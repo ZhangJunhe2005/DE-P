@@ -59,3 +59,22 @@ def test_anti_hover_thresholds_are_not_part_of_safety_label_rewrite():
     assert "hover_selection_rate_max" not in fields
     assert "selected_endpoint_speed_mean_min" not in fields
     assert "selected_endpoint_distance_mean_min" not in fields
+
+
+def test_continuous_kinematic_cost_orders_candidates_when_all_are_unsafe():
+    config = StaticSafetyFirstConfigV1(enabled=True)
+    predicted = torch.zeros(1, 3)
+    base = torch.zeros_like(predicted)
+    clearance = torch.ones_like(predicted)
+    static_cost = torch.zeros_like(predicted)
+    result = safety_first_score_objective_v1(
+        predicted, base, clearance, static_cost, config,
+        trajectory_max_speed=torch.tensor([[7.0, 8.0, 9.0]]),
+        trajectory_max_acceleration=torch.tensor([[7.0, 8.0, 9.0]]),
+        candidate_kinematic_cost=torch.tensor([[0.2, 0.6, 1.4]]),
+    )
+    assert result["hardware_unsafe_mask"].all()
+    assert result["ranking_per_sample"].item() == 0.0
+    assert torch.allclose(
+        result["labels"], torch.tensor([[5.2, 5.6, 6.4]])
+    )

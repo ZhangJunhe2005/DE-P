@@ -51,6 +51,7 @@ TRAINING_IMPLEMENTATION_FILES = (
     ROOT / "policy/static_yopo_wide_state_v1.py",
     ROOT / "policy/state_transform.py",
     ROOT / "policy/static_yopo_safety_first_v1.py",
+    ROOT / "policy/static_yopo_kinodynamic_v2.py",
     ROOT / "loss/loss_function.py",
     ROOT / "loss/safety_loss.py",
 )
@@ -205,7 +206,7 @@ def finite_details(details):
         "static_safety_loss", "guidance_loss", "dynamic_safety_loss",
         "ranking_loss", "safety_cvar_loss", "kinematic_loss",
         "candidate_smooth_cost", "candidate_static_cost",
-        "candidate_guidance_cost", "score_label",
+        "candidate_guidance_cost", "candidate_kinodynamic_cost", "score_label",
     )
     return {
         name: bool(torch.isfinite(details[name]).all())
@@ -378,6 +379,7 @@ def main():
             "local_goal_horizon_m"
         ),
         safety_first_config=config.get("safety_first"),
+        kinodynamic_config=config.get("kinodynamic_v2"),
     ).to(device)
     optimizer = build_optimizer(model, config)
     scheduler = build_scheduler(optimizer, config)
@@ -597,6 +599,10 @@ def main():
                 "hardware_unsafe_selection": 0.0,
                 "selected_trajectory_max_speed": 0.0,
                 "selected_trajectory_max_acceleration": 0.0,
+                "feasible_candidate_count": 0.0,
+                "candidate_time_dilation_mean": 0.0,
+                "selected_time_dilation": 0.0,
+                "selected_normal_acceleration": 0.0,
                 "selected_endpoint_distance": 0.0,
                 "selected_endpoint_speed": 0.0,
                 "hover_selection": 0.0,
@@ -720,6 +726,18 @@ def main():
                     validation_means["hardware_unsafe_selection"]
                     <= float(selection_gate_config.get(
                         "hardware_unsafe_selection_rate_max", 1.0
+                    ))
+                ),
+                "feasible_candidate_count_mean": (
+                    validation_means["feasible_candidate_count"]
+                    >= float(selection_gate_config.get(
+                        "feasible_candidate_count_mean_min", 0.0
+                    ))
+                ),
+                "selected_time_dilation_mean": (
+                    validation_means["selected_time_dilation"]
+                    <= float(selection_gate_config.get(
+                        "selected_time_dilation_mean_max", float("inf")
                     ))
                 ),
             }

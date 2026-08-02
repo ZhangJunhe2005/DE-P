@@ -19,6 +19,10 @@ from policy.static_yopo_safety_first_v1 import (
     sample_quintic_kinematic_maxima_v1,
     safety_first_score_objective_v1,
 )
+from policy.static_yopo_kinodynamic_v2 import (
+    KinodynamicFeasibilityConfigV2,
+    dense_quintic_kinodynamic_objective_v2,
+)
 
 
 def local_planning_goal(goal_body, horizon_m):
@@ -55,7 +59,7 @@ class MixedSceneStaticYOPOV1(torch.nn.Module):
 
 class MixedSceneStaticYOPOObjectiveV1(torch.nn.Module):
     def __init__(self, map_catalog, local_goal_horizon_m=None,
-                 safety_first_config=None):
+                 safety_first_config=None, kinodynamic_config=None):
         super().__init__()
         self.local_goal_horizon_m = (
             None if local_goal_horizon_m is None
@@ -65,6 +69,9 @@ class MixedSceneStaticYOPOObjectiveV1(torch.nn.Module):
         self.dep_loss = DEPLoss(dynamic_loss_config=config, map_catalog=map_catalog)
         self.safety_first_config = StaticSafetyFirstConfigV1.from_mapping(
             safety_first_config
+        )
+        self.kinodynamic_config = KinodynamicFeasibilityConfigV2.from_mapping(
+            kinodynamic_config
         )
         if self.dep_loss.dynamic_loss_config.enabled:
             raise RuntimeError("static objective must disable dynamic loss")
@@ -121,25 +128,44 @@ class MixedSceneStaticYOPOObjectiveV1(torch.nn.Module):
             candidate_static_cost = details.static_safety_cost.reshape(
                 batch_size, candidate_count
             )
-            trajectory_max_speed, trajectory_max_acceleration = (
-                sample_quintic_kinematic_maxima_v1(
+            kinodynamic = None
+            if self.kinodynamic_config.enabled:
+                kinodynamic = dense_quintic_kinodynamic_objective_v2(
                     self.dep_loss.safety_loss.trajectory_sampler,
                     start.repeat_interleave(count, 0).permute(0, 2, 1),
                     end.permute(0, 2, 1), batch_size, candidate_count,
+                    self.kinodynamic_config,
                 )
-            )
+                trajectory_max_speed = kinodynamic["maximum_speed"]
+                trajectory_max_acceleration = kinodynamic[
+                    "maximum_acceleration"
+                ]
+            else:
+                trajectory_max_speed, trajectory_max_acceleration = (
+                    sample_quintic_kinematic_maxima_v1(
+                        self.dep_loss.safety_loss.trajectory_sampler,
+                        start.repeat_interleave(count, 0).permute(0, 2, 1),
+                        end.permute(0, 2, 1), batch_size, candidate_count,
+                    )
+                )
             if self.safety_first_config.enabled:
                 safety_first = safety_first_score_objective_v1(
                     predicted_scores, base_label_scores,
                     details.static_min_distance.reshape(batch_size, candidate_count),
                     candidate_static_cost, self.safety_first_config,
                     trajectory_max_speed, trajectory_max_acceleration,
+                    candidate_kinematic_cost=(
+                        None if kinodynamic is None
+                        else kinodynamic["candidate_label_cost"]
+                    ),
                 )
                 label_scores = safety_first["labels"]
                 per_sample_score_loss = safety_first["regression_per_sample"]
                 per_sample_ranking_loss = safety_first["ranking_per_sample"]
                 per_sample_safety_cvar = safety_first["safety_cvar_per_sample"]
                 per_sample_kinematic_loss = safety_first["kinematic_per_sample"]
+                if kinodynamic is not None:
+                    per_sample_kinematic_loss = kinodynamic["per_sample_loss"]
                 selected_unsafe = safety_first["selected_unsafe"]
                 selected_hardware_unsafe = safety_first[
                     "selected_hardware_unsafe"
@@ -172,6 +198,34 @@ class MixedSceneStaticYOPOObjectiveV1(torch.nn.Module):
                 torch.arange(batch_size, device=endstate.device), selected_index
             ]
             selected_trajectory_max_acceleration = trajectory_max_acceleration[
+                torch.arange(batch_size, device=endstate.device), selected_index
+            ]
+            if kinodynamic is None:
+                feasible_candidate_count = (
+                    (trajectory_max_speed <= self.safety_first_config.max_speed_mps)
+                    & (trajectory_max_acceleration
+                       <= self.safety_first_config.max_acceleration_mps2)
+                ).sum(dim=1)
+                candidate_time_dilation = torch.maximum(
+                    trajectory_max_speed / self.safety_first_config.max_speed_mps,
+                    torch.sqrt((
+                        trajectory_max_acceleration
+                        / self.safety_first_config.max_acceleration_mps2
+                    ).clamp_min(0.0)),
+                ).clamp_min(1.0)
+                candidate_normal_acceleration = trajectory_max_acceleration * 0.0
+            else:
+                feasible_candidate_count = kinodynamic[
+                    "feasible_candidate_count"
+                ]
+                candidate_time_dilation = kinodynamic["time_dilation_ratio"]
+                candidate_normal_acceleration = kinodynamic[
+                    "maximum_normal_acceleration"
+                ]
+            selected_time_dilation = candidate_time_dilation[
+                torch.arange(batch_size, device=endstate.device), selected_index
+            ]
+            selected_normal_acceleration = candidate_normal_acceleration[
                 torch.arange(batch_size, device=endstate.device), selected_index
             ]
             score_loss = per_sample_score_loss.mean()
@@ -213,6 +267,10 @@ class MixedSceneStaticYOPOObjectiveV1(torch.nn.Module):
             "candidate_smooth_cost": details.smooth_cost,
             "candidate_static_cost": details.static_safety_cost,
             "candidate_guidance_cost": details.guidance_cost,
+            "candidate_kinodynamic_cost": (
+                candidate_static_cost * 0.0 if kinodynamic is None
+                else kinodynamic["candidate_loss"]
+            ),
             "per_sample_total_loss": (
                 per_sample_trajectory + per_sample_score_loss
                 + self.safety_first_config.ranking_weight * per_sample_ranking_loss
@@ -231,6 +289,13 @@ class MixedSceneStaticYOPOObjectiveV1(torch.nn.Module):
                 selected_trajectory_max_speed,
             "per_sample_selected_trajectory_max_acceleration":
                 selected_trajectory_max_acceleration,
+            "per_sample_feasible_candidate_count":
+                feasible_candidate_count.to(endstate.dtype),
+            "per_sample_candidate_time_dilation_mean":
+                candidate_time_dilation.mean(dim=1),
+            "per_sample_selected_time_dilation": selected_time_dilation,
+            "per_sample_selected_normal_acceleration":
+                selected_normal_acceleration,
             "per_sample_smoothness_loss": per_sample_smoothness,
             "per_sample_static_safety_loss": per_sample_static_safety,
             "per_sample_guidance_loss": per_sample_guidance,
