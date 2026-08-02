@@ -1,0 +1,310 @@
+{
+  "status": "PASS",
+  "analysis_version": "phase8f_causal_range_signal_v1",
+  "dataset": "/home/zjh/YOPO/DE-P/data/phase8_dynamic_production",
+  "split": "train",
+  "test_split_read": false,
+  "future_frames_used": 0,
+  "static_map_oracle_used": false,
+  "gt_used_by_mask_generator": false,
+  "gt_metric_semantics": "conservative actor projection/depth proxy; no recorded instance mask exists",
+  "sequence_manifest": [
+    "phase8c_train_0001",
+    "phase8c_train_0002",
+    "phase8c_train_0003",
+    "phase8c_train_0004",
+    "phase8c_train_0005",
+    "phase8c_train_0006",
+    "phase8c_train_0007",
+    "phase8c_train_0008",
+    "phase8c_train_0009",
+    "phase8c_train_0010",
+    "phase8c_train_0011",
+    "phase8c_train_0012"
+  ],
+  "sequence_manifest_sha256": "b654793ce72815f16ae69540a87c8b619e6acaa19d8d03275be2854b9b09ea56",
+  "history_frames": 4,
+  "selected_train_thresholds": {
+    "absolute_m": 0.12,
+    "relative": 0.02,
+    "minimum_history_support": 2,
+    "edge_guard_m": 0.3
+  },
+  "selected_metrics": {
+    "tp": 73014,
+    "fp": 102644,
+    "fn": 104900,
+    "precision": 0.41565997563447155,
+    "recall": 0.410389289207145,
+    "static_trigger_fraction": 0.011197587943294675
+  },
+  "top_candidates": [
+    {
+      "metric": {
+        "tp": 73014,
+        "fp": 102644,
+        "fn": 104900,
+        "precision": 0.41565997563447155,
+        "recall": 0.410389289207145,
+        "static_trigger_fraction": 0.011197587943294675
+      },
+      "absolute_m": 0.12,
+      "relative": 0.02,
+      "minimum_history_support": 2,
+      "edge_guard_m": 0.3
+    },
+    {
+      "metric": {
+        "tp": 75692,
+        "fp": 108056,
+        "fn": 102222,
+        "precision": 0.4119337353331737,
+        "recall": 0.42544150544645165,
+        "static_trigger_fraction": 0.011787991142206551
+      },
+      "absolute_m": 0.12,
+      "relative": 0.01,
+      "minimum_history_support": 2,
+      "edge_guard_m": 0.3
+    },
+    {
+      "metric": {
+        "tp": 67620,
+        "fp": 93425,
+        "fn": 110294,
+        "precision": 0.41988264149771803,
+        "recall": 0.38007127038906435,
+        "static_trigger_fraction": 0.010191873403241349
+      },
+      "absolute_m": 0.12,
+      "relative": 0.04,
+      "minimum_history_support": 2,
+      "edge_guard_m": 0.3
+    },
+    {
+      "metric": {
+        "tp": 73191,
+        "fp": 107318,
+        "fn": 104723,
+        "precision": 0.4054700873640649,
+        "recall": 0.4113841518936115,
+        "static_trigger_fraction": 0.011707481615082206
+      },
+      "absolute_m": 0.12,
+      "relative": 0.02,
+      "minimum_history_support": 2,
+      "edge_guard_m": 0.6
+    },
+    {
+      "metric": {
+        "tp": 67781,
+        "fp": 96331,
+        "fn": 110133,
+        "precision": 0.4130167202885834,
+        "recall": 0.3809762019852288,
+        "static_trigger_fraction": 0.010508893302730986
+      },
+      "absolute_m": 0.12,
+      "relative": 0.04,
+      "minimum_history_support": 2,
+      "edge_guard_m": 0.6
+    },
+    {
+      "metric": {
+        "tp": 67879,
+        "fp": 98287,
+        "fn": 110035,
+        "precision": 0.40850113741680005,
+        "recall": 0.38152702991332893,
+        "static_trigger_fraction": 0.010722276277060556
+      },
+      "absolute_m": 0.12,
+      "relative": 0.04,
+      "minimum_history_support": 2,
+      "edge_guard_m": 1.0
+    },
+    {
+      "metric": {
+        "tp": 75876,
+        "fp": 115806,
+        "fn": 102038,
+        "precision": 0.3958431151594829,
+        "recall": 0.4264757129849253,
+        "static_trigger_fraction": 0.012633450268512364
+      },
+      "absolute_m": 0.12,
+      "relative": 0.01,
+      "minimum_history_support": 2,
+      "edge_guard_m": 0.6
+    },
+    {
+      "metric": {
+        "tp": 73297,
+        "fp": 110406,
+        "fn": 104617,
+        "precision": 0.39899729454608795,
+        "recall": 0.41197994536686267,
+        "static_trigger_fraction": 0.012044356167602507
+      },
+      "absolute_m": 0.12,
+      "relative": 0.02,
+      "minimum_history_support": 2,
+      "edge_guard_m": 1.0
+    },
+    {
+      "metric": {
+        "tp": 62855,
+        "fp": 89805,
+        "fn": 115059,
+        "precision": 0.41173195336040874,
+        "recall": 0.3532886675584833,
+        "static_trigger_fraction": 0.009796962172631409
+      },
+      "absolute_m": 0.2,
+      "relative": 0.01,
+      "minimum_history_support": 2,
+      "edge_guard_m": 0.3
+    },
+    {
+      "metric": {
+        "tp": 75990,
+        "fp": 120443,
+        "fn": 101924,
+        "precision": 0.3868494601212627,
+        "recall": 0.4271164720033275,
+        "static_trigger_fraction": 0.01313930755479366
+      },
+      "absolute_m": 0.12,
+      "relative": 0.01,
+      "minimum_history_support": 2,
+      "edge_guard_m": 1.0
+    },
+    {
+      "metric": {
+        "tp": 60554,
+        "fp": 87111,
+        "fn": 117360,
+        "precision": 0.4100768631700132,
+        "recall": 0.34035545263441885,
+        "static_trigger_fraction": 0.009503069671177491
+      },
+      "absolute_m": 0.2,
+      "relative": 0.02,
+      "minimum_history_support": 2,
+      "edge_guard_m": 0.3
+    },
+    {
+      "metric": {
+        "tp": 63025,
+        "fp": 93737,
+        "fn": 114889,
+        "precision": 0.4020425868514053,
+        "recall": 0.35424418539294267,
+        "static_trigger_fraction": 0.010225909951293919
+      },
+      "absolute_m": 0.2,
+      "relative": 0.01,
+      "minimum_history_support": 2,
+      "edge_guard_m": 0.6
+    }
+  ],
+  "scenario_metrics_at_selected": {
+    "crossing": {
+      "tp": 18659,
+      "fp": 18834,
+      "fn": 31251,
+      "precision": 0.49766623102979224,
+      "recall": 0.3738529352835103,
+      "static_trigger_fraction": 0.012575508805994366
+    },
+    "head_on": {
+      "tp": 5987,
+      "fp": 25819,
+      "fn": 5774,
+      "precision": 0.18823492422813307,
+      "recall": 0.5090553524360173,
+      "static_trigger_fraction": 0.016703531879297753
+    },
+    "multi_target": {
+      "tp": 23959,
+      "fp": 25616,
+      "fn": 44763,
+      "precision": 0.4832879475542108,
+      "recall": 0.3486365356072291,
+      "static_trigger_fraction": 0.017143885898390887
+    },
+    "no_target": {
+      "tp": 0,
+      "fp": 5977,
+      "fn": 0,
+      "precision": 0.0,
+      "recall": null,
+      "static_trigger_fraction": 0.003822078015921382
+    },
+    "occluded_but_tracked": {
+      "tp": 23807,
+      "fp": 20518,
+      "fn": 18701,
+      "precision": 0.5371009588268472,
+      "recall": 0.5600592829585019,
+      "static_trigger_fraction": 0.013654007529069168
+    },
+    "temporal_separation": {
+      "tp": 602,
+      "fp": 5880,
+      "fn": 4411,
+      "precision": 0.09287257019438445,
+      "recall": 0.12008777179333732,
+      "static_trigger_fraction": 0.0037631325646644413
+    }
+  },
+  "history_support_histogram": [
+    2312804,
+    2000686,
+    2144360,
+    2101805,
+    1635545
+  ],
+  "first_visible_to_first_seed_frames": {
+    "all": {
+      "count": 14,
+      "mean": 3.357142857142857,
+      "p95": 11.0
+    },
+    "enters_later": {
+      "count": 14,
+      "mean": 3.357142857142857,
+      "p95": 11.0
+    }
+  },
+  "residual_quantiles_m": {
+    "actor_proxy": [
+      0.06548271179199222,
+      0.5053250789642334,
+      9.147806549072268,
+      16.520154953002933
+    ],
+    "static_sampled": [
+      -9.5367431640625e-07,
+      4.76837158203125e-07,
+      0.14142131805419922,
+      9.399998664855957
+    ]
+  },
+  "answers": {
+    "dynamic_actor_pixel_capture": {
+      "train_development_range_seed_recall": 0.410389289207145,
+      "full_train_range_seed_recall": 0.27901769612890825,
+      "full_valid_range_seed_recall": 0.2291688793392211
+    },
+    "static_pixel_trigger_fraction_train_development": 0.011197587943294675,
+    "multi_history_consensus": "Support=2 was selected by the frozen train-only objective. The persisted top-12 candidate table contains only support=2 candidates; a numeric support=1 comparison was not retained and is not reconstructed from valid/test.",
+    "held_out_recall_diagnosis": "The signal is present but weaker on full valid: range-seed recall is 0.229. Component recall is 0.202, so most loss precedes tracking and some additional loss occurs during constrained completion.",
+    "hardest_scenarios_train_development": [
+      "temporal_separation",
+      "head_on"
+    ],
+    "first_frame_visible_delay": "No actor with first_visible_frame=0 produced a retained delay sample in the fixed signal manifest. Overall full-valid first seed/component/dynamic-attention means are 0.230/0.408/0.707 s."
+  },
+  "frozen_full_evaluation_implementation_sha256": "fc9c5370a1da929cfb8cf267b0c11176ec15e3aeb291b8e5117ec6fe753abf04"
+}

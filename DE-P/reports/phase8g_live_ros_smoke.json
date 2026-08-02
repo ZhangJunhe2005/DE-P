@@ -1,0 +1,149 @@
+{
+  "status": "PASS",
+  "scenarios": {
+    "no_target": {
+      "status": "PASS",
+      "scenario": "no_target",
+      "frames": 60,
+      "visible_actor_ids": [],
+      "never_observed_actor_ids": [],
+      "dynamic_track_frames": 0,
+      "perception_latency_ms": {
+        "mean": 34.57246930007992,
+        "p95": 43.30348445046184
+      },
+      "instance_runtime_input": false,
+      "instance_mask_depth_alignment_error": 0,
+      "never_observed_proximity_event_count": 0,
+      "never_observed_attention_event_count": 0,
+      "prediction_only_attention_count": 0,
+      "failures": []
+    },
+    "crossing": {
+      "status": "PASS",
+      "scenario": "crossing",
+      "frames": 60,
+      "visible_actor_ids": [
+        18731011
+      ],
+      "never_observed_actor_ids": [],
+      "dynamic_track_frames": 20,
+      "perception_latency_ms": {
+        "mean": 35.278293499989864,
+        "p95": 42.39244235077421
+      },
+      "instance_runtime_input": false,
+      "instance_mask_depth_alignment_error": 0,
+      "never_observed_proximity_event_count": 0,
+      "never_observed_attention_event_count": 0,
+      "prediction_only_attention_count": 0,
+      "failures": []
+    },
+    "static_wall_occluded": {
+      "status": "PASS",
+      "scenario": "static_wall_occluded",
+      "frames": 60,
+      "visible_actor_ids": [],
+      "never_observed_actor_ids": [
+        18731081
+      ],
+      "dynamic_track_frames": 0,
+      "perception_latency_ms": {
+        "mean": 33.201226816618146,
+        "p95": 43.484312699547445
+      },
+      "instance_runtime_input": false,
+      "instance_mask_depth_alignment_error": 0,
+      "never_observed_proximity_event_count": 0,
+      "never_observed_attention_event_count": 0,
+      "prediction_only_attention_count": 0,
+      "failures": []
+    },
+    "always_outside_fov": {
+      "status": "PASS",
+      "scenario": "always_outside_fov",
+      "frames": 60,
+      "visible_actor_ids": [],
+      "never_observed_actor_ids": [
+        18731071
+      ],
+      "dynamic_track_frames": 0,
+      "perception_latency_ms": {
+        "mean": 32.256639866742866,
+        "p95": 44.00796194959184
+      },
+      "instance_runtime_input": false,
+      "instance_mask_depth_alignment_error": 0,
+      "never_observed_proximity_event_count": 0,
+      "never_observed_attention_event_count": 0,
+      "prediction_only_attention_count": 0,
+      "failures": []
+    },
+    "visible_plus_never_nearby": {
+      "status": "PASS",
+      "scenario": "visible_plus_never_nearby",
+      "frames": 60,
+      "visible_actor_ids": [
+        18731111
+      ],
+      "never_observed_actor_ids": [
+        18731112
+      ],
+      "dynamic_track_frames": 20,
+      "perception_latency_ms": {
+        "mean": 26.319346033354424,
+        "p95": 41.418895199694816
+      },
+      "instance_runtime_input": false,
+      "instance_mask_depth_alignment_error": 0,
+      "never_observed_proximity_event_count": 0,
+      "never_observed_attention_event_count": 0,
+      "prediction_only_attention_count": 0,
+      "failures": []
+    },
+    "occluded_but_tracked": {
+      "status": "PASS",
+      "scenario": "occluded_but_tracked",
+      "frames": 60,
+      "visible_actor_ids": [
+        18731051
+      ],
+      "never_observed_actor_ids": [],
+      "dynamic_track_frames": 14,
+      "perception_latency_ms": {
+        "mean": 25.30565550008153,
+        "p95": 38.292842349983395
+      },
+      "instance_runtime_input": false,
+      "instance_mask_depth_alignment_error": 0,
+      "never_observed_proximity_event_count": 0,
+      "never_observed_attention_event_count": 0,
+      "prediction_only_attention_count": 0,
+      "failures": []
+    },
+    "temporal_separation": {
+      "status": "PASS",
+      "scenario": "temporal_separation",
+      "frames": 60,
+      "visible_actor_ids": [
+        18731041
+      ],
+      "never_observed_actor_ids": [],
+      "dynamic_track_frames": 0,
+      "perception_latency_ms": {
+        "mean": 33.908542266757046,
+        "p95": 42.08820455096428
+      },
+      "instance_runtime_input": false,
+      "instance_mask_depth_alignment_error": 0,
+      "never_observed_proximity_event_count": 0,
+      "never_observed_attention_event_count": 0,
+      "prediction_only_attention_count": 0,
+      "failures": []
+    }
+  },
+  "process_cleanup": "PASS",
+  "runtime_instance_subscription_owner": "evaluator_collector_only",
+  "dep_runtime_instance_input": false,
+  "logs": "/tmp/phase8g-live-lq2qn2r9"
+}

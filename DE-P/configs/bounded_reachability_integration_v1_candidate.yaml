@@ -1,0 +1,46 @@
+phase_id: phase8jqv2_4_bounded_reachability_integration_review
+contract_version: bounded_reachability_integration_v1_candidate
+status: development_only_candidate
+
+dynamic_reachability_integration:
+  enabled: false
+  mode: LEGACY_OFF
+  production_default: false
+  environment_override_allowed: false
+  development_launcher_required: true
+
+snapshot:
+  timestamp_tolerance_s: 0.000001
+  maximum_reachability_snapshot_age_s: 0.05
+  require_candidate_origin_at_query: true
+  require_camera_pose_at_query: true
+  immutable_arrays: true
+
+decision:
+  no_safe_candidate: DEVELOPMENT_SAFE_ABORT
+  unresolved_dynamic_risk: DEVELOPMENT_SAFE_ABORT
+  invalid_evaluation: DEVELOPMENT_SAFE_ABORT
+  unsafe_fallback_allowed: false
+  hover_or_brake_fallback_defined: false
+
+stability_gates:
+  planner_frequency_hz: 33.0
+  planner_period_s: 0.030303030303030304
+  planner_frequency_provenance: Simulator/src/config/config.yaml:depth_fps
+  maximum_switch_rate_hz: 16.5
+  minimum_candidate_hold_duration_s: 0.0
+  hold_rule_enabled: false
+  maximum_no_safe_frame_rate: 0.20
+  maximum_safe_abort_episode_rate: 0.50
+
+runtime_gates:
+  adapter_overhead_p95_ms: 2.0
+  reachability_risk_integration_p95_ms: 15.0
+  planner_cycle_p95_ms: 30.303030303030305
+
+validation:
+  split_unit: complete_episode_map_actor_trajectory_multi_target_scene
+  fresh_integration_required_for_next_phase: true
+  cylinder_evidence: DEVELOPMENT_PASS_SMALL_SAMPLE
+  formal_integration_authorized: false
+  production_activation_authorized: false

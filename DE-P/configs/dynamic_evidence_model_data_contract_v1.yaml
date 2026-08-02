@@ -1,0 +1,57 @@
+version: dynamic_evidence_model_data_contract_v1
+scope: development_contract_only
+selected_model: causal_feature_temporal_dynamic_evidence_v1
+fallback_model: hybrid_patch_temporal_dynamic_evidence_v1
+maximum_finalists: 2
+feature_dim: 32
+temporal_windows: [2, 4]
+classes:
+  - DYNAMIC_SUPPORT
+  - STATIC_SUPPORT
+  - SENSOR_OR_SEGMENTATION_ARTIFACT
+  - UNKNOWN_AMBIGUOUS
+missing_values:
+  storage_fill: 0.0
+  validity_mask_required: true
+  zero_velocity_without_mask_forbidden: true
+preprocessing:
+  version: dynamic_evidence_preprocessing_v1
+  normalization: train_split_robust_statistics_only
+  clipping: field_schema_bounds
+  deterministic: true
+patch_candidate:
+  retained_as_fallback_only: true
+  size: [32, 32]
+  channels: [normalized_depth, foreground_residual, foreground_mask, validity_mask]
+  temporal_length: 4
+runtime_budget:
+  inference_p95_ms: 1.5
+  inference_p99_ms: 2.5
+  preprocessing_p99_ms: 1.0
+  full_cycle_ms: 30.303030303030305
+pilot:
+  dataset_name: phase8_dynamic_evidence_schema_pilot_v1
+  maximum_frames: 5000
+  samples_per_map_type: 4
+  non_formal: true
+  training_allowed: false
+formal_v3:
+  dataset_name: phase8_dynamic_evidence_formal_v3
+  root_candidate: data/phase8_dynamic_evidence_formal_v3
+  schema_version: dynamic_evidence_v3_schema_v1
+  label_version: dynamic_evidence_label_authority_v1
+  map_types: [cave, forest, pillar, room, wall]
+loss:
+  primary: class_weighted_cross_entropy
+  unknown: explicit_fourth_class_plus_selective_abstention
+  auxiliary: dynamic_actionability
+calibration:
+  method: temperature_scaling
+  split: calibration
+  threshold_objective: frozen_planner_safety_gates_then_coverage
+production_activation_authorized: false
+formal_generation_authorized: false
+training_authorized: false
+backward_authorized: false
+optimizer_step_authorized: false
+second_model_data_contract_review_authorized: false

@@ -1,0 +1,14 @@
+config_version: phase8_gate_e_v1
+dataset_manifest: /home/zjh/YOPO/DE-P/data/phase8_dynamic_production/dataset_manifest.yaml
+map_split: test
+require_held_out_map: true
+require_held_out_actor_seed: true
+models: [static_corrected, dynamic_corrected]
+same_initial_state_goal_scenario: true
+scenario_categories: [no_target, crossing, head_on, multi_target, temporally_separated, occluded_but_tracked]
+seeds_per_category: 3
+scenario_timeout_seconds: 45
+resume_state: reports/gate_e_random_maps/progress.json
+metrics: [collision_rate, reach_rate, minimum_clearance, path_length, acceleration, jerk, planning_latency, fallback, false_dynamic, missed_dynamic, track_id_switches]
+official_sensor_source: depth
+formal_pointcloud_training_allowed: false

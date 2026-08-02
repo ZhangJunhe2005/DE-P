@@ -1,0 +1,83 @@
+{
+  "status": "FAIL",
+  "production_ready": false,
+  "device": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+  "compute_capability": [
+    12,
+    0
+  ],
+  "steps": 30,
+  "seconds": 0.5874454230001902,
+  "steps_per_second": 51.06857390561419,
+  "baseline": {
+    "total": 4.914547920227051,
+    "score": 1.3040525913238525,
+    "dynamic": 0.0076160128228366375,
+    "static": 2.26727294921875,
+    "spearman": 0.24884551021592258,
+    "kendall": 0.17883174872956903,
+    "top1_risk": 0.0,
+    "oracle_regret": 0.0,
+    "min_dynamic_distance": 0.49038267135620117
+  },
+  "after_overfit": {
+    "total": 2.961016893386841,
+    "score": 0.5704917907714844,
+    "dynamic": 0.008494247682392597,
+    "static": 1.5711933374404907,
+    "spearman": 0.35190104449395493,
+    "kendall": 0.23941318803860867,
+    "top1_risk": 6.340611147237496e-09,
+    "oracle_regret": 6.340611147237496e-09,
+    "min_dynamic_distance": 0.579543948173523
+  },
+  "no_target_before": {
+    "total": 4.9895700216293335,
+    "score": 1.534584879875183,
+    "dynamic": 0.0,
+    "static": 2.111093044281006,
+    "spearman": 0.0,
+    "kendall": 0.0,
+    "top1_risk": 0.0,
+    "oracle_regret": 0.0,
+    "min_dynamic_distance": 0.0
+  },
+  "no_target_after": {
+    "total": 2.7442036867141724,
+    "score": 0.5674554109573364,
+    "dynamic": 0.0,
+    "static": 1.3552271127700806,
+    "spearman": 0.0,
+    "kendall": 0.0,
+    "top1_risk": 0.0,
+    "oracle_regret": 0.0,
+    "min_dynamic_distance": 0.0
+  },
+  "parameter_max_abs_delta": 0.0031270794570446014,
+  "checkpoint_resume_exact": true,
+  "bounded_run": "/home/zjh/YOPO/DE-P/runs/dynamic/20260722-100819-phase8_preflight_v1",
+  "bounded_stdout_tail": "ody_frame_id\": \"quadrotor\", \"camera_cx\": 80.0, \"camera_cy\": 45.0, \"camera_depth_scale\": 1.0, \"camera_frame_id\": \"camera_optical\", \"camera_fx\": 80.0, \"camera_fy\": 80.0, \"camera_height\": 90, \"camera_info_topic\": \"/camera_info\", \"camera_max_depth\": 20.0, \"camera_min_depth\": 0.1, \"camera_position_body\": [0.0, 0.0, 0.0], \"camera_rotation_body_from_camera\": [[0.0, 0.0, 1.0], [-1.0, 0.0, 0.0], [0.0, -1.0, 0.0]], \"camera_width\": 160, \"cluster_eps\": 0.35, \"cluster_max_iterations\": 300, \"cluster_min_samples\": 5, \"depth_stride\": 2, \"depth_topic\": \"/depth_image\", \"dynamic_enter_speed\": 0.3, \"dynamic_exit_speed\": 0.15, \"dynamic_max_velocity_std\": 0.75, \"dynamic_min_confirmed_hits\": 4, \"enabled\": true, \"fallback_to_static\": true, \"initial_position_variance\": 0.25, \"initial_velocity_variance\": 4.0, \"max_dt\": 1.0, \"max_missed_frames\": 3, \"max_pose_time_offset\": 0.05, \"measurement_noise\": 0.05, \"min_confirmed_hits\": 3, \"min_dt\": 0.001, \"odom_topic\": \"/sim/odom\", \"pointcloud_body_topic\": \"/lidar_points_body\", \"pointcloud_optical_topic\": \"/lidar_points_optical\", \"pointcloud_topic\": \"/lidar_points_optical\", \"pointcloud_world_topic\": \"/lidar_points_odom\", \"process_noise_acceleration\": 1.0, \"publish_debug\": false, \"source\": \"depth\", \"sync_queue_size\": 10, \"sync_slop\": 0.03, \"tf_lookup_timeout\": 0.02, \"use_attention\": true, \"use_camera_info\": true, \"use_tf_extrinsics\": true, \"world_frame_id\": \"world\"}\nBackbone variant: corrected\nCheckpoint detected variant: corrected\nRequested model variant: corrected\nmissing keys: []\nunexpected keys: []\nStrict checkpoint load: PASS\nBuilding ESDF map...\n    map_id=0 pointcloud-0.ply: x=(-30.00, 29.90), y=(-30.00, 29.90), z=(0.00, 14.90)\n    map_id=1 pointcloud-1.ply: x=(-30.00, 29.90), y=(-30.00, 29.90), z=(0.00, 14.90)\n    map_id=2 pointcloud-2.ply: x=(-30.00, 29.90), y=(-30.00, 29.90), z=(0.00, 14.90)\n    map_id=3 pointcloud-3.ply: x=(-30.00, 29.90), y=(-30.00, 29.90), z=(0.00, 14.90)\n    map_id=4 pointcloud-4.ply: x=(-30.00, 29.90), y=(-30.00, 29.90), z=(0.00, 14.90)\n    map_id=5 pointcloud-5.ply: x=(-30.00, 29.90), y=(-30.00, 29.90), z=(0.00, 14.90)\n    map_id=6 pointcloud-6.ply: x=(-30.00, 29.90), y=(-30.00, 29.90), z=(0.00, 14.90)\n    map_id=7 pointcloud-7.ply: x=(-30.00, 29.90), y=(-30.00, 29.90), z=(0.00, 14.90)\n    map_id=8 pointcloud-8.ply: x=(-30.00, 29.90), y=(-30.00, 29.90), z=(0.00, 14.90)\n    map_id=9 pointcloud-9.ply: x=(-30.00, 29.90), y=(-30.00, 29.90), z=(0.00, 14.90)\nMap built!\n------ Actual Loss ------\n| smooth       = 0.0001 |\n| safety       = 0.6000 |\n| goal         = 0.6000 |\n| full ratio   = 0.3000 |\n| OOB cost     = 10.0000 |\n| guide perp   = 0.5000 |\n| dynamic      = 0.1000 |\n| dynamic on   =   True |\n-------------------------\nAdamW fused: True; trainable tensors: 36\n{\n  \"status\": \"PASS\",\n  \"state\": \"complete\",\n  \"run_dir\": \"/home/zjh/YOPO/DE-P/runs/dynamic/20260722-100819-phase8_preflight_v1\",\n  \"last_checkpoint\": \"/home/zjh/YOPO/DE-P/runs/dynamic/20260722-100819-phase8_preflight_v1/checkpoints/latest.pt\"\n}\n",
+  "bounded_stderr_tail": "",
+  "resources": {
+    "peak_gpu_memory_bytes": 418693120,
+    "gpu_memory_growth_bytes": 0,
+    "cpu_rss_growth_bytes": 270336,
+    "fd_growth": 0
+  },
+  "gates": {
+    "small_set_total_loss_decreased": true,
+    "small_set_score_loss_decreased": true,
+    "small_set_dynamic_loss_decreased": false,
+    "no_target_dynamic_exact_zero": true,
+    "model_parameter_updated": true,
+    "finite_training": true,
+    "checkpoint_resume_exact": true,
+    "bounded_one_epoch": true,
+    "static_regression_bounded": true,
+    "score_risk_not_worse": true,
+    "oracle_regret_not_worse": true,
+    "gpu_memory_stable": true,
+    "cpu_memory_stable": true,
+    "file_descriptors_stable": true
+  }
+}

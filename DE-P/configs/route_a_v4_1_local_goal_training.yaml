@@ -1,0 +1,105 @@
+contract_version: route_a_static_yopo_training_v4_1
+training_implementation_hash: 3b2c286c9a0134db4d0d1eb81930d5d8436f525cb0fa4e003316fb5d7674d284
+route: A
+source_dataset_root: /home/zjh/YOPO/DE-P/data/route_a_v4_raw_static
+derived_dataset_root: /home/zjh/YOPO/DE-P/data/route_a_v4_static_yopo
+source_dataset_manifest_hash: bbae8497498a98784706c767055654231114157deeb09c4da47798d01b29d672
+derived_dataset_manifest_hash: 44ec9aa40b7a9dab0f59b0115eee226f4d2bd6f15d96c903f2f42d5efb35bb72
+normalization_contract_hash: 17d0ef25b1c828f66e8e414a08f517360d41048f4dc9b6068ce5891bf99837ef
+model_contract_hash: 55d20eab01f0561eb6a3fa6b794ea21304ff4ef17b9cf68582ded13811984a89
+loss_contract_hash: 368c7c89ea10d5f5d17f263d5d526a52d3ec23ae50cf52213653b71581ae8580
+model:
+  name: MixedSceneStaticYOPOV1
+  backbone_variant: legacy
+  head_variant: unified
+  initial_checkpoint: /home/zjh/YOPO/DE-P/saved/DEP_0/epoch10.pth
+  initial_checkpoint_sha256: 615c40c638cf4741d19d232687514ee7e33ffb68b414b8d154263caed5a41223
+  strict_load: true
+observation:
+  contract: route_a_wide_state_v1
+  seed: 82501
+  speed_range_mps:
+  - 0.0
+  - 6.0
+  acceleration_range_mps2:
+  - 0.0
+  - 6.0
+  goal_distance_range_m:
+  - 10.0
+  - 40.0
+optimizer:
+  name: AdamW
+  learning_rate: 5e-05
+  backbone_learning_rate: 5e-06
+  head_learning_rate: 5e-05
+  weight_decay: 0.0001
+scheduler:
+  name: ReduceLROnPlateau
+  factor: 0.5
+  patience: 8
+  threshold: 0.0005
+  minimum_learning_rate:
+    backbone: 5e-07
+    head: 2e-06
+training:
+  batch_size: 32
+  max_epochs: 50
+  seed: 82501
+  amp: true
+  gradient_clip_norm: 5.0
+  checkpoint_every_epochs: 1
+  validation_every_epochs: 1
+numerics:
+  cnn_amp: true
+  trajectory_loss_precision: float32
+  nonfinite_policy: fail_fast
+  require_finite_gradient_norm: true
+  max_consecutive_amp_overflows: 8
+logging:
+  progress_every_batches: 100
+  flush_console: true
+  batch_event_log: events.jsonl
+  nonfinite_event_log: nonfinite_batches.jsonl
+loader:
+  num_workers: 8
+  prefetch_factor: 2
+  pin_memory: true
+  mmap_cache_size: 8
+  sampling_strategy: map_type_balanced
+validation:
+  primary_metric: anti_hover_feasible_macro_loss
+  direction: minimize
+  minimum_epoch: 30
+  patience: 12
+  selection_gate:
+    selected_endpoint_distance_mean_min: 3.0
+    selected_endpoint_speed_mean_min: 2.0
+    hover_selection_rate_max: 0.2
+  predefined_metrics:
+  - macro_map_type_total_static_loss
+  - per_map_type_total_static_loss
+  - selected_endpoint_distance
+  - selected_endpoint_speed
+  - hover_selection_rate
+  - score_top1_label_agreement
+  - route_goal_distance
+  - objective_goal_distance
+output_root: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_1_local_goal
+resume:
+  automatic: false
+  strict_identity: true
+internal_test_access: false
+post_training_h5_automatic: false
+production_activation_automatic: false
+implementation_hotfixes:
+- route_a_v4_checkpoint_identity_alias_repair_v1
+- route_a_v4_1_local_goal_observability_repair_v1
+- route_a_v4_1_gradient_clip_and_scheduler_rebaseline_v1
+parent_v4_config_hash: bbf93d492f50bd7ec41328c40bfba21133dc72de754d98a0b47c0206161c15ca
+objective_contract_hash: 8d1167b110f5e79d4fe616f559e0bbb97d1ca0b4943dad12d5c55a7b20b06000
+objective:
+  route_goal_range_m:
+  - 10.0
+  - 40.0
+  local_goal_horizon_m: 10.0
+  score_label_goal: local_horizon_projection

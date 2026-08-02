@@ -1,0 +1,50 @@
+{
+  "status": "PASS",
+  "purpose": "Pre-freeze validation of the Phase 8H recovery infrastructure; this is not a blind perception evaluation.",
+  "phase8g_failure_reproduced": {
+    "status": "PASS",
+    "exception": "YAML::TypedBadConversion<unsigned int>",
+    "workers_with_identical_failure": 7,
+    "cause": "actor ID exceeded uint32"
+  },
+  "fix": {
+    "actor_id_range": "1..2147483647",
+    "encoding": "32SC1",
+    "ids_reserved_per_scenario": 4,
+    "blind_seed_range": "1..336868795",
+    "pre_ros_identity_schema_validation": true,
+    "phase8g_lock_preserved": true,
+    "phase8g_failed_staging_preserved": true
+  },
+  "concurrency_audit": {
+    "shared_config_write": false,
+    "static_map_access": "read_only",
+    "scenario_yaml": "unique per sequence",
+    "ros_master": "unique port per worker",
+    "ros_home_and_log_dir": "unique per worker",
+    "node_name_collision": "isolated by separate ROS masters",
+    "recording_output": "unique sequence directory under one atomic staging root",
+    "file_descriptor_limit": 1048576,
+    "recommended_workers": 4,
+    "eight_workers_used_for_recovery": false
+  },
+  "host_smoke": [
+    {
+      "workers": 2,
+      "sequences": 2,
+      "frames": 120,
+      "instance_mask_depth_alignment_error": 0,
+      "atomic_commit": "PASS",
+      "output": "/tmp/phase8h-infra-smoke-v2-p2KmS0/dataset"
+    },
+    {
+      "workers": 4,
+      "sequences": 4,
+      "frames": 240,
+      "instance_mask_depth_alignment_error": 0,
+      "atomic_commit": "PASS",
+      "output": "/tmp/phase8h-infra-smoke-v3-fQs25F/dataset"
+    }
+  ],
+  "conclusion": "The observed blind failure was deterministic ID overflow, not CUDA/ROS/shared-file contention. Four concurrent Simulator workers completed successfully and are the frozen Phase 8H default."
+}

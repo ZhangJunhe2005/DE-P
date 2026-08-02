@@ -1,0 +1,25 @@
+{
+  "status": "PASS",
+  "device": "NVIDIA GeForce RTX 5070 Ti Laptop GPU",
+  "static_catalog_hash": "5545339b9238a0996130d5d324fa8fab70704c61403f28074861ddf03c134d40",
+  "dynamic_catalog_hash": "1ed8247bef502b6c8681110494fc4569a7e0936885c76d23980107f856d3918c",
+  "static_maps_only_legacy": true,
+  "dynamic_maps_only_formal": true,
+  "static_dynamic_loss": 0.0,
+  "dynamic_loss_finite": true,
+  "static_loss_finite": true,
+  "steps_per_epoch": 1026,
+  "batch_counts": {
+    "static": 513,
+    "dynamic": 513
+  },
+  "dynamic_loader_batches": 513,
+  "static_loader_batches": 513,
+  "dynamic_recycling": false,
+  "static_dataset_cache_count": 16,
+  "validation_contexts": {
+    "valid_gt": "ground_truth",
+    "valid_estimated": "estimated"
+  },
+  "peak_gpu_memory_bytes": 1120904704
+}

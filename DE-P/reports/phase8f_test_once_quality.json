@@ -1,0 +1,525 @@
+{
+  "status": "FAIL",
+  "evaluator_version": "phase8f_range_image_stages_v1",
+  "dataset": "/home/zjh/YOPO/DE-P/data/phase8_dynamic_production",
+  "causal": true,
+  "future_gt_used_by_tracker": false,
+  "evaluated_splits": [
+    "test"
+  ],
+  "max_sequences_per_scenario": 0,
+  "foreground_mode": "range_image_hybrid",
+  "sequence_manifests": {
+    "test": [
+      "phase8c_test_0001",
+      "phase8c_test_0002",
+      "phase8c_test_0003",
+      "phase8c_test_0004",
+      "phase8c_test_0005",
+      "phase8c_test_0006",
+      "phase8c_test_0007",
+      "phase8c_test_0008",
+      "phase8c_test_0009",
+      "phase8c_test_0010",
+      "phase8c_test_0011",
+      "phase8c_test_0012",
+      "phase8c_test_0013",
+      "phase8c_test_0014",
+      "phase8c_test_0015",
+      "phase8c_test_0016",
+      "phase8c_test_0017",
+      "phase8c_test_0018",
+      "phase8c_test_0019",
+      "phase8c_test_0020",
+      "phase8c_test_0021",
+      "phase8c_test_0022",
+      "phase8c_test_0023",
+      "phase8c_test_0024",
+      "phase8c_test_0025",
+      "phase8c_test_0026",
+      "phase8c_test_0027",
+      "phase8c_test_0028",
+      "phase8c_test_0029",
+      "phase8c_test_0030",
+      "phase8c_test_0031",
+      "phase8c_test_0032",
+      "phase8c_test_0033",
+      "phase8c_test_0034",
+      "phase8c_test_0035",
+      "phase8c_test_0036"
+    ]
+  },
+  "sequence_manifest_sha256": {
+    "test": "f8b0f13ae8531271270b7058c01eb96178b4cce062241593b4a4912894af6cd6"
+  },
+  "implementation_sha256": "fc9c5370a1da929cfb8cf267b0c11176ec15e3aeb291b8e5117ec6fe753abf04",
+  "metric_semantics": {
+    "visible": "active, inside image, non-occluded, visibility>0",
+    "active_track": "active and visible, or previously observed within max_missed_frames",
+    "visible_false_positive": "unmatched estimated track; correctly retained occluded matches excluded",
+    "no_target": "every dynamic track is a hard false positive"
+  },
+  "split_metrics": {
+    "test": {
+      "sequence_count": 36,
+      "frame_count": 2160,
+      "visible_detection_precision": 0.9141274238227147,
+      "visible_detection_recall": 0.5445544554455446,
+      "active_track_precision": 0.9119804400977995,
+      "active_track_recall": 0.4966711051930759,
+      "position_rmse_m": 0.4270881317241169,
+      "velocity_rmse_mps": 0.581034093441538,
+      "id_switches": 11,
+      "track_fragmentations": 13,
+      "time_to_confirm_mean_s": 0.7073482990264892,
+      "first_visible_to_first_seed_mean_s": 0.38483390682622004,
+      "first_visible_to_first_component_mean_s": 0.425868710956058,
+      "first_visible_to_dynamic_attention_mean_s": 0.7073482990264892,
+      "pixel_stage_metrics": {
+        "completed_component": {
+          "tp": 97074,
+          "fp": 142692,
+          "fn": 239654,
+          "precision": 0.4048697480043042,
+          "recall": 0.2882860944144829
+        },
+        "free_space_seed": {
+          "tp": 19170,
+          "fp": 49702,
+          "fn": 317558,
+          "precision": 0.2783424323382507,
+          "recall": 0.05693022261291012
+        },
+        "range_residual_seed": {
+          "tp": 152901,
+          "fp": 244159,
+          "fn": 183827,
+          "precision": 0.38508285901375106,
+          "recall": 0.4540786628970564
+        }
+      },
+      "foreground_latency_ms": {
+        "mean": 4.890438427753031,
+        "p95": 7.058862399753698
+      },
+      "complete_perception_latency_ms": {
+        "mean": 32.98356769071823,
+        "p95": 53.44596979775813
+      },
+      "bounded_capacity": {
+        "range_history_frames": 4,
+        "background_max_voxels": 200000
+      },
+      "no_target_false_positive_track_count": 2,
+      "no_target_false_positive_frame_fraction": 0.005555555555555556,
+      "never_observed_false_positive_match_count": 13,
+      "never_observed_false_positive_match_details": [
+        {
+          "sequence_id": "phase8c_test_0008",
+          "frame_index": 48,
+          "actor_id": 10300311,
+          "track_id": 15,
+          "distance_m": 0.35755419353321166
+        },
+        {
+          "sequence_id": "phase8c_test_0008",
+          "frame_index": 49,
+          "actor_id": 10300311,
+          "track_id": 15,
+          "distance_m": 0.3526728928873705
+        },
+        {
+          "sequence_id": "phase8c_test_0008",
+          "frame_index": 50,
+          "actor_id": 10300311,
+          "track_id": 15,
+          "distance_m": 0.3462736074742252
+        },
+        {
+          "sequence_id": "phase8c_test_0028",
+          "frame_index": 15,
+          "actor_id": 10320111,
+          "track_id": 0,
+          "distance_m": 0.3601034761235035
+        },
+        {
+          "sequence_id": "phase8c_test_0028",
+          "frame_index": 16,
+          "actor_id": 10320111,
+          "track_id": 0,
+          "distance_m": 0.3624766512485292
+        },
+        {
+          "sequence_id": "phase8c_test_0028",
+          "frame_index": 17,
+          "actor_id": 10320111,
+          "track_id": 0,
+          "distance_m": 0.3614610416012956
+        },
+        {
+          "sequence_id": "phase8c_test_0028",
+          "frame_index": 18,
+          "actor_id": 10320111,
+          "track_id": 0,
+          "distance_m": 0.35871708089438326
+        },
+        {
+          "sequence_id": "phase8c_test_0028",
+          "frame_index": 19,
+          "actor_id": 10320111,
+          "track_id": 0,
+          "distance_m": 0.3551142839100182
+        },
+        {
+          "sequence_id": "phase8c_test_0032",
+          "frame_index": 16,
+          "actor_id": 10320311,
+          "track_id": 1,
+          "distance_m": 0.3420660086267281
+        },
+        {
+          "sequence_id": "phase8c_test_0032",
+          "frame_index": 17,
+          "actor_id": 10320311,
+          "track_id": 1,
+          "distance_m": 0.34672752817972075
+        },
+        {
+          "sequence_id": "phase8c_test_0032",
+          "frame_index": 18,
+          "actor_id": 10320311,
+          "track_id": 1,
+          "distance_m": 0.3453543230540104
+        },
+        {
+          "sequence_id": "phase8c_test_0032",
+          "frame_index": 19,
+          "actor_id": 10320311,
+          "track_id": 1,
+          "distance_m": 0.3430158197913163
+        },
+        {
+          "sequence_id": "phase8c_test_0032",
+          "frame_index": 20,
+          "actor_id": 10320311,
+          "track_id": 1,
+          "distance_m": 0.34401559060385734
+        }
+      ],
+      "never_observed_actor_frame_count": 459,
+      "occluded_track_retention_same_id": 0.25517241379310346,
+      "occluded_eligible_frame_count": 145,
+      "attention_iou_mean": 0.5748293639268081,
+      "attention_center_error_cells": 0.19843982103900615,
+      "no_target_attention_nonzero_frame_fraction": 0.002777777777777778,
+      "no_target_attention_max": 0.8994602560997009,
+      "no_target_attention_mean": 0.00038248999044299126,
+      "no_target_false_attention_cell_count_mean": 0.016666666666666666,
+      "scenario_metrics": {
+        "crossing": {
+          "frames": 360,
+          "dynamic_track_frame_fraction": 0.14444444444444443
+        },
+        "head_on": {
+          "frames": 360,
+          "dynamic_track_frame_fraction": 0.19444444444444445
+        },
+        "multi_target": {
+          "frames": 360,
+          "dynamic_track_frame_fraction": 0.43333333333333335
+        },
+        "no_target": {
+          "frames": 360,
+          "dynamic_track_frame_fraction": 0.005555555555555556
+        },
+        "occluded_but_tracked": {
+          "frames": 360,
+          "dynamic_track_frame_fraction": 0.125
+        },
+        "temporal_separation": {
+          "frames": 360,
+          "dynamic_track_frame_fraction": 0.14444444444444443
+        }
+      },
+      "stratified_active_recall": {
+        "actor_shape": {
+          "sphere": {
+            "matched": 261,
+            "eligible": 527,
+            "recall": 0.4952561669829222
+          },
+          "vertical_cylinder": {
+            "matched": 112,
+            "eligible": 224,
+            "recall": 0.5
+          }
+        },
+        "camera_rotation_bin": {
+          "high": {
+            "matched": 18,
+            "eligible": 60,
+            "recall": 0.3
+          },
+          "low": {
+            "matched": 355,
+            "eligible": 691,
+            "recall": 0.5137481910274964
+          }
+        },
+        "camera_translation_bin": {
+          "high": {
+            "matched": 373,
+            "eligible": 749,
+            "recall": 0.4979973297730307
+          },
+          "low": {
+            "matched": 0,
+            "eligible": 2,
+            "recall": 0.0
+          }
+        },
+        "distance_bin": {
+          "0-4": {
+            "matched": 215,
+            "eligible": 349,
+            "recall": 0.6160458452722063
+          },
+          "12+": {
+            "matched": 0,
+            "eligible": 6,
+            "recall": 0.0
+          },
+          "4-8": {
+            "matched": 156,
+            "eligible": 333,
+            "recall": 0.46846846846846846
+          },
+          "8-12": {
+            "matched": 2,
+            "eligible": 63,
+            "recall": 0.031746031746031744
+          }
+        },
+        "first_visible_frame": {
+          "0": {
+            "matched": 34,
+            "eligible": 59,
+            "recall": 0.576271186440678
+          },
+          "10": {
+            "matched": 15,
+            "eligible": 58,
+            "recall": 0.25862068965517243
+          },
+          "11": {
+            "matched": 26,
+            "eligible": 43,
+            "recall": 0.6046511627906976
+          },
+          "12": {
+            "matched": 37,
+            "eligible": 78,
+            "recall": 0.47435897435897434
+          },
+          "13": {
+            "matched": 16,
+            "eligible": 26,
+            "recall": 0.6153846153846154
+          },
+          "15": {
+            "matched": 21,
+            "eligible": 66,
+            "recall": 0.3181818181818182
+          },
+          "16": {
+            "matched": 20,
+            "eligible": 32,
+            "recall": 0.625
+          },
+          "18": {
+            "matched": 7,
+            "eligible": 17,
+            "recall": 0.4117647058823529
+          },
+          "2": {
+            "matched": 34,
+            "eligible": 57,
+            "recall": 0.5964912280701754
+          },
+          "20": {
+            "matched": 15,
+            "eligible": 33,
+            "recall": 0.45454545454545453
+          },
+          "21": {
+            "matched": 10,
+            "eligible": 13,
+            "recall": 0.7692307692307693
+          },
+          "22": {
+            "matched": 9,
+            "eligible": 16,
+            "recall": 0.5625
+          },
+          "25": {
+            "matched": 31,
+            "eligible": 52,
+            "recall": 0.5961538461538461
+          },
+          "3": {
+            "matched": 30,
+            "eligible": 56,
+            "recall": 0.5357142857142857
+          },
+          "31": {
+            "matched": 11,
+            "eligible": 25,
+            "recall": 0.44
+          },
+          "32": {
+            "matched": 6,
+            "eligible": 13,
+            "recall": 0.46153846153846156
+          },
+          "33": {
+            "matched": 9,
+            "eligible": 15,
+            "recall": 0.6
+          },
+          "4": {
+            "matched": 33,
+            "eligible": 66,
+            "recall": 0.5
+          },
+          "40": {
+            "matched": 0,
+            "eligible": 9,
+            "recall": 0.0
+          },
+          "41": {
+            "matched": 0,
+            "eligible": 8,
+            "recall": 0.0
+          },
+          "51": {
+            "matched": 9,
+            "eligible": 9,
+            "recall": 1.0
+          }
+        },
+        "map_id": {
+          "15": {
+            "matched": 65,
+            "eligible": 180,
+            "recall": 0.3611111111111111
+          },
+          "16": {
+            "matched": 147,
+            "eligible": 280,
+            "recall": 0.525
+          },
+          "17": {
+            "matched": 161,
+            "eligible": 291,
+            "recall": 0.5532646048109966
+          }
+        },
+        "motion_type": {
+          "lateral": {
+            "matched": 164,
+            "eligible": 315,
+            "recall": 0.5206349206349207
+          },
+          "radial": {
+            "matched": 209,
+            "eligible": 436,
+            "recall": 0.4793577981651376
+          }
+        },
+        "pixel_area_bin": {
+          "0-25": {
+            "matched": 12,
+            "eligible": 154,
+            "recall": 0.07792207792207792
+          },
+          "100-400": {
+            "matched": 146,
+            "eligible": 235,
+            "recall": 0.6212765957446809
+          },
+          "25-100": {
+            "matched": 75,
+            "eligible": 170,
+            "recall": 0.4411764705882353
+          },
+          "400+": {
+            "matched": 140,
+            "eligible": 192,
+            "recall": 0.7291666666666666
+          }
+        },
+        "scenario": {
+          "crossing": {
+            "matched": 44,
+            "eligible": 93,
+            "recall": 0.4731182795698925
+          },
+          "head_on": {
+            "matched": 68,
+            "eligible": 121,
+            "recall": 0.5619834710743802
+          },
+          "multi_target": {
+            "matched": 168,
+            "eligible": 341,
+            "recall": 0.49266862170087977
+          },
+          "occluded_but_tracked": {
+            "matched": 42,
+            "eligible": 87,
+            "recall": 0.4827586206896552
+          },
+          "temporal_separation": {
+            "matched": 51,
+            "eligible": 109,
+            "recall": 0.46788990825688076
+          }
+        },
+        "velocity_bin": {
+          "1.5-3": {
+            "matched": 373,
+            "eligible": 751,
+            "recall": 0.4966711051930759
+          }
+        },
+        "visibility": {
+          "occluded": {
+            "matched": 39,
+            "eligible": 145,
+            "recall": 0.2689655172413793
+          },
+          "visible": {
+            "matched": 334,
+            "eligible": 606,
+            "recall": 0.5511551155115512
+          }
+        }
+      }
+    }
+  },
+  "hard_thresholds": {
+    "visible_precision_min": 0.5,
+    "active_precision_min": 0.5,
+    "recall_min": 0.2,
+    "position_rmse_max_m": 1.0,
+    "velocity_rmse_max_mps": 1.5,
+    "no_target_false_positive_frame_fraction_max": 0.1,
+    "no_target_attention_nonzero_frame_fraction_max": 0.05,
+    "attention_iou_min": 0.05,
+    "never_observed_false_matches": 0
+  },
+  "hard_failures": [
+    "test: never-observed false matches=13"
+  ],
+  "warnings": []
+}

@@ -1,0 +1,60 @@
+phase_id: phase8jqv2_4_dynamic_object_geometry_model_review
+contract_version: dynamic_object_geometry_contract_v1_candidate
+status: development_candidate_frozen_before_fresh_validation
+
+runtime_priors:
+  provenance: fixed_contract_prior
+  gravity_axis_world: [0.0, 0.0, 1.0]
+  sphere_radius_interval_m: [0.18, 0.42]
+  cylinder_radius_interval_m: [0.34, 0.42]
+  cylinder_half_height_interval_m: [0.70, 0.85]
+  runtime_gt_shape: false
+  runtime_gt_radius: false
+  runtime_gt_height: false
+
+features:
+  maximum_normal_points: 128
+  normal_neighbor_count: 8
+  robust_reweighting_iterations: 2
+
+observability:
+  minimum_points: 12
+  maximum_sphere_residual_m: 0.045
+  maximum_cylinder_residual_m: 0.045
+  maximum_condition_number: 2000000.0
+  minimum_relative_fit_margin: 0.20
+  cylinder_minimum_silhouette_aspect: 1.35
+  cylinder_minimum_vertical_extent_m: 0.55
+  sphere_maximum_silhouette_aspect: 1.45
+  border_evidence_weight: 0.35
+  occlusion_evidence_weight: 0.50
+
+temporal:
+  minimum_direct_evidence_frames: 2
+  stable_mode_hysteresis_margin: 0.15
+  ambiguous_expiry_frames: 2
+  maximum_missed_frames: 2
+  velocity_smoothing: 0.50
+  mode_switch_velocity_variance_mps2: 1.0
+
+fresh_validation_gates:
+  sphere_geometry_coverage_min: 0.975
+  cylinder_geometry_coverage_min: 0.95
+  overall_geometry_coverage_min: 0.97
+  any_major_shape_coverage_min: 0.90
+  unsafe_recommendations_max: 0
+  top3_unsafe_miss_max: 0
+  global_unsafe_miss_rate_max: 0.05
+  safe_false_veto_rate_max: 0.30
+  false_emergency_rate_max: 0.10
+  no_target_false_veto_max: 0
+  negative_false_geometry_track_max: 0
+  geometry_model_p95_ms_max: 6.0
+  combined_geometry_risk_p95_ms_max: 15.0
+
+selection:
+  maximum_hypotheses: 2
+  force_shape_classification: false
+  giant_union_envelope_allowed: false
+  selected_candidate: null
+  production_activation_authorized: false

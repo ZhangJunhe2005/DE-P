@@ -1,0 +1,40 @@
+fixture_version: occlusion_fixture_annex_v1
+enabled_by_default: false
+development_fixture_only: true
+formal_use_authorized: false
+base_maze_type_natural_credit_allowed: false
+maximum_future_dynamic_dataset_fraction: 0.10
+required_profile_diversity:
+  minimum_positions: 3
+  minimum_orientations: 2
+  minimum_size_profiles: 3
+profiles:
+  narrow_x_offset_a:
+    position_profile: offset_a
+    orientation_axis: x
+    panel_width_m: 0.20
+    panel_height_m: 4.0
+  medium_y_offset_b:
+    position_profile: offset_b
+    orientation_axis: y
+    panel_width_m: 0.40
+    panel_height_m: 5.0
+  wide_x_offset_c:
+    position_profile: offset_c
+    orientation_axis: x
+    panel_width_m: 0.60
+    panel_height_m: 6.0
+proposer_policy:
+  may_read_fixture_provenance: true
+validator_policy:
+  may_read_fixture_provenance: false
+  authority_inputs:
+    - canonical_occupancy
+    - camera_state
+    - actor_state
+    - cuda_per_actor_visibility
+dataset_policy:
+  occlusion_specialized_subset_only: true
+  may_be_dynamic_dataset_majority: false
+  attach_to_all_maps: false
+  natural_wall_room_pillar_coverage_required_separately: true

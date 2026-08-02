@@ -1,0 +1,28 @@
+contract_version: closed_loop_causal_observability_contract_v1_candidate
+scope: development_root_cause_replay_only
+classes:
+  - CAUSALLY_OBSERVABLE_DYNAMIC_RISK
+  - PREVIOUSLY_OBSERVED_COASTABLE_RISK
+  - PROVISIONAL_OBSERVABLE_RISK
+  - CAUSALLY_UNOBSERVABLE_FUTURE_RISK
+  - ODD_VIOLATION
+no_active_dynamic_risk_semantics: >-
+  No currently consumable causal dynamic risk state; this does not assert
+  that no dynamic hazard exists in the world.
+runtime_evidence_allowed:
+  - current_and_past_depth
+  - causal_measurements
+  - formal_track_state
+  - frozen_extent_and_motion_priors
+runtime_evidence_forbidden:
+  - gt_actor_identity
+  - gt_visibility
+  - owner_map
+  - future_frames
+unobservable_mitigations_review_only:
+  - odd_visibility_guarantee
+  - larger_fov_or_additional_sensor
+  - blind_zone_speed_limit
+  - active_perception
+  - conservative_no_state_fallback
+production_activation_authorized: false

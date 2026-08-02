@@ -1,0 +1,5 @@
+-r requirements-core.txt
+# Standalone stage-4 dynamic-perception core; install separately from static DEP.
+filterpy>=1.4.5,<2
+scikit-learn>=1.7,<2
+scipy>=1.10,<2

@@ -1,0 +1,153 @@
+config_version: phase8d_fixed_025_seed8403
+run_kind: bounded_shakedown
+architecture: corrected
+initialization_checkpoint: /home/zjh/YOPO/DE-P/saved/DEP_corrected_init/epoch10_converted.pth
+dataset_mode: mixed
+dataset_root: /home/zjh/YOPO/DE-P/data/phase8_dynamic_production
+dataset_manifest: /home/zjh/YOPO/DE-P/data/phase8_dynamic_production/dataset_manifest.yaml
+static_map_catalog: /home/zjh/YOPO/DE-P/configs/static_map_catalog.yaml
+dynamic_map_catalog: /home/zjh/YOPO/DE-P/data/phase8_dynamic_production/map_catalog.yaml
+map_split:
+  train:
+  - 0
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  - 10
+  - 11
+  valid:
+  - 12
+  - 13
+  - 14
+  test:
+  - 15
+  - 16
+  - 17
+batch_size: 16
+epochs: 2
+learning_rate: 0.00015
+freeze_policy: late
+loss_weight:
+- 1.0
+- 1.0
+training_schedule:
+  steps_per_epoch: 1026
+  static_batch_ratio: 0.5
+  dynamic_passes_per_epoch: 1.0
+  allow_loader_recycling: false
+static_dataset:
+  implementation_version: dep_static_lazy_v1
+  cache_size: 128
+  worker_seed_policy: global_seed + epoch*100003 + worker_id
+dynamic_loss:
+  enabled: true
+  weight: 0.1
+  uav_radius: 0.3
+  default_obstacle_radius: 0.3
+  covariance_sigma: 2.0
+  covariance_growth_rate: 0.05
+  temperature: 0.2
+  time_discount: 0.2
+  max_track_age: 0.5
+  obstacle_aggregation: max
+  eval_points: 30
+  target_source: recorded_future_gt
+risk_metrics:
+  clearance_threshold: 0.0
+  cost_epsilon: 0.4804530139182014
+  cvar_fraction: 0.26666666666666666
+  hard_window_threshold: 0.15
+dynamic_objective:
+  mean_coefficient: 1.0
+  cvar_coefficient: 0.0
+  cvar_fraction: 0.26666666666666666
+  reference_scale: 1.0
+  gradient_strategy: dynamic_priority_pcgrad
+  pcgrad_other_norm_ratio: 0.25
+  pcgrad_risk_gate: true
+  pcgrad_activation_clearance: 0.15
+  pcgrad_dynamic_grad_epsilon: 1e-12
+  pcgrad_ratio_switch_step: -1
+  pcgrad_late_other_norm_ratio: 0.25
+dynamic_training:
+  dataset_version: dep_dynamic_sequence_v1
+  history_length: 4
+  window_stride: 1
+  cache_size: 64
+  context_source: ground_truth
+  loss_target_source: recorded_future_gt
+  max_obstacles: 16
+  max_grad_norm: 0.1
+  static_batch_ratio: 0.5
+  noise_seed: 8403
+  position_noise_std: 0.05
+  velocity_noise_std: 0.1
+  visibility_noise_std: 0.05
+  attention_noise_std: 0.02
+  estimated_cache_dir: /home/zjh/YOPO/DE-P/cache/phase8d_estimated_context
+  sampler_weights:
+    no_target: 1.0
+    visible_low_risk: 1.0
+    visible_high_risk: 2.0
+    temporally_separated: 1.5
+    occluded_but_tracked: 2.0
+    multi_target: 2.0
+  curriculum:
+  - start_epoch: 0
+    context_source: ground_truth
+    ratio: 1.0
+validation:
+  suite_version: phase8d_fixed_v1
+  checkpoint_suite: estimated
+  diagnostic_suites:
+  - ground_truth
+  - static
+  max_batches_per_suite: 32
+optimizer:
+  name: AdamW
+  weight_decay: 0.01
+scheduler:
+  name: ReduceLROnPlateau
+  factor: 0.5
+  patience: 3
+  min_lr: 1e-06
+early_stopping:
+  patience: 20
+checkpoint_selection:
+  dynamic_priority:
+  - top1_collision_fraction
+  - dynamic_cvar
+  - selected_min_clearance
+  - raw_dynamic_mean
+  balanced_hard_constraints:
+    top1_collision_max: 0.05
+    no_target_dynamic_tolerance: 0.0
+    static_warning_ratio: 1.1
+    static_hard_ratio: 1.15
+    estimated_gt_dynamic_cvar_gap_max: 0.25
+    estimated_gt_top1_collision_gap_max: 0.1
+  balanced_weights:
+    dynamic_cvar: 1.0
+    selected_clearance: 1.0
+    oracle_regret: 0.5
+    static_cost: 0.25
+    score_loss: 0.1
+  balanced_scales:
+    dynamic_cvar: 0.5
+    selected_clearance: 0.3
+    oracle_regret: 0.1
+save_interval: 1
+random_seed: 8403
+num_workers: 4
+abort_thresholds:
+  max_gradient_norm: 1000.0
+  min_free_disk_gib: 10.0
+  dataloader_stall_seconds: 90.0
+  static_regression_ratio: 1.5
+  gpu_memory_growth_bytes: 268435456

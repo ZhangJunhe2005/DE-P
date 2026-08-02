@@ -1,0 +1,60 @@
+phase_id: phase8jqv2_4_shape_aware_motion_state_review
+contract_version: shape_aware_motion_state_contract_v1_candidate
+status: development_candidates
+
+history:
+  minimum_direct_frames: 2
+  maximum_direct_frames: 5
+  maximum_history_age_s: 0.6
+  huber_delta_m: 0.08
+  robust_iterations: 2
+  maximum_speed_mps: 4.0
+  minimum_dt_s: 0.04
+
+reference_transition:
+  stable_direct_frames_required: 2
+  gap1_frames: 1
+  gap2_frames: 2
+  expire_after_frames: 2
+  ambiguous_expiry_frames: 2
+
+support:
+  reference_drift_rate_mps: 0.15
+  minimum_reference_drift_m: 0.04
+  visible_support_velocity_semantics: visible_support_not_actor_center
+
+reachable_candidates:
+  - id: M7A_TIGHT
+    acceleration_bound_mps2: 0.35
+    reference_drift_rate_mps: 0.10
+  - id: M7B_BALANCED
+    acceleration_bound_mps2: 0.75
+    reference_drift_rate_mps: 0.15
+
+motion_error_budget:
+  maximum_prediction_horizon_s: 1.7
+  total_dynamic_clearance_budget_m: 0.70
+  geometry_reference_budget_m: 0.12
+  acceleration_model_budget_m: 0.29
+  required_reserve_m: 0.08
+  velocity_prediction_budget_m: 0.21
+  velocity_error_budget_mps: 0.12352941176470589
+
+runtime_gates:
+  direct_geometry_update_p95_ms: 6.0
+  combined_cached_motion_risk_p95_ms: 15.0
+
+risk_gates:
+  unsafe_recommendations_max: 0
+  top3_unsafe_miss_max: 0
+  global_unsafe_miss_rate_max: 0.05
+  safe_candidate_false_veto_rate_max: 0.30
+  no_target_false_veto_max: 0
+  negative_false_geometry_track_max: 0
+
+selection:
+  maximum_development_candidates: 2
+  selected_candidate: null
+  production_activation_authorized: false
+  formal_integration_authorized: false
+

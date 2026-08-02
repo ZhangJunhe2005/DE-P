@@ -1,0 +1,15 @@
+contract_version: deterministic_dynamic_guard_strict_history_only_v1
+enabled: true
+weak_provisional_enabled: false
+pdscr1_runtime_reachable: false
+learned_adapter_runtime_reachable: false
+formal_tracker_accepts_weak: false
+accepted_evidence:
+  - STRICT_MEASUREMENT
+  - HISTORY_BACKED_STATE
+unknown_disposition: UNRESOLVED_CONSERVATIVE_VETO
+out_of_odd_disposition: SAFE_ABORT
+runtime_gt_allowed: false
+owner_map_allowed: false
+future_actor_state_allowed: false
+

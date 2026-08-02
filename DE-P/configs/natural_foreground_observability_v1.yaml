@@ -1,0 +1,26 @@
+version: natural_foreground_observability_v1
+role: development_broad_phase_only
+sensor_contract:
+  width: 160
+  height: 96
+  intrinsics: [80.0, 80.0, 80.0, 45.0]
+  max_depth_m: 20.0
+  frame_period_s: 0.1
+thresholds:
+  minimum_projected_pixels: 64
+  minimum_visible_pixels: 16
+  minimum_visible_fraction: 0.10
+  minimum_background_depth_contrast_m: 0.20
+  minimum_expected_seed_pixels: 8
+  minimum_expected_component_pixels: 8
+  minimum_border_margin_pixels: 2
+  minimum_pre_gap_consecutive_observable_frames: 4
+  minimum_post_gap_consecutive_observable_frames: 2
+  repeated_ray_history_frames: 2
+  maximum_camera_translation_per_frame_m: 0.35
+  maximum_camera_yaw_per_frame_rad: 0.30
+prohibitions:
+  runtime_measurement_output: true
+  training_loader_input: true
+  validator_certificate_input: true
+  gt_mask_runtime_input: true

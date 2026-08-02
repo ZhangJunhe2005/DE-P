@@ -1,0 +1,128 @@
+#ifndef CUDA_UTILS_CUH
+#define CUDA_UTILS_CUH
+
+#include <cuda_runtime.h>
+#include "cuda_toolkit/se3.cuh"
+#include <cmath>
+#include <vector>
+#include <iostream>
+#include <opencv2/opencv.hpp>
+#include <pcl/common/common.h> // For pcl::getMinMax3D
+#include <pcl/point_cloud.h>   // For pcl::PointCloud
+#include <pcl/point_types.h>   // For pcl::PointXYZ
+#include <chrono>
+#include <string>
+
+namespace raycast
+{
+    struct Vector3f
+    {
+        float x, y, z;
+        __device__ __host__ Vector3f() : x(0.0f), y(0.0f), z(0.0f) {}
+        __device__ __host__ Vector3f(float x_val, float y_val, float z_val)
+            : x(x_val), y(y_val), z(z_val) {}
+    };
+
+    struct Vector3i
+    {
+        int x, y, z;
+        __device__ __host__ Vector3i() : x(0), y(0), z(0) {}
+        __device__ __host__ Vector3i(int x_val, int y_val, int z_val)
+            : x(x_val), y(y_val), z(z_val) {}
+    };
+
+    struct CameraParams
+    {
+        float fx = 80.0f; // focal length x
+        float fy = 80.0f; // focal length y
+        float cx = 80.0f; // principal point x (image center)
+        float cy = 45.0f; // principal point y (image center)
+        int image_width = 160;
+        int image_height = 90;
+        float max_depth_dist{20};
+        bool normalize_depth{false};
+    };
+
+    struct LidarParams
+    {
+        int vertical_lines = 16;            // 纵向16线
+        float vertical_angle_start = -15.0; // 起始垂直角度
+        float vertical_angle_end = 15.0;    // 结束垂直角度
+        int horizontal_num = 360;           // 水平360点
+        float horizontal_resolution = 1.0;  // 水平分辨率为1度
+        float max_lidar_dist{50};
+    };
+
+    static constexpr double STATIC_AUTHORITY_CONTACT_TOLERANCE_M = 1e-6;
+
+    struct StaticSphereQuery
+    {
+        double x, y, z, radius;
+    };
+
+    struct StaticCollisionResult
+    {
+        int collision;
+        double minimum_gap_m;
+        int voxel_x, voxel_y, voxel_z;
+        double bounds_min_x, bounds_min_y, bounds_min_z;
+        double bounds_max_x, bounds_max_y, bounds_max_z;
+        int out_of_bounds;
+        int queried_voxel_count;
+    };
+
+    class GridMap
+    {
+        public:
+            GridMap(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, float resolution, int occupy_threshold);
+            explicit GridMap(const std::string &authority_artifact);
+            ~GridMap() {};
+            void freeGridMap();
+            __host__ __device__ Vector3i Pos2Vox(const Vector3f &pos);
+            __host__ __device__ Vector3f Vox2Pos(const Vector3i &vox);
+            __host__ __device__ int Vox2Idx(const Vector3i &vox);
+            __host__ __device__ Vector3i Idx2Vox(int idx);
+            __device__ int symmetricIndex(int index, int length);
+            __device__ int mapQuery(const Vector3f &pos);
+            StaticCollisionResult queryStaticSphereCollision(
+                const StaticSphereQuery &query) const;
+            std::vector<StaticCollisionResult>
+            queryStaticSphereCollisionBatchCpu(
+                const std::vector<StaticSphereQuery> &queries) const;
+            std::vector<StaticCollisionResult>
+            queryStaticSphereCollisionBatchGpu(
+                const std::vector<StaticSphereQuery> &queries) const;
+            std::string authorityHash() const {
+                return std::string(authority_hash_);
+            }
+            bool isCanonicalAuthority() const { return canonical_authority_; }
+            int occupiedVoxelCount() const { return occupied_count_; }
+            __device__ StaticCollisionResult queryStaticSphereCollisionDevice(
+                const StaticSphereQuery &query) const;
+
+            float raycast_step_; // raycast step
+        private:
+            // map param
+            int *map_cuda_;
+            float resolution_;                                           // grid resolution
+            float origin_x_, origin_y_, origin_z_;                       // origin coordinates
+            int grid_size_x_, grid_size_y_, grid_size_z_, grid_size_yz_; // grid sizes
+            int occupy_threshold_;                                        // occupancy threshold
+            int *map_cpu_{nullptr};
+            int *occupied_indices_cpu_{nullptr};
+            int *occupied_indices_cuda_{nullptr};
+            int occupied_count_{0};
+            bool canonical_authority_{false};
+            char authority_hash_[65]{};
+    };
+
+    __global__ void cameraRaycastKernel(float *depth_values, GridMap grid_map, CameraParams camera_param, cudaMat::SE3<float> T_wc);
+    __global__ void lidarRaycastKernel(Vector3f* point_values, GridMap grid_map, LidarParams lidar_param, cudaMat::SE3<float> T_wc);
+    __global__ void staticSphereCollisionKernel(
+        StaticCollisionResult *results, GridMap grid_map,
+        const StaticSphereQuery *queries, int count);
+
+    void renderDepthImage(GridMap *grid_map, CameraParams *camera_param, cudaMat::SE3<float>& T_wc, cv::Mat &depth_image);
+    void renderLidarPointcloud(GridMap *grid_map, LidarParams *lidar_param, cudaMat::SE3<float>& T_wc, pcl::PointCloud<pcl::PointXYZ>& lidar_points);
+}
+#endif // CUDA_UTILS_CUH

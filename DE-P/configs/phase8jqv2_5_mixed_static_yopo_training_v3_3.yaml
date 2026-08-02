@@ -1,0 +1,85 @@
+contract_version: mixed_scene_static_yopo_training_v3_3_balanced_plateau
+training_implementation_hash: 9d5f479d38edbec99bc6b3e1e0db93ad36f50f935ba5ba656c8257d55fcad194
+route: A
+source_dataset_root: /home/zjh/YOPO/DE-P/data/phase8_dynamic_evidence_formal_v3
+derived_dataset_root: /home/zjh/YOPO/DE-P/data/phase8_mixed_scene_static_yopo_derived_v3
+source_v3_manifest_hash: a1acfa2fee7e8336917316cb3f07ac005c1ce1354a8bda8de10d02f2438354f6
+derived_v3_manifest_hash: 1719c43ca48e1c832b9ec64f3394b91d36f22a91b58522b16d4556ae94438727
+solver_split_manifest_hash: 575b32732b2212e8bf5af3f1327f649295f28fc33531d64248f338234998d94b
+no_return_policy: P1_EXCLUDE_CANONICAL_NO_RETURN_SYMMETRICALLY
+p1_policy_hash: edd1002b81d07ff8c767ac3231365ea72ea090cef24d4e6d99e7bba533cc3756
+model:
+  name: MixedSceneStaticYOPOV1
+  backbone_variant: legacy
+  head_variant: unified
+  initial_checkpoint: /home/zjh/YOPO/DE-P/saved/DEP_0/epoch10.pth
+  initial_checkpoint_sha256: 615c40c638cf4741d19d232687514ee7e33ffb68b414b8d154263caed5a41223
+  strict_load: true
+optimizer:
+  name: AdamW
+  learning_rate: 0.00002
+  backbone_learning_rate: 0.000005
+  head_learning_rate: 0.00002
+  # Original YOPO used AdamW's implicit 1e-2 default.  V3.3 uses a conservative
+  # one-tenth value because this run fine-tunes a pretrained MobileNet backbone.
+  weight_decay: 0.001
+scheduler:
+  name: ReduceLROnPlateau
+  factor: 0.5
+  patience: 3
+  threshold: 0.0001
+  minimum_learning_rate:
+    backbone: 0.0000005
+    head: 0.000002
+training:
+  batch_size: 32
+  max_epochs: 50
+  seed: 82501
+  amp: true
+  gradient_clip_norm: 0.1
+  checkpoint_every_epochs: 1
+  validation_every_epochs: 1
+numerics:
+  cnn_amp: true
+  trajectory_loss_precision: float32
+  nonfinite_policy: fail_fast
+  require_finite_gradient_norm: true
+  max_consecutive_amp_overflows: 8
+logging:
+  progress_every_batches: 100
+  flush_console: true
+  batch_event_log: events.jsonl
+  nonfinite_event_log: nonfinite_batches.jsonl
+loader:
+  num_workers: 8
+  prefetch_factor: 2
+  pin_memory: true
+  mmap_cache_size: 8
+  sampling_strategy: map_type_balanced
+validation:
+  primary_metric: macro_map_type_total_static_loss
+  direction: minimize
+  tie_break: total_static_loss
+  minimum_epoch: 20
+  patience: 16
+  predefined_metrics:
+    - total_static_loss
+    - macro_map_type_total_static_loss
+    - per_map_type_total_static_loss
+    - score_top1_label_agreement
+    - collision_cost
+    - guidance_cost
+    - smoothness_cost
+    - score_loss
+    - safe_top1_rate
+    - safe_top3_availability
+    - static_unsafe_recommendation
+    - static_false_no_safe
+    - goal_path_availability
+output_root: /home/zjh/YOPO/DE-P/runs/phase8_mixed_static_yopo_v3_3_balanced_plateau
+resume:
+  automatic: false
+  strict_identity: true
+internal_test_access: false
+post_training_h5_automatic: false
+production_activation_automatic: false

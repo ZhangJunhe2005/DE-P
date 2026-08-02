@@ -1,0 +1,25 @@
+{
+  "status": "PASS",
+  "files": {
+    "pointcloud-0.ply": {
+      "first": "09a2d02498dbce55828cc55e1224bb6befdcb175f1e4e697d8edfebb808db92f",
+      "second": "09a2d02498dbce55828cc55e1224bb6befdcb175f1e4e697d8edfebb808db92f",
+      "match": true
+    },
+    "pose-0.csv": {
+      "first": "649e0461cf43dd01e3390602f45ef02505cbc7ef8a109524eb238008163bc060",
+      "second": "649e0461cf43dd01e3390602f45ef02505cbc7ef8a109524eb238008163bc060",
+      "match": true
+    },
+    "start_goal-0.csv": {
+      "first": "4692e72100249bc2b2d93a263602f502d1e790d77cb5989baabd8f1fc2575536",
+      "second": "4692e72100249bc2b2d93a263602f502d1e790d77cb5989baabd8f1fc2575536",
+      "match": true
+    },
+    "reachability_metadata.json": {
+      "first": "aacedc03a27d1d0b4142b4ed4581405e5d2bcc988e67c231a20e8dfb8c376d0f",
+      "second": "aacedc03a27d1d0b4142b4ed4581405e5d2bcc988e67c231a20e8dfb8c376d0f",
+      "match": true
+    }
+  }
+}

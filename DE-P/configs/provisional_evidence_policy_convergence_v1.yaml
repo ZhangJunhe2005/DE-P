@@ -1,0 +1,38 @@
+version: provisional_evidence_policy_convergence_v1
+scope: development_shadow_only
+policy_convergence_iteration_count: 1
+allowed_strategies:
+  - A_HISTORY_BACKED_DYNAMIC_ONLY
+  - B_TWO_STAGE_NO_HISTORY_BOOTSTRAP
+  - C_HANDCRAFTED_EVIDENCE_INSUFFICIENT
+pending:
+  maximum_age_s: 0.05
+  cache_read_refreshes_evidence: false
+  dynamic_claim: false
+  formal_tracker_feed: false
+bootstrap:
+  maximum_age_s: 0.05
+  maximum_displacement_m: 0.50
+  required_distinct_causal_frames: 2
+  require_one_to_one: true
+  require_frozen_motion_consistency: true
+  require_frozen_negative_veto_clear: true
+  allow_same_frame_promotion: false
+transient_unresolved:
+  maximum_age_s: 0.05
+  candidate_support_clearance_m: 0.0
+  known_static_allowed: false
+runtime:
+  environment: H5_MINIMAL_ENVIRONMENT_CONTRACT
+  full_cycle_gate_ms: 30.303030303030305
+  deadline_miss_rate_maximum: 0.01
+  consecutive_deadline_miss_maximum: 1
+  queue_depth: 0
+validation:
+  no_post_freeze_tuning: true
+  support_metrics_diagnostic_only: true
+  planner_level_primary: true
+production_default_enabled: false
+production_activation_authorized: false
+training_authorized: false
+second_policy_convergence_authorized: false

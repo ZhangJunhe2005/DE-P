@@ -1,0 +1,48 @@
+{
+  "dynamic_weighted_vs_static": {
+    "mean": -0.35439337491989137,
+    "negative_fraction": 0.8
+  },
+  "dynamic_weighted_vs_guidance": {
+    "mean": -0.032095252303406596,
+    "negative_fraction": 0.3
+  },
+  "dynamic_weighted_vs_score": {
+    "mean": -0.013947524712421,
+    "negative_fraction": 0.5
+  },
+  "dynamic_weighted_vs_smooth": {
+    "mean": -0.2645194396201987,
+    "negative_fraction": 0.7
+  },
+  "gradient_norms": {
+    "smooth": {
+      "mean": 2.1142362713813783,
+      "median": 2.1866891384124756
+    },
+    "static": {
+      "mean": 12.841027164459229,
+      "median": 12.625310897827148
+    },
+    "guidance": {
+      "mean": 6.13233118057251,
+      "median": 6.345592498779297
+    },
+    "dynamic_raw": {
+      "mean": 5.267937481403351,
+      "median": 4.8495259284973145
+    },
+    "dynamic_weighted": {
+      "mean": 0.5267465367913247,
+      "median": 0.4849425107240677
+    },
+    "score": {
+      "mean": 8.399653244018555,
+      "median": 9.282389640808105
+    },
+    "total": {
+      "mean": 18.581592273712157,
+      "median": 18.502105712890625
+    }
+  }
+}

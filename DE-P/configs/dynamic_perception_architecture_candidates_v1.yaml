@@ -1,0 +1,89 @@
+version: dynamic_perception_architecture_candidates_v1
+default_architecture: legacy_v1
+explicit_key_required: true
+physical_control_manifest_hash: 1a699f9caeb6b1139f4f31bc17efc3ca0f9cb09f1c29bc1cf38860f5295f5efe
+runtime_provenance:
+  depth_consistency_tolerance_m: 0.20
+  minimum_stable_overlap_precision: 0.90
+  minimum_stable_overlap_recall: 0.90
+  minimum_fov_precision: 0.90
+  minimum_fov_recall: 0.90
+  minimum_disocclusion_precision: 0.80
+  minimum_disocclusion_recall: 0.80
+performance_bounds:
+  history_capacity: 4
+  maximum_history_capacity: 6
+  maximum_residual_points_per_frame: 4096
+  maximum_tracklets: 32
+  maximum_components: 64
+  maximum_predicted_rois: 32
+  p95_runtime_ms: 50.0
+  maximum_runtime_ratio_to_legacy: 2.0
+  peak_cpu_memory_mb: 512
+  peak_gpu_memory_mb: 64
+candidates:
+  legacy_v1:
+    implementation: frozen
+  tf1_candidate_a:
+    implementation: frozen
+  tf1_candidate_b:
+    implementation: frozen
+  tf1_candidate_c:
+    implementation: frozen
+    parameters:
+      minimum_channel_support: 1
+      require_closer_or_free: true
+  physical_control_residual_v1:
+    minimum_stable_fraction: 0.10
+    maximum_fov_fraction: 0.50
+    maximum_invalid_fraction: 0.50
+    minimum_closer_fraction_for_birth: 0.01
+    minimum_component_pixels_for_residual_birth: 64
+    minimum_component_pixels_for_motion_birth: 128
+    minimum_motion_support_frames: 3
+    minimum_world_speed_mps: 0.15
+    maximum_world_speed_mps: 2.0
+    minimum_direction_consistency: 0.90
+    boundary_hazard_dilation_pixels: 3
+    maximum_boundary_hazard_fraction_for_motion_birth: 0.05
+  visibility_aware_causal_residual_v1:
+    history_frames: 4
+    minimum_temporal_support_frames: 2
+    residual_abs_m: 0.08
+    residual_relative: 0.02
+    minimum_component_pixels: 8
+    maximum_component_pixels: 4096
+    maximum_component_depth_span_m: 1.2
+  causal_depth_track_before_detect_v1:
+    history_frames: 4
+    minimum_support_frames: 3
+    association_distance_m: 0.65
+    minimum_world_speed_mps: 0.15
+    maximum_world_speed_mps: 3.0
+    minimum_direction_consistency: 0.70
+  dual_path_dynamic_perception_v1:
+    discovery_sources:
+      - visibility_aware_causal_residual_v1
+      - causal_depth_track_before_detect_v1
+    duplicate_distance_m: 0.45
+    residual:
+      history_frames: 4
+      minimum_temporal_support_frames: 2
+      residual_abs_m: 0.08
+      residual_relative: 0.02
+      minimum_component_pixels: 8
+      maximum_component_pixels: 4096
+      maximum_component_depth_span_m: 1.2
+    tracklet:
+      history_frames: 4
+      minimum_support_frames: 3
+      minimum_temporal_support_frames: 3
+      association_distance_m: 0.65
+      minimum_world_speed_mps: 0.15
+      maximum_world_speed_mps: 3.0
+      minimum_direction_consistency: 0.70
+    reacquisition:
+      roi_sigma: 2.0
+      minimum_residual_pixels: 4
+    reacquisition_requires_current_depth_evidence: true
+    reacquisition_birth_allowed: false

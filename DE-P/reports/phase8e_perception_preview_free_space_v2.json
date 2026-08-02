@@ -1,0 +1,152 @@
+{
+  "status": "FAIL",
+  "evaluator_version": "phase8e_occlusion_semantics_v2",
+  "dataset": "/home/zjh/YOPO/DE-P/data/phase8_dynamic_production",
+  "causal": true,
+  "future_gt_used_by_tracker": false,
+  "evaluated_splits": [
+    "train",
+    "valid"
+  ],
+  "max_sequences_per_scenario": 1,
+  "metric_semantics": {
+    "visible": "active, inside image, non-occluded, visibility>0",
+    "active_track": "active and visible, or previously observed within max_missed_frames",
+    "visible_false_positive": "unmatched estimated track; correctly retained occluded matches excluded",
+    "no_target": "every dynamic track is a hard false positive"
+  },
+  "split_metrics": {
+    "train": {
+      "sequence_count": 6,
+      "frame_count": 360,
+      "visible_detection_precision": 0.3465346534653465,
+      "visible_detection_recall": 0.2413793103448276,
+      "active_track_precision": 0.3888888888888889,
+      "active_track_recall": 0.23333333333333334,
+      "position_rmse_m": 0.32851527650912205,
+      "velocity_rmse_mps": 0.6817483799598347,
+      "id_switches": 1,
+      "track_fragmentations": 2,
+      "time_to_confirm_mean_s": 1.2166693607966106,
+      "no_target_false_positive_track_count": 9,
+      "no_target_false_positive_frame_fraction": 0.15,
+      "never_observed_false_positive_match_count": 0,
+      "never_observed_actor_frame_count": 22,
+      "occluded_track_retention_same_id": 0.17142857142857143,
+      "occluded_eligible_frame_count": 35,
+      "attention_iou_mean": 0.3494486429600933,
+      "attention_center_error_cells": 0.5371812404888628,
+      "no_target_attention_nonzero_frame_fraction": 0.13333333333333333,
+      "no_target_attention_max": 0.10653422027826309,
+      "no_target_attention_mean": 0.003435143269598484,
+      "no_target_false_attention_cell_count_mean": 0.4166666666666667,
+      "scenario_metrics": {
+        "crossing": {
+          "frames": 60,
+          "dynamic_track_frame_fraction": 0.16666666666666666
+        },
+        "head_on": {
+          "frames": 60,
+          "dynamic_track_frame_fraction": 0.05
+        },
+        "multi_target": {
+          "frames": 60,
+          "dynamic_track_frame_fraction": 0.5
+        },
+        "no_target": {
+          "frames": 60,
+          "dynamic_track_frame_fraction": 0.15
+        },
+        "occluded_but_tracked": {
+          "frames": 60,
+          "dynamic_track_frame_fraction": 0.21666666666666667
+        },
+        "temporal_separation": {
+          "frames": 60,
+          "dynamic_track_frame_fraction": 0.31666666666666665
+        }
+      }
+    },
+    "valid": {
+      "sequence_count": 6,
+      "frame_count": 360,
+      "visible_detection_precision": 0.08196721311475409,
+      "visible_detection_recall": 0.07246376811594203,
+      "active_track_precision": 0.0967741935483871,
+      "active_track_recall": 0.0625,
+      "position_rmse_m": 0.9254863415990222,
+      "velocity_rmse_mps": 0.7111600330275636,
+      "id_switches": 0,
+      "track_fragmentations": 0,
+      "time_to_confirm_mean_s": 0.900023341178894,
+      "no_target_false_positive_track_count": 9,
+      "no_target_false_positive_frame_fraction": 0.15,
+      "never_observed_false_positive_match_count": 7,
+      "never_observed_actor_frame_count": 95,
+      "occluded_track_retention_same_id": 0.037037037037037035,
+      "occluded_eligible_frame_count": 27,
+      "attention_iou_mean": 0.3089590964590964,
+      "attention_center_error_cells": 0.9191771264367139,
+      "no_target_attention_nonzero_frame_fraction": 0.15,
+      "no_target_attention_max": 0.14203965663909912,
+      "no_target_attention_mean": 0.00471099279820919,
+      "no_target_false_attention_cell_count_mean": 0.5166666666666667,
+      "scenario_metrics": {
+        "crossing": {
+          "frames": 60,
+          "dynamic_track_frame_fraction": 0.15
+        },
+        "head_on": {
+          "frames": 60,
+          "dynamic_track_frame_fraction": 0.11666666666666667
+        },
+        "multi_target": {
+          "frames": 60,
+          "dynamic_track_frame_fraction": 0.16666666666666666
+        },
+        "no_target": {
+          "frames": 60,
+          "dynamic_track_frame_fraction": 0.15
+        },
+        "occluded_but_tracked": {
+          "frames": 60,
+          "dynamic_track_frame_fraction": 0.13333333333333333
+        },
+        "temporal_separation": {
+          "frames": 60,
+          "dynamic_track_frame_fraction": 0.08333333333333333
+        }
+      }
+    }
+  },
+  "hard_thresholds": {
+    "visible_precision_min": 0.5,
+    "active_precision_min": 0.5,
+    "recall_min": 0.2,
+    "position_rmse_max_m": 1.0,
+    "velocity_rmse_max_mps": 1.5,
+    "no_target_false_positive_frame_fraction_max": 0.1,
+    "no_target_attention_nonzero_frame_fraction_max": 0.1,
+    "attention_iou_min": 0.05,
+    "never_observed_false_matches": 0
+  },
+  "hard_failures": [
+    "train: visible_detection_precision=0.3465346534653465 violates min 0.5",
+    "train: active_track_precision=0.3888888888888889 violates min 0.5",
+    "train: no_target_false_positive_frame_fraction=0.15 violates max 0.1",
+    "train: no_target_attention_nonzero_frame_fraction=0.13333333333333333 violates max 0.1",
+    "valid: visible_detection_precision=0.08196721311475409 violates min 0.5",
+    "valid: active_track_precision=0.0967741935483871 violates min 0.5",
+    "valid: visible_detection_recall=0.07246376811594203 violates min 0.2",
+    "valid: active_track_recall=0.0625 violates min 0.2",
+    "valid: no_target_false_positive_frame_fraction=0.15 violates max 0.1",
+    "valid: no_target_attention_nonzero_frame_fraction=0.15 violates max 0.1",
+    "valid: never-observed false matches=7"
+  ],
+  "warnings": [
+    "train: visible precision below target 0.7",
+    "train: no-target FP above target 0.05",
+    "valid: visible precision below target 0.7",
+    "valid: no-target FP above target 0.05"
+  ]
+}

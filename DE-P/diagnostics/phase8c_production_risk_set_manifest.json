@@ -1,0 +1,59 @@
+{
+  "status": "PASS",
+  "schema_version": 1,
+  "immutable": true,
+  "selection_rule": "frozen corrected baseline; lists must never be re-mined after training",
+  "baseline_checkpoint": "/home/zjh/YOPO/DE-P/saved/DEP_corrected_init/epoch10_converted.pth",
+  "baseline_checkpoint_sha256": "4f1be43cd8721f1b777ced569130f9d018f20bdba596a89b58bade3aefef6f30",
+  "config": "/home/zjh/YOPO/DE-P/configs/train_dynamic_production_v2.yaml",
+  "config_sha256": "cf4c6b44aa1da09610fc6f251f87d51085a2d51c5638c28f7d6f9ee8ea480d23",
+  "dataset_manifest_sha256": "25526162db84dd2b306566d1f256bd077a9c20b998c4e8ebd95cba3fc22d624e",
+  "map_splits": {
+    "train": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "valid": [
+      12,
+      13,
+      14
+    ],
+    "test": [
+      15,
+      16,
+      17
+    ]
+  },
+  "baseline_scan_counts": {
+    "train": 50,
+    "valid": 50,
+    "test": 50
+  },
+  "split_sequence_counts": {
+    "train": 144,
+    "valid": 36,
+    "test": 36
+  },
+  "file_sha256": {
+    "production_train_hard_risk.json": "7c815063129da3b9dbde6b6dda51806f1b370240c1fc06033fe8df806bc63a1b",
+    "production_valid_hard_risk.json": "9eff6c5653c49b8a532669f99a2f767ea4ddda9dc7299a64904d510c3684029e",
+    "production_test_hard_risk.json": "2ff0ca6be392fa8189368e4848a8b33d046461954b69fbdc344a4588ce5c0d72",
+    "production_valid_no_target.json": "d1909d7884b6f38c0dcd054a98e564b81e1362138c0dc2da4ac159aaca13698d",
+    "production_test_no_target.json": "0598af26cdbcd0772afacf88c367cbbb905d0e55851ebd2e17e5fc9691f2e6b7",
+    "production_valid_temporal_separation.json": "0e23d84e6e257d09bb731a27f389554332665286c558654d147aa66e90d77839",
+    "production_test_temporal_separation.json": "2fee1fd18d464ee9f67be389a5beb4605f4c1ace5121987ef9e3a9f05ce13923",
+    "production_valid_occluded_tracked.json": "e56ac2922886d4c2056ccc8f052a1f8e397ff84c28c4d58ec057b78cd5764401",
+    "production_test_occluded_tracked.json": "c624b8e384646eea40ce688a0880ee5e55fc80ffb2bea021e6eacd2725c1a91b"
+  },
+  "validation_and_test_used_by_training_sampler": false
+}

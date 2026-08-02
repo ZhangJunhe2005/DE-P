@@ -1,0 +1,72 @@
+version: natural_short_occlusion_contract_v3_candidate
+status: candidate_not_activated
+backward_compatibility:
+  natural_full_occlusion_gap1_v1: unchanged
+  natural_short_full_occlusion_v2: unchanged
+geometry:
+  allowed_actor_radius_m: [0.20, 0.25, 0.30]
+  full_occlusion:
+    projected_pixel_count_positive: true
+    visible_pixel_count: 0
+    static_blocked_equals_projected: true
+    reject_fov_exit: true
+    reject_behind_camera: true
+    reject_max_depth_exit: true
+    artificial_hiding: false
+map_capability_gate:
+  hard_required_gap_frames: [1]
+  minimum_independent_maps: 2
+  minimum_independent_seeds: 2
+  require_non_cave_forest_type: true
+  require_independent_cuda_rerender: true
+  require_default_radius_0_30_coverage: true
+corpus_diversity_gate:
+  minimum_independent_maps: 6
+  minimum_types: 3
+  minimum_seeds: 6
+  maximum_single_type_fraction: 0.50
+tracker_survival_semantics:
+  gap1:
+    class: strict_short_full_occlusion_gap1
+    confidence_precondition:
+      expression: c0 >= T / d
+      frozen_constant_base_bound: 0.7333333333333334
+      additional_state_preconditions:
+        - velocity_uncertainty_remains_within_dynamic_bound
+        - track_is_confirmed_and_already_dynamic
+  gap2:
+    class: conditional_high_confidence_full_occlusion
+    confidence_precondition:
+      expression: c0 >= T / d^2
+      frozen_constant_base_bound: 0.9777777777777779
+      sufficient_from_confidence_alone: false
+      additional_state_preconditions:
+        - velocity_uncertainty_remains_within_dynamic_bound
+        - recomputed_confidence_components_remain_stable
+        - track_is_confirmed_and_already_dynamic
+    map_capability_blocking: false
+    empirical_pre_gap_distribution_required_before_activation: true
+  gap3_or_longer:
+    class: long_or_confidence_breaking_full_occlusion
+    strict_dynamic_survival: false
+    intended_evaluation: [track_survival, deletion, redetection, rebirth]
+scene_taxonomy:
+  - partial_occlusion
+  - severe_partial_occlusion
+  - strict_short_full_gap1
+  - conditional_short_full_gap2
+  - long_full_occlusion
+  - rejected_visibility_exit
+manifest_requirements:
+  contract_version_required: true
+  sampled_gap_frames_required: true
+  continuous_full_interval_required: true
+  legal_phase_interval_required: true
+  selected_phase_required: true
+  actor_radius_required: true
+  pre_gap_confidence_precondition_required_for_gap2: true
+loader_constraints:
+  pre_gap_ground_truth_confidence_as_model_input: false
+activation:
+  enabled: false
+  formal_contract_activated: false

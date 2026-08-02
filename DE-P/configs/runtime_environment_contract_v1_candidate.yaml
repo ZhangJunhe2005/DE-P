@@ -1,0 +1,50 @@
+version: runtime_environment_contract_v1_candidate
+development_only: true
+experiments:
+  H0:
+    description: current host baseline
+    affinity: default
+    threads: default
+    gc_policy: DEFAULT
+  H1:
+    description: clean-host low-overhead qualification control
+    affinity: default
+    threads: default
+    gc_policy: DEFAULT
+  H2:
+    description: detected high-performance-core set
+    affinity: p_core_set
+    threads: default
+    gc_policy: DEFAULT
+  H3:
+    description: numerical and torch thread pools limited to one
+    affinity: default
+    threads: 1
+    gc_policy: DEFAULT
+  H4:
+    description: episode-boundary GC and bounded memory pre-touch
+    affinity: default
+    threads: default
+    gc_policy: EPISODE_BOUNDARY
+    memory_pre_touch_bytes: 8388608
+  H5:
+    description: evidence-selected minimal combination of H1-H4
+qualification:
+  independent_process_runs: 5
+  steady_frames_per_run: 300
+  warmup_frames_per_episode: 10
+  minimum_total_steady_frames: 1500
+  full_cycle_gate_ms: 30.303030303030305
+  deadline_miss_rate_maximum: 0.01
+  consecutive_deadline_miss_maximum: 1
+  require_p99_below_gate: true
+  no_outlier_deletion: true
+  no_frame_skipping: true
+  same_frame_only: true
+  atomic_join_before_snapshot: true
+host:
+  governor_requirement: READ_ONLY_CURRENT
+  logging_mode: LOW_OVERHEAD_QUALIFICATION
+  restore_procedure: process exit restores affinity, thread environment and GC
+production_activation_authorized: false
+training_authorized: false

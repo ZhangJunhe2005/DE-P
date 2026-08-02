@@ -1,0 +1,48 @@
+.idea/
+
+Controller/devel/
+Controller/build/
+Controller/.catkin_workspace
+
+Simulator/devel/
+Simulator/build/
+Simulator/logs/
+Simulator/.catkin_tools/
+
+YOPO/saved/*
+dataset/
+yopo_sim/
+
+!YOPO/saved/YOPO_1/
+
+# Python cache
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/.pytest_cache/
+
+# DE-P large/generated data
+DE-P/data/
+!DE-P/data/
+DE-P/data/*
+!DE-P/data/dynamic_evidence_chain_builder_v1.py
+!DE-P/data/dynamic_evidence_label_authority_v1.py
+!DE-P/data/dynamic_evidence_v3_schema_v1.py
+DE-P/cache/
+DE-P/runs/
+DE-P/tensorboard/
+DE-P/checkpoints/
+
+# Generated experiment outputs
+dataset_smoke_*/
+repro_records/
+
+# Temporary backups
+*.backup
+*.full-backup
+*.before_checkpoint_patch
+
+# Editor/system files
+.vscode/
+.DS_Store
+Simulator/.catkin_workspace

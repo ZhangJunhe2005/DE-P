@@ -1,0 +1,11 @@
+version: provisional_evidence_runtime_v1_candidate
+semantic_contract: provisional_evidence_contract_v1_candidate
+selected_candidate: R8_PROVISIONAL_EVIDENCE_RUNTIME_V1
+diagnostic_ring_capacity: 256
+history_index_maximum_entries: 256
+batch_enabled: true
+gc_policy: episode_boundary_only
+cross_frame_queue_depth: 0
+semantic_thresholds_present: false
+production_activation_authorized: false
+training_authorized: false

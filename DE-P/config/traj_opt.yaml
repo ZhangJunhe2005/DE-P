@@ -1,0 +1,258 @@
+# IMPORTANT: velocity in testing (modifiable)
+velocity: 6.0
+
+# IMPORTANT: vel_max and acc_max in training
+# not the actual values in testing, ensure consistency between testing and training, please refer to ../policy/primitive.py
+vel_max_train: 6.0
+acc_max_train: 6.0
+
+# Versioned runtime safety shield.  These are vehicle limits, not soft loss
+# weights.  The neural network proposes continuously; only candidates that
+# satisfy every hard constraint are allowed to compete by score.
+runtime_safety:
+  enabled: true
+  max_speed_mps: 6.0
+  max_acceleration_mps2: 6.0
+  vehicle_radius_m: 0.30
+  tracking_margin_m: 0.35
+  trajectory_samples: 81
+  depth_stride: 2
+  limit_tolerance: 0.001
+  minimum_progress_m: 1.0
+  braking_duration_min_s: 0.8
+  braking_duration_max_s: 2.5
+  braking_duration_step_s: 0.05
+  feasibility_projection_enabled: true
+  feasibility_projection_min_scale: 0.15
+  feasibility_projection_steps: 18
+  clearance_sensor_tolerance_m: 0.08
+  clearance_escape_drop_tolerance_m: 0.05
+  clearance_escape_gain_m: 0.10
+
+# IMPORTANT: weight of costs for unit speed (can be visualized in tensorboard)
+wg: 0.6   # guidance
+ws: 1   # smoothness
+wc: 0.1  # collision
+
+# 平滑度参数：强化高阶导数约束
+#snap_weight: 0.1  # 提高snap权重，抑制急动度
+
+# dataset
+dataset_path: "../dataset"
+image_height: 96
+image_width: 160
+
+# Static MobileNetV3 architecture. Keep legacy as the default for existing checkpoints.
+backbone_variant: legacy
+
+# Dynamic perception, network fusion, and ROS integration.  This block is the
+# single source of defaults for training, inference, and tests.
+dynamic_perception:
+  enabled: false
+  source: depth              # depth | pointcloud
+  use_attention: true
+  fallback_to_static: true
+  publish_debug: false
+  max_pose_time_offset: 0.05
+  attention_alpha: 1.0       # fixed, parameter-free feature modulation
+  depth_stride: 2
+  depth_topic: /depth_image
+  pointcloud_topic: /lidar_points_optical
+  pointcloud_body_topic: /lidar_points_body
+  pointcloud_optical_topic: /lidar_points_optical
+  pointcloud_world_topic: /lidar_points_odom
+  camera_info_topic: /camera_info
+  odom_topic: /sim/odom
+  use_camera_info: true
+  use_tf_extrinsics: true
+  tf_lookup_timeout: 0.02
+  allow_empty_sensor_frame: false
+  camera_frame_id: camera_optical
+  body_frame_id: quadrotor
+  world_frame_id: world
+  sync_queue_size: 10
+  sync_slop: 0.03
+  camera_width: 160
+  camera_height: 90       # current Simulator/src/config/config.yaml sensor height
+  camera_fx: 80.0
+  camera_fy: 80.0
+  camera_cx: 80.0
+  camera_cy: 45.0
+  camera_depth_scale: 1.0
+  camera_min_depth: 0.1
+  camera_max_depth: 20.0
+  camera_position_body: [0.0, 0.0, 0.0]
+  # body FLU -> optical RDF. p_body = R_body_from_camera * p_camera + t_body
+  camera_rotation_body_from_camera: [[0.0, 0.0, 1.0], [-1.0, 0.0, 0.0], [0.0, -1.0, 0.0]]
+  cluster_eps: 0.50
+  cluster_min_samples: 5
+  cluster_max_iterations: 300  # validated compatibility limit; sklearn DBSCAN itself is exhaustive
+  min_dt: 0.001
+  max_dt: 1.0
+  process_noise_acceleration: 1.0
+  measurement_noise: 0.05
+  initial_position_variance: 0.25
+  initial_velocity_variance: 4.0
+  association_distance_threshold: 1.5
+  association_mahalanobis_threshold: 11.345
+  max_missed_frames: 3
+  min_confirmed_hits: 3
+  dynamic_enter_speed: 0.30
+  dynamic_exit_speed: 0.15
+  dynamic_min_confirmed_hits: 3
+  dynamic_max_velocity_std: 1.50
+  dynamic_min_cluster_points: 20
+  dynamic_min_cluster_extent: 0.05
+  dynamic_max_cluster_extent: 1.50
+  dynamic_max_cluster_min_extent: 0.75
+  attention_sigma: 1.0
+  attention_max: 1.0
+  attention_distance_scale: 10.0
+  attention_uncertainty_scale: 1.0
+  foreground_mode: temporal_voxel  # none | temporal_voxel
+  background_voxel_size: 0.20
+  background_match_distance: 0.28
+  background_min_persistence: 3
+  background_max_age: 30
+  background_max_voxels: 200000
+  foreground_min_persistence: 2
+  foreground_reset_gap: 0.5
+  background_update_speed_limit: 0.20
+  centroid_trim_fraction: 0.10
+  centroid_extent_covariance_scale: 0.05
+  association_point_count_ratio_max: 4.0
+  association_extent_ratio_max: 4.0
+  association_bbox_margin: 0.35
+  association_shape_weight: 0.5
+  association_size_weight: 0.25
+  association_overlap_weight: 0.5
+  physically_plausible_speed_max: 8.0
+  physically_plausible_acceleration_max: 15.0
+  velocity_covariance_floor: 0.04
+  motion_consistency_frames: 2
+  track_confidence_threshold: 0.55
+  confidence_missed_decay: 0.75
+  # Phase 8F train-only causal residual analysis (manifest hash is recorded in
+  # reports/phase8f_range_signal_analysis.json).  These are independent from
+  # the retained temporal_voxel default until the perception Gate is evaluated.
+  range_history_frames: 4
+  range_min_history_support: 2
+  range_abs_residual_threshold: 0.12
+  range_rel_residual_threshold: 0.02
+  range_static_consistency_threshold: 0.12
+  range_edge_guard_threshold: 0.30
+  range_min_seed_pixels: 8
+  range_min_seed_fraction: 0.015
+  range_component_connectivity: 8
+  range_growth_abs_depth: 0.08
+  range_growth_rel_depth: 0.01
+  range_growth_max_3d_neighbor_distance: 0.20
+  range_max_component_pixels: 2500
+  range_max_component_depth_span: 1.50
+  range_component_min_persistence: 1
+  range_history_max_age: 0.50
+  range_reset_gap: 0.50
+
+# Future dynamic-collision supervision. Disabled keeps the phase-2A loss exact.
+dynamic_loss:
+  enabled: false
+  weight: 0.1
+  uav_radius: 0.3
+  default_obstacle_radius: 0.3
+  covariance_sigma: 2.0
+  covariance_growth_rate: 0.05  # isotropic position variance growth, m^2/s^2
+  temperature: 0.2
+  time_discount: 0.2            # 1/s
+  max_track_age: 0.5            # seconds at candidate start
+  obstacle_aggregation: max
+  eval_points: 30
+  target_source: recorded_future_gt  # recorded_future_gt | constant_velocity
+
+# Physical Gate thresholds.  log(2)^2 is the raw per-time loss exactly at
+# distance == d_safe; 0.15 m is half the configured UAV radius.
+risk_metrics:
+  clearance_threshold: 0.0
+  cost_epsilon: 0.4804530139182014
+  cvar_fraction: 0.26666666666666666  # highest 4 of the fixed 15 primitives
+  hard_window_threshold: 0.15
+
+# Default preserves the phase-8 weighted candidate mean exactly.  Phase-8B
+# experiment configs may add a CVaR term and a fixed baseline reference scale.
+dynamic_objective:
+  mean_coefficient: 1.0
+  cvar_coefficient: 0.0
+  cvar_fraction: 0.26666666666666666
+  reference_scale: 1.0
+  gradient_strategy: weighted_sum
+  pcgrad_other_norm_ratio: 1.0
+  pcgrad_risk_gate: false
+  pcgrad_activation_clearance: 0.15
+  pcgrad_dynamic_grad_epsilon: 1.0e-12
+  pcgrad_ratio_switch_step: -1
+  pcgrad_late_other_norm_ratio: 0.25
+
+dynamic_training:
+  dataset_version: dep_dynamic_sequence_v1
+  history_length: 4
+  window_stride: 1
+  cache_size: 32
+  context_source: ground_truth  # ground_truth | noisy_ground_truth | estimated
+  loss_target_source: recorded_future_gt
+  noise_seed: 8000
+  position_noise_std: 0.05
+  velocity_noise_std: 0.10
+  visibility_noise_std: 0.05
+  attention_noise_std: 0.02
+  estimated_cache_dir: null
+  sampler_weights:
+    no_target: 1.0
+    visible_low_risk: 1.0
+    visible_high_risk: 2.0
+    temporally_separated: 1.5
+    occluded_but_tracked: 2.0
+    multi_target: 2.0
+  curriculum:
+    - {start_epoch: 0, context_source: ground_truth, ratio: 1.0}
+  max_obstacles: 16
+  max_grad_norm: 0.1
+  static_batch_ratio: 0.5
+
+# trajectory and primitive param (Note: traj_time = 2 * radio / vel_max) (can be visualized in rviz)
+horizon_num: 5
+vertical_num: 3
+horizon_camera_fov: 90.0
+vertical_camera_fov: 60.0
+horizon_anchor_fov: 30.0
+vertical_anchor_fov: 30.0
+radio_range: 5.0    # planning horizon: 2 * radio_range
+radio_num: 1        # only support 1 currently
+
+# safety penalties
+d0: 1.2
+r: 0.6
+
+safety_full_ratio: 0.3  # 完整轨迹成本占比；其余权重用于首次碰撞前成本
+out_of_bounds_cost: 10.0  # 地图外/未知区域的高风险代价
+
+# distribution for unit state sampling (can be visualized by 'python ./policy/dep_dataset.py')
+vx_mean_unit: 0.4
+vy_mean_unit: 0.0
+vz_mean_unit: 0.0
+vx_std_unit: 2.0
+vy_std_unit: 0.45
+vz_std_unit: 0.3
+ax_mean_unit: 0.0
+ay_mean_unit: 0.0
+az_mean_unit: 0.0
+ax_std_unit: 0.5
+ay_std_unit: 0.5
+az_std_unit: 0.3
+goal_pitch_std: 10.0  # clip goal_length to: 2 * radio_range; 10% probability [0, 2 * radio_range]
+goal_yaw_std: 20.0
+
+# extend the map to avoid trajectory exceeding bounds (especially in z-axis) and treating the sky outside the map as obstacle
+map_expand_min: [0, 0, 0.2]
+map_expand_max: [0, 0, 6.0]
+
+# 引导损失参数：减少目标偏离
+guidance_perp_max: 0.5  # 垂直分量权重上限提高，减少横向偏离

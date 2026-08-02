@@ -1,0 +1,25 @@
+{
+  "status": "PASS",
+  "encoding": "32SC1",
+  "shape": [90, 160],
+  "static_pixel_id": 0,
+  "actor_id_semantics": "stable nonzero DynamicObjectState.object_id",
+  "shared_depth_z_buffer": true,
+  "depth_instance_timestamp_exact": true,
+  "development_maps": 4,
+  "shadow_validation_maps": 2,
+  "development_frames": 3360,
+  "shadow_validation_frames": 1680,
+  "instance_mask_depth_alignment_error": 0,
+  "negative_control_sequences_checked": 30,
+  "negative_control_visible_frame_count": 0,
+  "sphere_supported": true,
+  "vertical_cylinder_supported": true,
+  "runtime_input": false,
+  "simulator_build": "PASS",
+  "invalid_control_history_retained": [
+    "data/phase8g_perception_protocol/historical_invalid_static_wall_v1",
+    "data/phase8g_perception_protocol/historical_invalid_outside_fov_v1"
+  ],
+  "formal_shadow_cycle": 3
+}

@@ -1,0 +1,52 @@
+version: occlusion_coasting_safety_contract_v1_candidate
+status: candidate_not_activated
+scope: development_shadow_only
+
+parameter_grid_frozen_before_calibration:
+  covariance_sigma: [1.5, 2.0, 2.5, 3.0]
+  maximum_coasting_misses: [1, 2, 3]
+  maximum_position_std_m: [0.40, 0.60, 0.80, 1.00]
+  maximum_velocity_std_mps: [0.25, 0.50, 1.00, 1.50]
+
+selection_policy:
+  split: deterministic_case_grouped_sha256_modulo_3
+  validation_bucket: 0
+  required_gap2_misses: 2
+  default_maximum_coasting_misses: 2
+  gap3_default_enabled: false
+  choose_covariance_sigma:
+    rule: smallest_grid_value_with_calibration_unsafe_miss_zero_then_lowest_false_veto
+  choose_position_std:
+    rule: smallest_grid_value_at_or_above_calibration_p99
+  choose_velocity_std:
+    rule: smallest_grid_value_at_or_above_calibration_p99
+  no_post_validation_tuning: true
+
+predeclared_validation_gates:
+  unsafe_candidate_miss_rate_max: 0.0
+  unsafe_recommendation_count_max: 0
+  safe_candidate_false_veto_rate_max: 0.10
+  sequence_false_emergency_rate_max: 0.05
+  negative_false_coasting_count_max: 0
+  negative_false_veto_count_max: 0
+  adapter_runtime_p95_ms_max: 10.0
+
+selected_parameters:
+  frozen: true
+  frozen_from_split: calibration
+  covariance_sigma: 3.0
+  maximum_coasting_misses: 2
+  maximum_coasting_time_s: 0.25
+  maximum_position_std_m: 0.40
+  maximum_velocity_std_mps: 1.50
+  process_noise_acceleration: 1.0
+  uav_radius_m: 0.30
+  default_actor_radius_m: 0.30
+  clearance_margin_m: 0.10
+  maximum_reacquired_frames: 2
+
+activation:
+  enabled: false
+  formal_planner_modified: false
+  formal_command_modified: false
+  runtime_gt_used: false

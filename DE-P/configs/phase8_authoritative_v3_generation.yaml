@@ -1,0 +1,353 @@
+actor_distribution:
+  maximum_actors: 2
+  policy: scenario_conditioned_persisted
+authority_settings:
+  collision_truth: canonical_occupancy_only
+  empty_minimum_gap_mask_required: true
+  resolution_m: 0.1
+authority_source_dataset: phase8_authoritative_v1
+authority_source_root: /home/zjh/YOPO/DE-P/data/phase8_authoritative_v1
+authority_source_root_manifest_hash: a81319d734871c48d49058e22a36a733baead3d85db2ec39206221d3b154f723
+blind_disabled: true
+certificate_settings:
+  dynamic_success_min: 0.99
+  fail_fast_failure_fraction: 0.01
+  maximum_attempts_per_map: 100000
+  maximum_attempts_per_sequence: 5000
+  maximum_attempts_per_window: 1000
+  static_success_min: 0.99
+  uav_radius_m: 0.3
+  unknown_budget: 0.01
+composition_derivation: 'Q2.3 pilot suite round-robin: 8 static then 7 dynamic'
+dataset_protocol_version: authoritative_dataset_protocol_v1
+dataset_version: phase8_authoritative_v3
+derived_esdf_settings:
+  authoritative: false
+  enabled: true
+  exact_verifier_required: true
+dynamic_motion_contract_hash: 5a6bc337d73617aa42b8b30d1a33386b5cfe876acb43c73667bdf32c45b8e7a4
+dynamic_motion_contract_path: configs/authoritative_dynamic_motion_contract_v2_1.yaml
+occlusion_map_eligibility_hash: 4e3685b8010d42f17b6f24aec02e3d4d1da88ee9a33af6d7b81b655694d5f8f8
+occlusion_map_eligibility_path: configs/phase8_authoritative_v3_occlusion_map_eligibility.yaml
+dynamic_scenarios:
+- no_target
+- crossing
+- head_on
+- multi_target
+- temporal_separation
+- occluded_but_tracked
+- static_dynamic_joint_constraint
+formal_splits:
+  train:
+    frames: 1000000
+    maps:
+    - map_id: train_map_0000
+      map_uuid: 6c05e11f-bc1a-5720-b671-fff6d7400444
+      namespace: authoritative_formal_train_v1
+      seed: 696818147
+    - map_id: train_map_0001
+      map_uuid: 9195342d-675c-5c74-a9e1-983fa4c2296f
+      namespace: authoritative_formal_train_v1
+      seed: 2180487242
+    - map_id: train_map_0002
+      map_uuid: 0c713d67-ead5-5697-b462-d712dce67080
+      namespace: authoritative_formal_train_v1
+      seed: 1935528161
+    - map_id: train_map_0003
+      map_uuid: ad9616fd-81fc-560d-a927-f9a3e3fa8559
+      namespace: authoritative_formal_train_v1
+      seed: 277479187
+    - map_id: train_map_0004
+      map_uuid: c2f9145b-e0e7-5a0b-adc6-f58778837992
+      namespace: authoritative_formal_train_v1
+      seed: 2398476357
+    - map_id: train_map_0005
+      map_uuid: 7cd12b35-25f2-50c9-afd8-baf8106ed7e8
+      namespace: authoritative_formal_train_v1
+      seed: 2533336707
+    - map_id: train_map_0006
+      map_uuid: 288eb5ed-b566-5a8d-bd65-427292ff70f8
+      namespace: authoritative_formal_train_v1
+      seed: 422774293
+    - map_id: train_map_0007
+      map_uuid: d3cff06f-9ddc-5edc-a1a7-310cfff33d5a
+      namespace: authoritative_formal_train_v1
+      seed: 1888886820
+    - map_id: train_map_0008
+      map_uuid: 13fd57ad-ef63-5868-a0a5-0b6226ce1d77
+      namespace: authoritative_formal_train_v1
+      seed: 2924730091
+    - map_id: train_map_0009
+      map_uuid: 3de831e0-32db-5798-8849-0379b1e4dead
+      namespace: authoritative_formal_train_v1
+      seed: 667071296
+    - map_id: train_map_0010
+      map_uuid: df63448a-3e2d-56b4-b489-7b14395a6129
+      namespace: authoritative_formal_train_v1
+      seed: 2220445028
+    - map_id: train_map_0011
+      map_uuid: a0c0b337-5833-50a1-ac11-e8b29431a5c9
+      namespace: authoritative_formal_train_v1
+      seed: 3857222669
+    - map_id: train_map_0012
+      map_uuid: 15e57c83-8653-561b-b215-68842556825f
+      namespace: authoritative_formal_train_v1
+      seed: 971844098
+    - map_id: train_map_0013
+      map_uuid: 15aa103a-14d5-5f7b-b5d5-1d299365ef8a
+      namespace: authoritative_formal_train_v1
+      seed: 3340105130
+    - map_id: train_map_0014
+      map_uuid: 8dcf4e70-e37d-5ed8-8396-350ce2869ed5
+      namespace: authoritative_formal_train_v1
+      seed: 3167068397
+    - map_id: train_map_0015
+      map_uuid: 47ce04c2-5849-5b1d-8080-d0db2cc2b8c4
+      namespace: authoritative_formal_train_v1
+      seed: 1587701215
+    - map_id: train_map_0016
+      map_uuid: dae721d1-61d0-5d10-9f44-963c571bee33
+      namespace: authoritative_formal_train_v1
+      seed: 1864874613
+    - map_id: train_map_0017
+      map_uuid: 843ef1e2-c21f-546c-b866-fb29ce1d0671
+      namespace: authoritative_formal_train_v1
+      seed: 3167195335
+    - map_id: train_map_0018
+      map_uuid: 00deed42-01aa-55bf-8147-ec5bdd9b49b3
+      namespace: authoritative_formal_train_v1
+      seed: 1613106683
+    - map_id: train_map_0019
+      map_uuid: bc915fde-b8f8-5972-b8db-60b960dc3579
+      namespace: authoritative_formal_train_v1
+      seed: 207968394
+    - map_id: train_map_0020
+      map_uuid: 69234b02-b397-5d45-b410-4ca2e0af0991
+      namespace: authoritative_formal_train_v1
+      seed: 4158603813
+    - map_id: train_map_0021
+      map_uuid: 9d84550c-27ad-572e-84f2-0bb0f8789e19
+      namespace: authoritative_formal_train_v1
+      seed: 2726297678
+    - map_id: train_map_0022
+      map_uuid: 1ba67a89-b6cb-5923-8ce0-e8d218f74a5e
+      namespace: authoritative_formal_train_v1
+      seed: 1405222474
+    - map_id: train_map_0023
+      map_uuid: a2bd50dd-e856-5d64-915e-4b0bb56b3d75
+      namespace: authoritative_formal_train_v1
+      seed: 1641573762
+    - map_id: train_map_0024
+      map_uuid: 3ee78201-c423-55e9-a76e-33906843656f
+      namespace: authoritative_formal_train_v1
+      seed: 607903363
+    - map_id: train_map_0025
+      map_uuid: 9f6ebf32-8170-5ad8-bc0e-329546f592c6
+      namespace: authoritative_formal_train_v1
+      seed: 2597799529
+    - map_id: train_map_0026
+      map_uuid: ddcfa894-fb3c-50d4-aa18-d0eabff42c3f
+      namespace: authoritative_formal_train_v1
+      seed: 3082929427
+    - map_id: train_map_0027
+      map_uuid: b193766c-e28c-54dc-8d7a-8a51a5863023
+      namespace: authoritative_formal_train_v1
+      seed: 1019808236
+    - map_id: train_map_0028
+      map_uuid: 8e75ec65-14c4-5a59-9200-7f91cbfc62f2
+      namespace: authoritative_formal_train_v1
+      seed: 2739461387
+    - map_id: train_map_0029
+      map_uuid: 8c8029d1-1bc0-5cc3-bf64-dc06b67c040e
+      namespace: authoritative_formal_train_v1
+      seed: 422212570
+    - map_id: train_map_0030
+      map_uuid: a36bc89d-a0b8-5805-9b61-8e0b41ee30c7
+      namespace: authoritative_formal_train_v1
+      seed: 2765411798
+    - map_id: train_map_0031
+      map_uuid: 207869a8-c658-519c-a610-26de602315bf
+      namespace: authoritative_formal_train_v1
+      seed: 3501660945
+    - map_id: train_map_0032
+      map_uuid: 6fbd8924-beee-5147-8d7f-0aee4bc4b510
+      namespace: authoritative_formal_train_v1
+      seed: 4085504260
+    - map_id: train_map_0033
+      map_uuid: c61664d7-f59e-5bd8-83d4-003a38a30637
+      namespace: authoritative_formal_train_v1
+      seed: 519624427
+    - map_id: train_map_0034
+      map_uuid: 0db2bfbe-0ad2-50af-bd5f-671d6de5ea83
+      namespace: authoritative_formal_train_v1
+      seed: 3740521172
+    - map_id: train_map_0035
+      map_uuid: a813da88-c8f0-59c4-b62f-730c9d6c3284
+      namespace: authoritative_formal_train_v1
+      seed: 2342962945
+    - map_id: train_map_0036
+      map_uuid: 2aa1e78f-ec0e-5ad3-8d94-05c2fa28579e
+      namespace: authoritative_formal_train_v1
+      seed: 3053771260
+    - map_id: train_map_0037
+      map_uuid: 365229ce-f0f7-5797-ad5d-2cc201a34871
+      namespace: authoritative_formal_train_v1
+      seed: 1433173209
+    - map_id: train_map_0038
+      map_uuid: 073cb6ad-fc79-507b-a1ff-f6633dd8df99
+      namespace: authoritative_formal_train_v1
+      seed: 1314098762
+    - map_id: train_map_0039
+      map_uuid: 4adb3bb3-4a26-500a-ac3e-016e133c3d7f
+      namespace: authoritative_formal_train_v1
+      seed: 2467805845
+    - map_id: train_map_0040
+      map_uuid: ca83cb12-5728-5807-84a3-973c98c548f2
+      namespace: authoritative_formal_train_v1
+      seed: 3244375051
+    - map_id: train_map_0041
+      map_uuid: 35c5ee0f-94cc-5565-add9-c43bec7375fe
+      namespace: authoritative_formal_train_v1
+      seed: 1156302027
+    - map_id: train_map_0042
+      map_uuid: cc51b0cf-f24b-5662-b350-031e519cede9
+      namespace: authoritative_formal_train_v1
+      seed: 2824970980
+    - map_id: train_map_0043
+      map_uuid: a748f400-12b4-57fd-a89a-04c718f591c2
+      namespace: authoritative_formal_train_v1
+      seed: 686847305
+    - map_id: train_map_0044
+      map_uuid: bb84ac32-6514-5b47-87df-91d2d1fd70da
+      namespace: authoritative_formal_train_v1
+      seed: 1025013105
+    - map_id: train_map_0045
+      map_uuid: 8864cf81-d45b-5441-8ad7-04d2e216f837
+      namespace: authoritative_formal_train_v1
+      seed: 2033324213
+    - map_id: train_map_0046
+      map_uuid: bae8581f-f207-51ec-b253-88ad9e20aaa2
+      namespace: authoritative_formal_train_v1
+      seed: 2255082681
+    - map_id: train_map_0047
+      map_uuid: d46fbb65-e47d-5767-9d14-d4d8f04fe062
+      namespace: authoritative_formal_train_v1
+      seed: 4138786821
+  valid:
+    frames: 100000
+    maps:
+    - map_id: valid_map_0000
+      map_uuid: d966786a-da4b-5e63-b721-b16eb27f6c64
+      namespace: authoritative_formal_valid_v1
+      seed: 3781604582
+    - map_id: valid_map_0001
+      map_uuid: c4e348ae-480e-5e58-9cd7-fc0b34d17d01
+      namespace: authoritative_formal_valid_v1
+      seed: 3433709443
+    - map_id: valid_map_0002
+      map_uuid: 7c05e78b-a2b0-5dab-b1b9-e7aa6e7955a3
+      namespace: authoritative_formal_valid_v1
+      seed: 1179402425
+    - map_id: valid_map_0003
+      map_uuid: 2f5f900a-ed7f-5a5f-9343-713360da4819
+      namespace: authoritative_formal_valid_v1
+      seed: 3911595400
+    - map_id: valid_map_0004
+      map_uuid: 8b4ee34e-a324-55aa-9a95-63c04b4d75de
+      namespace: authoritative_formal_valid_v1
+      seed: 1890141407
+    - map_id: valid_map_0005
+      map_uuid: c150b556-63e1-592d-92f1-db95953f24ce
+      namespace: authoritative_formal_valid_v1
+      seed: 2949605131
+    - map_id: valid_map_0006
+      map_uuid: 192af272-d7ee-53f9-b4bc-b8a82dd57537
+      namespace: authoritative_formal_valid_v1
+      seed: 603694193
+    - map_id: valid_map_0007
+      map_uuid: 5cf89449-7651-5af4-b82d-729fd9815642
+      namespace: authoritative_formal_valid_v1
+      seed: 2929575941
+    - map_id: valid_map_0008
+      map_uuid: 43605954-d14c-5f47-96ff-7e57ba9df6e8
+      namespace: authoritative_formal_valid_v1
+      seed: 543260775
+    - map_id: valid_map_0009
+      map_uuid: 6523928e-b1b4-5753-b967-2c7661cb7d8a
+      namespace: authoritative_formal_valid_v1
+      seed: 520665723
+    - map_id: valid_map_0010
+      map_uuid: be14bd09-d550-54c3-a865-10910c50631a
+      namespace: authoritative_formal_valid_v1
+      seed: 3791167268
+    - map_id: valid_map_0011
+      map_uuid: 93f62f69-72fa-5dbf-b0d1-4516c435041e
+      namespace: authoritative_formal_valid_v1
+      seed: 645983244
+frames_per_sequence: 60
+frozen_hashes:
+  authority_source_root_manifest_hash: a81319d734871c48d49058e22a36a733baead3d85db2ec39206221d3b154f723
+  source_hash: 9dac4e1b3a90307df0b14e49d24d511c94ad8a22d246c1d8345d1457fd588707
+  split_manifest_hash: 3dad9b756597e3b4c268dc820a7ba1e4ea2e42bedbd4bacfdece8e8af5955323
+goal_distribution:
+  body_transform: R_body_from_world@(goal_world-position_world)
+  distance_max_m: 8.0
+  distance_min_m: 2.0
+  policy: safe_local_reference_goal_persisted
+gpu_settings:
+  cpu_fallback_allowed_for_formal: false
+  device: 0
+  renderer_required: canonical_occupancy_cuda_raycast_v1
+  simulator_processes: 1
+output_root: /home/zjh/YOPO/DE-P/data/phase8_authoritative_v3
+parent_dataset_root_manifest_hash: 56d7118862afc22d8df8672d747c930bc4fdcfcb1fe0795c19e5ceef47989461
+parent_dataset_version: phase8_authoritative_v2
+parent_git_commit: 17831c38b083cf104379030c18df701353893533
+random_seeds:
+  sequence_base: 824000000
+schema_version: authoritative_dataset_schema_v1
+sensor_settings:
+  backend: canonical_occupancy_cuda_raycast_v1
+  dynamic_actor_compositing: analytic_ray_sphere_nearest_v1
+  frame_period_ns: 100000000
+  height: 96
+  intrinsics:
+  - 80.0
+  - 80.0
+  - 80.0
+  - 45.0
+  max_depth_m: 20.0
+  ray_step_m: 0.1
+  width: 160
+smoke_settings:
+  frames_per_sequence: 20
+  frames_per_split: 300
+  map_count: 3
+state_sampling_contract:
+  acceleration_source: velocity_finite_difference
+  command_latency_s: 0.04
+  demonstrated_acceleration_mps2: 2.0
+  demonstrated_speed_mps: 2.0
+  frame_state_source: continuous_reference_trajectory
+  network_acceleration_limit_mps2: 6.0
+  network_speed_limit_mps: 6.0
+  runtime_random_sampling: false
+  semantics_version: authoritative_state_semantics_v2
+  source: phase8jqv2_3_state_sampling_contract.json
+  velocity_source: position_finite_difference
+static_geometry_authority_version: static_geometry_authority_v1
+static_scenarios:
+- normal_progress
+- hold
+- brake
+- lateral_reposition
+- vertical_reposition
+- corner
+- corridor
+- near_boundary_recovery_stress
+test_disabled: true
+worker_settings:
+  memory_limit_gib: 48
+  progress_interval_seconds: 30
+  recommended_workers: 8
+  single_gpu_simulator: true

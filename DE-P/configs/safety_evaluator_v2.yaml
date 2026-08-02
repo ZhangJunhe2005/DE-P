@@ -1,0 +1,49 @@
+evaluator_version: phase8jqv2_safety_v2
+configuration_status: frozen_before_full_validation
+
+physical_geometry:
+  uav_radius_m: 0.3
+  static_source: raw_esdf_distance_to_occupied_geometry
+  dynamic_shapes: [sphere, vertical_cylinder]
+  contact_tolerance_m: 1.0e-6
+
+planning_margins:
+  static_margin_m: 0.0
+  dynamic_margin_m: 0.0
+  tracking_control_margin_m: 0.0
+  tracking_control_margin_status: unknown_no_authoritative_bound
+
+uncertainty:
+  gt_policy: none
+  recorded_future_gt_policy: none
+  estimated_policy: directional_covariance
+  confidence_sigma: 2.0
+  confidence_source: predeclared_two_sigma_gaussian_mapping
+  covariance_owner: phase8h_tracker_output
+  propagate_in_evaluator: false
+  comparison_policies: [none, directional_covariance, maximum_eigenvalue]
+
+timeline:
+  source_report: reports/phase8jq_controller_authoritative_envelope.json
+  horizon_semantics: fixed_wall_clock
+  wall_clock_horizon_s: 1.7
+  controlled_samples: 30
+  latency_prefix_model: constant_current_acceleration
+  previous_command_fallback: unavailable_in_recording
+  alternative_audit: fixed_controlled_duration_plus_latency
+
+continuous_collision:
+  adaptive_subdivisions_per_base_segment: 4
+  dynamic_tolerance_m: 0.001
+  static_tolerance_m: 0.005
+  static_lipschitz_bound: 1.0
+
+label:
+  version: phase8jqv2_safety_first_lexicographic_v1
+  collision_priority: 1000000.0
+  penetration_scale: 1000.0
+  secondary_normalization: per_window_robust_range
+
+gate:
+  historical_unconditional_threshold: 0.05
+  decision_checkpoint: fixed_050_seed8403

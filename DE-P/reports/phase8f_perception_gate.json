@@ -1,0 +1,32 @@
+{
+  "status": "FAIL",
+  "perception_ready": false,
+  "train_valid_gate": "PASS",
+  "test_once_gate": "FAIL",
+  "implementation_sha256": "fc9c5370a1da929cfb8cf267b0c11176ec15e3aeb291b8e5117ec6fe753abf04",
+  "test_used_same_frozen_implementation": true,
+  "full_sequence_counts": {
+    "train": 144,
+    "valid": 36,
+    "test": 36
+  },
+  "hard_failures": [
+    "test: never-observed false matches=13"
+  ],
+  "test_was_used_for_parameter_selection": false,
+  "test_rerun_allowed": false,
+  "dynamic_cpu_tests": {
+    "status": "PASS",
+    "count": 94
+  },
+  "ros_import_without_master": {
+    "status": "PASS",
+    "raw_depth_shape": [
+      90,
+      160
+    ],
+    "depth_callback_uses_update_depth": true
+  },
+  "live_ros_simulator_matrix": "NOT_RUN_NO_MASTER_OR_SENSOR_PUBLISHERS",
+  "next_allowed_phase": null
+}

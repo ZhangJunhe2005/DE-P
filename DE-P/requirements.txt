@@ -1,0 +1,11 @@
+# SAFETY NOTICE
+# Do not use this file to replace the existing PyTorch/CUDA or ROS Noetic
+# environment. Install the appropriate layers explicitly instead:
+#
+#   requirements-core.txt     static DE-P Python dependencies
+#   requirements-dynamic.txt  optional dynamic-obstacle experiments
+#   requirements-dev.txt      test/development notes
+#   requirements-ros.txt      ROS packages are supplied by Noetic/workspaces
+#
+# torch, torchvision and CUDA must be installed separately for the target GPU.
+# empy is intentionally not installed by pip because ROS Noetic owns it.

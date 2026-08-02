@@ -1,0 +1,183 @@
+profiles_version: mixed_scene_map_profiles_v2
+purpose: natural_foreground_observability_development_screening
+formal_eligible: false
+annex_allowed: false
+common:
+  resolution: 0.1
+  complexity: 0.025
+  fill: 0.06
+  fractal: 1
+  attenuation: 0.1
+  width_min: 0.8
+  width_max: 1.8
+  obstacle_number: 70
+  road_width: 3.0
+  add_wall_x: 1
+  add_wall_y: 1
+  tree_file: /home/zjh/YOPO/Simulator/src/pointcloud/tree.ply
+  tree_dist: 9.0
+  room_number: 3
+  max_windows: 2
+  window_size_min: 1.8
+  window_size_max: 2.8
+  add_ceiling: 0
+  wall_width_min: 1.5
+  wall_width_max: 6.0
+  wall_thick: 0.4
+  wall_number: 45
+  wall_ceiling: 0
+  occlusion_annex: false
+profiles:
+  cave_observable_open:
+    maze_type: 1
+    semantic_name: cave_perlin
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    complexity: 0.018
+    fill: 0.045
+    fractal: 1
+    attenuation: 0.08
+    post_translate: [0.0, 0.0, 0.0]
+  cave_observable_balanced:
+    maze_type: 1
+    semantic_name: cave_perlin
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    complexity: 0.025
+    fill: 0.055
+    fractal: 1
+    attenuation: 0.10
+    post_translate: [0.0, 0.0, 0.0]
+  cave_observable_layered:
+    maze_type: 1
+    semantic_name: cave_perlin
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    complexity: 0.032
+    fill: 0.065
+    fractal: 2
+    attenuation: 0.08
+    post_translate: [0.0, 0.0, 0.0]
+  pillar_observable_sparse:
+    maze_type: 2
+    semantic_name: pillar_random_solid
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    obstacle_number: 48
+    width_min: 0.8
+    width_max: 1.4
+    post_translate: [0.0, 0.0, 0.0]
+  pillar_observable_balanced:
+    maze_type: 2
+    semantic_name: pillar_random_solid
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    obstacle_number: 64
+    width_min: 0.9
+    width_max: 1.6
+    post_translate: [0.0, 0.0, 0.0]
+  pillar_observable_wide:
+    maze_type: 2
+    semantic_name: pillar_random_solid
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    obstacle_number: 54
+    width_min: 1.2
+    width_max: 2.0
+    post_translate: [0.0, 0.0, 0.0]
+  forest_observable_sparse:
+    maze_type: 5
+    semantic_name: forest_tree_asset
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    tree_dist: 11.0
+    post_translate: [0.0, 0.0, 0.0]
+  forest_observable_balanced:
+    maze_type: 5
+    semantic_name: forest_tree_asset
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    tree_dist: 9.0
+    post_translate: [0.0, 0.0, 0.0]
+  forest_observable_dense:
+    maze_type: 5
+    semantic_name: forest_tree_asset
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    tree_dist: 7.5
+    post_translate: [0.0, 0.0, 0.0]
+  room_observable_wide:
+    maze_type: 6
+    semantic_name: room_window_grid
+    x_length: 24
+    y_length: 24
+    z_length: 8
+    room_number: 2
+    max_windows: 2
+    window_size_min: 2.2
+    window_size_max: 3.0
+    post_translate: [-12.0, -12.0, 0.0]
+  room_observable_balanced:
+    maze_type: 6
+    semantic_name: room_window_grid
+    x_length: 24
+    y_length: 24
+    z_length: 8
+    room_number: 3
+    max_windows: 2
+    window_size_min: 1.8
+    window_size_max: 2.8
+    post_translate: [-12.0, -12.0, 0.0]
+  room_observable_segmented:
+    maze_type: 6
+    semantic_name: room_window_grid
+    x_length: 24
+    y_length: 24
+    z_length: 8
+    room_number: 4
+    max_windows: 3
+    window_size_min: 1.6
+    window_size_max: 2.4
+    post_translate: [-12.0, -12.0, 0.0]
+  wall_observable_sparse:
+    maze_type: 7
+    semantic_name: random_wall_field
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    wall_width_min: 1.5
+    wall_width_max: 4.5
+    wall_thick: 0.3
+    wall_number: 28
+    post_translate: [0.0, 0.0, 0.0]
+  wall_observable_balanced:
+    maze_type: 7
+    semantic_name: random_wall_field
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    wall_width_min: 1.8
+    wall_width_max: 5.5
+    wall_thick: 0.4
+    wall_number: 38
+    post_translate: [0.0, 0.0, 0.0]
+  wall_observable_long:
+    maze_type: 7
+    semantic_name: random_wall_field
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    wall_width_min: 2.5
+    wall_width_max: 7.0
+    wall_thick: 0.4
+    wall_number: 32
+    post_translate: [0.0, 0.0, 0.0]

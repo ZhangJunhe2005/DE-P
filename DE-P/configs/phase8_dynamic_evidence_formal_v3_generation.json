@@ -1,0 +1,69 @@
+{
+  "version": "phase8_dynamic_evidence_formal_v3_generation_v1",
+  "dataset_version": "phase8_dynamic_evidence_formal_v3",
+  "formal_root": "/home/zjh/YOPO/DE-P/data/phase8_dynamic_evidence_formal_v3",
+  "raw_base_config": "configs/phase8_authoritative_v3_mixed_generation.yaml",
+  "map_protocol": "configs/mixed_scene_authority_map_protocol_v1.yaml",
+  "map_plan": "reports/phase8jqv2_4m1_formal_map_plan.json",
+  "feature_schema": "reports/phase8jqv2_4demdcr1_feature_schema.json",
+  "label_authority": "dynamic_evidence_label_authority_v1",
+  "schema_version": "dynamic_evidence_v3_schema_v1",
+  "feature_order_version": "dynamic_evidence_features_v1",
+  "motion_threshold_mps": 0.3,
+  "frame_period_s": 0.1,
+  "frames_per_sequence": 60,
+  "formal_occlusion_gap_frames": [1],
+  "formal_occlusion_constructor": "natural_observable_occlusion_proposer_v1",
+  "formal_occlusion_map_semantic_names": ["forest_tree_asset"],
+  "formal_occlusion_map_uuids": {
+    "train": [
+      "e0d3bc0c-ab2b-5392-81cb-93d0280ea252",
+      "257fc036-6dc0-5173-af90-01c98bd9bb72",
+      "8348f469-2f84-5348-905f-8425c180e93a",
+      "92a6fec2-f808-5cde-bc61-9e513f293f3f"
+    ],
+    "valid": [
+      "0615a15f-e5f5-5d1e-b970-b47b6b4263d1"
+    ]
+  },
+  "formal_occlusion_maximum_proposals": 32,
+  "formal_occlusion_maximum_patch_checks": 4096,
+  "formal_occlusion_actor_candidate_budget": 128,
+  "formal_dynamic_actor_map_uuids": {
+    "train": [
+      "ca19b7d8-2b60-529f-a8ce-0fc67ef29439",
+      "d9a48024-a53f-595c-b42b-97c471a2fc5c",
+      "e0d3bc0c-ab2b-5392-81cb-93d0280ea252"
+    ],
+    "valid": [
+      "53a39282-644e-5421-b75b-5114607eae70",
+      "91cd0b8a-d7e5-5e54-999b-c4d795a37b5a",
+      "0615a15f-e5f5-5d1e-b970-b47b6b4263d1"
+    ]
+  },
+  "raw_frames": {"train": 360000, "valid": 60000},
+  "formal_splits": {
+    "train": {"source": "train", "map_group_modulo": [0, 1, 2]},
+    "calibration": {"source": "valid", "map_group_modulo": [0]},
+    "validation": {"source": "valid", "map_group_modulo": [1]},
+    "internal_test": {"source": "valid", "map_group_modulo": [2]},
+    "future_holdout": {"source": null, "placeholder_only": true}
+  },
+  "motion_buckets_mps": {
+    "ZERO_MOTION": [0.0, 0.0],
+    "LOW_SUBTHRESHOLD": [0.03, 0.14],
+    "NEAR_THRESHOLD_NEGATIVE": [0.15, 0.29],
+    "ACTIVE_DYNAMIC": [0.3, 0.59],
+    "HIGH_DYNAMIC": [0.6, 1.75]
+  },
+  "target_chain_samples": 420000,
+  "recommended_workers": 8,
+  "minimum_free_bytes": 50000000000,
+  "minimum_free_inodes": 100000,
+  "authority_outputs": ["composed_depth", "static_depth", "nearest_actor_owner", "actor_metadata"],
+  "seed_derivation": "sha256_canonical_identity_first_64_bits_v1",
+  "atomicity": "ATOMIC_WORK_UNIT_AND_ROOT_FINALIZE",
+  "normalization": "TRAIN_SPLIT_ONLY_AFTER_FORMAL_FINALIZE",
+  "test_blind_production_access": false,
+  "training_enabled": false
+}

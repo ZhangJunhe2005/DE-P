@@ -1,0 +1,993 @@
+{
+  "status": "PASS",
+  "evaluator_version": "phase8f_range_image_stages_v1",
+  "dataset": "/home/zjh/YOPO/DE-P/data/phase8_dynamic_production",
+  "causal": true,
+  "future_gt_used_by_tracker": false,
+  "evaluated_splits": [
+    "train",
+    "valid"
+  ],
+  "max_sequences_per_scenario": 0,
+  "foreground_mode": "range_image_hybrid",
+  "sequence_manifests": {
+    "train": [
+      "phase8c_train_0001",
+      "phase8c_train_0002",
+      "phase8c_train_0003",
+      "phase8c_train_0004",
+      "phase8c_train_0005",
+      "phase8c_train_0006",
+      "phase8c_train_0007",
+      "phase8c_train_0008",
+      "phase8c_train_0009",
+      "phase8c_train_0010",
+      "phase8c_train_0011",
+      "phase8c_train_0012",
+      "phase8c_train_0013",
+      "phase8c_train_0014",
+      "phase8c_train_0015",
+      "phase8c_train_0016",
+      "phase8c_train_0017",
+      "phase8c_train_0018",
+      "phase8c_train_0019",
+      "phase8c_train_0020",
+      "phase8c_train_0021",
+      "phase8c_train_0022",
+      "phase8c_train_0023",
+      "phase8c_train_0024",
+      "phase8c_train_0025",
+      "phase8c_train_0026",
+      "phase8c_train_0027",
+      "phase8c_train_0028",
+      "phase8c_train_0029",
+      "phase8c_train_0030",
+      "phase8c_train_0031",
+      "phase8c_train_0032",
+      "phase8c_train_0033",
+      "phase8c_train_0034",
+      "phase8c_train_0035",
+      "phase8c_train_0036",
+      "phase8c_train_0037",
+      "phase8c_train_0038",
+      "phase8c_train_0039",
+      "phase8c_train_0040",
+      "phase8c_train_0041",
+      "phase8c_train_0042",
+      "phase8c_train_0043",
+      "phase8c_train_0044",
+      "phase8c_train_0045",
+      "phase8c_train_0046",
+      "phase8c_train_0047",
+      "phase8c_train_0048",
+      "phase8c_train_0049",
+      "phase8c_train_0050",
+      "phase8c_train_0051",
+      "phase8c_train_0052",
+      "phase8c_train_0053",
+      "phase8c_train_0054",
+      "phase8c_train_0055",
+      "phase8c_train_0056",
+      "phase8c_train_0057",
+      "phase8c_train_0058",
+      "phase8c_train_0059",
+      "phase8c_train_0060",
+      "phase8c_train_0061",
+      "phase8c_train_0062",
+      "phase8c_train_0063",
+      "phase8c_train_0064",
+      "phase8c_train_0065",
+      "phase8c_train_0066",
+      "phase8c_train_0067",
+      "phase8c_train_0068",
+      "phase8c_train_0069",
+      "phase8c_train_0070",
+      "phase8c_train_0071",
+      "phase8c_train_0072",
+      "phase8c_train_0073",
+      "phase8c_train_0074",
+      "phase8c_train_0075",
+      "phase8c_train_0076",
+      "phase8c_train_0077",
+      "phase8c_train_0078",
+      "phase8c_train_0079",
+      "phase8c_train_0080",
+      "phase8c_train_0081",
+      "phase8c_train_0082",
+      "phase8c_train_0083",
+      "phase8c_train_0084",
+      "phase8c_train_0085",
+      "phase8c_train_0086",
+      "phase8c_train_0087",
+      "phase8c_train_0088",
+      "phase8c_train_0089",
+      "phase8c_train_0090",
+      "phase8c_train_0091",
+      "phase8c_train_0092",
+      "phase8c_train_0093",
+      "phase8c_train_0094",
+      "phase8c_train_0095",
+      "phase8c_train_0096",
+      "phase8c_train_0097",
+      "phase8c_train_0098",
+      "phase8c_train_0099",
+      "phase8c_train_0100",
+      "phase8c_train_0101",
+      "phase8c_train_0102",
+      "phase8c_train_0103",
+      "phase8c_train_0104",
+      "phase8c_train_0105",
+      "phase8c_train_0106",
+      "phase8c_train_0107",
+      "phase8c_train_0108",
+      "phase8c_train_0109",
+      "phase8c_train_0110",
+      "phase8c_train_0111",
+      "phase8c_train_0112",
+      "phase8c_train_0113",
+      "phase8c_train_0114",
+      "phase8c_train_0115",
+      "phase8c_train_0116",
+      "phase8c_train_0117",
+      "phase8c_train_0118",
+      "phase8c_train_0119",
+      "phase8c_train_0120",
+      "phase8c_train_0121",
+      "phase8c_train_0122",
+      "phase8c_train_0123",
+      "phase8c_train_0124",
+      "phase8c_train_0125",
+      "phase8c_train_0126",
+      "phase8c_train_0127",
+      "phase8c_train_0128",
+      "phase8c_train_0129",
+      "phase8c_train_0130",
+      "phase8c_train_0131",
+      "phase8c_train_0132",
+      "phase8c_train_0133",
+      "phase8c_train_0134",
+      "phase8c_train_0135",
+      "phase8c_train_0136",
+      "phase8c_train_0137",
+      "phase8c_train_0138",
+      "phase8c_train_0139",
+      "phase8c_train_0140",
+      "phase8c_train_0141",
+      "phase8c_train_0142",
+      "phase8c_train_0143",
+      "phase8c_train_0144"
+    ],
+    "valid": [
+      "phase8c_valid_0001",
+      "phase8c_valid_0002",
+      "phase8c_valid_0003",
+      "phase8c_valid_0004",
+      "phase8c_valid_0005",
+      "phase8c_valid_0006",
+      "phase8c_valid_0007",
+      "phase8c_valid_0008",
+      "phase8c_valid_0009",
+      "phase8c_valid_0010",
+      "phase8c_valid_0011",
+      "phase8c_valid_0012",
+      "phase8c_valid_0013",
+      "phase8c_valid_0014",
+      "phase8c_valid_0015",
+      "phase8c_valid_0016",
+      "phase8c_valid_0017",
+      "phase8c_valid_0018",
+      "phase8c_valid_0019",
+      "phase8c_valid_0020",
+      "phase8c_valid_0021",
+      "phase8c_valid_0022",
+      "phase8c_valid_0023",
+      "phase8c_valid_0024",
+      "phase8c_valid_0025",
+      "phase8c_valid_0026",
+      "phase8c_valid_0027",
+      "phase8c_valid_0028",
+      "phase8c_valid_0029",
+      "phase8c_valid_0030",
+      "phase8c_valid_0031",
+      "phase8c_valid_0032",
+      "phase8c_valid_0033",
+      "phase8c_valid_0034",
+      "phase8c_valid_0035",
+      "phase8c_valid_0036"
+    ]
+  },
+  "sequence_manifest_sha256": {
+    "train": "27c2e5cda66c2560f22365165d46456729aef62b28570ca3a96facc5ab11238f",
+    "valid": "c16ce2c05cc7cb75eeeb1cf2e8666daf8c71860423d995944b8452b3c88e165f"
+  },
+  "implementation_sha256": "fc9c5370a1da929cfb8cf267b0c11176ec15e3aeb291b8e5117ec6fe753abf04",
+  "metric_semantics": {
+    "visible": "active, inside image, non-occluded, visibility>0",
+    "active_track": "active and visible, or previously observed within max_missed_frames",
+    "visible_false_positive": "unmatched estimated track; correctly retained occluded matches excluded",
+    "no_target": "every dynamic track is a hard false positive"
+  },
+  "split_metrics": {
+    "train": {
+      "sequence_count": 144,
+      "frame_count": 8640,
+      "visible_detection_precision": 0.8084763948497854,
+      "visible_detection_recall": 0.463835026161896,
+      "active_track_precision": 0.7839643652561247,
+      "active_track_recall": 0.42656325739214734,
+      "position_rmse_m": 0.38908535167655167,
+      "velocity_rmse_mps": 0.44278574394285986,
+      "id_switches": 100,
+      "track_fragmentations": 56,
+      "time_to_confirm_mean_s": 0.8357688347498576,
+      "first_visible_to_first_seed_mean_s": 0.3960796329710219,
+      "first_visible_to_first_component_mean_s": 0.4898073050626524,
+      "first_visible_to_dynamic_attention_mean_s": 0.8357688347498576,
+      "pixel_stage_metrics": {
+        "completed_component": {
+          "tp": 438596,
+          "fp": 894807,
+          "fn": 1626997,
+          "precision": 0.328929813417249,
+          "recall": 0.21233418200003581
+        },
+        "free_space_seed": {
+          "tp": 89613,
+          "fp": 312236,
+          "fn": 1975980,
+          "precision": 0.22300167475842916,
+          "recall": 0.043383667547285454
+        },
+        "range_residual_seed": {
+          "tp": 576337,
+          "fp": 1417937,
+          "fn": 1489256,
+          "precision": 0.28899589524809527,
+          "recall": 0.27901769612890825
+        }
+      },
+      "foreground_latency_ms": {
+        "mean": 5.125846415854472,
+        "p95": 7.691508998141212
+      },
+      "complete_perception_latency_ms": {
+        "mean": 36.35539699421231,
+        "p95": 58.002780597780614
+      },
+      "bounded_capacity": {
+        "range_history_frames": 4,
+        "background_max_voxels": 200000
+      },
+      "no_target_false_positive_track_count": 44,
+      "no_target_false_positive_frame_fraction": 0.029166666666666667,
+      "never_observed_false_positive_match_count": 0,
+      "never_observed_false_positive_match_details": [],
+      "never_observed_actor_frame_count": 438,
+      "occluded_track_retention_same_id": 0.20296465222348917,
+      "occluded_eligible_frame_count": 877,
+      "attention_iou_mean": 0.5029932397926731,
+      "attention_center_error_cells": 0.20179037112985487,
+      "no_target_attention_nonzero_frame_fraction": 0.024305555555555556,
+      "no_target_attention_max": 0.9985589385032654,
+      "no_target_attention_mean": 0.0019382598111405969,
+      "no_target_false_attention_cell_count_mean": 0.12638888888888888,
+      "scenario_metrics": {
+        "crossing": {
+          "frames": 1440,
+          "dynamic_track_frame_fraction": 0.22152777777777777
+        },
+        "head_on": {
+          "frames": 1440,
+          "dynamic_track_frame_fraction": 0.28680555555555554
+        },
+        "multi_target": {
+          "frames": 1440,
+          "dynamic_track_frame_fraction": 0.3541666666666667
+        },
+        "no_target": {
+          "frames": 1440,
+          "dynamic_track_frame_fraction": 0.029166666666666667
+        },
+        "occluded_but_tracked": {
+          "frames": 1440,
+          "dynamic_track_frame_fraction": 0.19166666666666668
+        },
+        "temporal_separation": {
+          "frames": 1440,
+          "dynamic_track_frame_fraction": 0.11736111111111111
+        }
+      },
+      "stratified_active_recall": {
+        "actor_shape": {
+          "sphere": {
+            "matched": 1127,
+            "eligible": 2907,
+            "recall": 0.38768489852081184
+          },
+          "vertical_cylinder": {
+            "matched": 633,
+            "eligible": 1219,
+            "recall": 0.5192780968006563
+          }
+        },
+        "camera_rotation_bin": {
+          "high": {
+            "matched": 132,
+            "eligible": 364,
+            "recall": 0.3626373626373626
+          },
+          "low": {
+            "matched": 1628,
+            "eligible": 3762,
+            "recall": 0.4327485380116959
+          }
+        },
+        "camera_translation_bin": {
+          "high": {
+            "matched": 1760,
+            "eligible": 4068,
+            "recall": 0.4326450344149459
+          },
+          "low": {
+            "matched": 0,
+            "eligible": 58,
+            "recall": 0.0
+          }
+        },
+        "distance_bin": {
+          "0-4": {
+            "matched": 1079,
+            "eligible": 2176,
+            "recall": 0.4958639705882353
+          },
+          "4-8": {
+            "matched": 658,
+            "eligible": 1815,
+            "recall": 0.362534435261708
+          },
+          "8-12": {
+            "matched": 23,
+            "eligible": 135,
+            "recall": 0.17037037037037037
+          }
+        },
+        "first_visible_frame": {
+          "0": {
+            "matched": 805,
+            "eligible": 1533,
+            "recall": 0.5251141552511416
+          },
+          "10": {
+            "matched": 10,
+            "eligible": 38,
+            "recall": 0.2631578947368421
+          },
+          "11": {
+            "matched": 8,
+            "eligible": 23,
+            "recall": 0.34782608695652173
+          },
+          "12": {
+            "matched": 21,
+            "eligible": 85,
+            "recall": 0.24705882352941178
+          },
+          "13": {
+            "matched": 2,
+            "eligible": 30,
+            "recall": 0.06666666666666667
+          },
+          "14": {
+            "matched": 9,
+            "eligible": 26,
+            "recall": 0.34615384615384615
+          },
+          "15": {
+            "matched": 22,
+            "eligible": 60,
+            "recall": 0.36666666666666664
+          },
+          "19": {
+            "matched": 16,
+            "eligible": 32,
+            "recall": 0.5
+          },
+          "2": {
+            "matched": 25,
+            "eligible": 53,
+            "recall": 0.4716981132075472
+          },
+          "23": {
+            "matched": 10,
+            "eligible": 41,
+            "recall": 0.24390243902439024
+          },
+          "25": {
+            "matched": 68,
+            "eligible": 219,
+            "recall": 0.3105022831050228
+          },
+          "26": {
+            "matched": 10,
+            "eligible": 67,
+            "recall": 0.14925373134328357
+          },
+          "27": {
+            "matched": 22,
+            "eligible": 55,
+            "recall": 0.4
+          },
+          "29": {
+            "matched": 3,
+            "eligible": 54,
+            "recall": 0.05555555555555555
+          },
+          "3": {
+            "matched": 123,
+            "eligible": 379,
+            "recall": 0.3245382585751979
+          },
+          "30": {
+            "matched": 0,
+            "eligible": 20,
+            "recall": 0.0
+          },
+          "31": {
+            "matched": 13,
+            "eligible": 47,
+            "recall": 0.2765957446808511
+          },
+          "32": {
+            "matched": 0,
+            "eligible": 12,
+            "recall": 0.0
+          },
+          "33": {
+            "matched": 2,
+            "eligible": 6,
+            "recall": 0.3333333333333333
+          },
+          "35": {
+            "matched": 13,
+            "eligible": 50,
+            "recall": 0.26
+          },
+          "4": {
+            "matched": 219,
+            "eligible": 499,
+            "recall": 0.43887775551102204
+          },
+          "40": {
+            "matched": 2,
+            "eligible": 20,
+            "recall": 0.1
+          },
+          "44": {
+            "matched": 0,
+            "eligible": 13,
+            "recall": 0.0
+          },
+          "47": {
+            "matched": 2,
+            "eligible": 13,
+            "recall": 0.15384615384615385
+          },
+          "5": {
+            "matched": 66,
+            "eligible": 137,
+            "recall": 0.48175182481751827
+          },
+          "53": {
+            "matched": 0,
+            "eligible": 7,
+            "recall": 0.0
+          },
+          "6": {
+            "matched": 9,
+            "eligible": 20,
+            "recall": 0.45
+          },
+          "7": {
+            "matched": 127,
+            "eligible": 257,
+            "recall": 0.49416342412451364
+          },
+          "8": {
+            "matched": 133,
+            "eligible": 265,
+            "recall": 0.5018867924528302
+          },
+          "9": {
+            "matched": 20,
+            "eligible": 65,
+            "recall": 0.3076923076923077
+          }
+        },
+        "map_id": {
+          "0": {
+            "matched": 174,
+            "eligible": 339,
+            "recall": 0.5132743362831859
+          },
+          "1": {
+            "matched": 162,
+            "eligible": 315,
+            "recall": 0.5142857142857142
+          },
+          "10": {
+            "matched": 151,
+            "eligible": 374,
+            "recall": 0.4037433155080214
+          },
+          "11": {
+            "matched": 133,
+            "eligible": 346,
+            "recall": 0.38439306358381503
+          },
+          "2": {
+            "matched": 84,
+            "eligible": 279,
+            "recall": 0.3010752688172043
+          },
+          "3": {
+            "matched": 152,
+            "eligible": 365,
+            "recall": 0.41643835616438357
+          },
+          "4": {
+            "matched": 54,
+            "eligible": 272,
+            "recall": 0.19852941176470587
+          },
+          "5": {
+            "matched": 183,
+            "eligible": 363,
+            "recall": 0.5041322314049587
+          },
+          "6": {
+            "matched": 210,
+            "eligible": 399,
+            "recall": 0.5263157894736842
+          },
+          "7": {
+            "matched": 157,
+            "eligible": 369,
+            "recall": 0.4254742547425474
+          },
+          "8": {
+            "matched": 225,
+            "eligible": 403,
+            "recall": 0.5583126550868487
+          },
+          "9": {
+            "matched": 75,
+            "eligible": 302,
+            "recall": 0.24834437086092714
+          }
+        },
+        "motion_type": {
+          "lateral": {
+            "matched": 791,
+            "eligible": 1851,
+            "recall": 0.4273365748244192
+          },
+          "radial": {
+            "matched": 969,
+            "eligible": 2275,
+            "recall": 0.4259340659340659
+          }
+        },
+        "pixel_area_bin": {
+          "0-25": {
+            "matched": 44,
+            "eligible": 653,
+            "recall": 0.06738131699846861
+          },
+          "100-400": {
+            "matched": 729,
+            "eligible": 1324,
+            "recall": 0.5506042296072508
+          },
+          "25-100": {
+            "matched": 140,
+            "eligible": 675,
+            "recall": 0.2074074074074074
+          },
+          "400+": {
+            "matched": 847,
+            "eligible": 1474,
+            "recall": 0.5746268656716418
+          }
+        },
+        "scenario": {
+          "crossing": {
+            "matched": 282,
+            "eligible": 606,
+            "recall": 0.46534653465346537
+          },
+          "head_on": {
+            "matched": 367,
+            "eligible": 622,
+            "recall": 0.590032154340836
+          },
+          "multi_target": {
+            "matched": 737,
+            "eligible": 1820,
+            "recall": 0.40494505494505495
+          },
+          "occluded_but_tracked": {
+            "matched": 241,
+            "eligible": 501,
+            "recall": 0.4810379241516966
+          },
+          "temporal_separation": {
+            "matched": 133,
+            "eligible": 577,
+            "recall": 0.23050259965337955
+          }
+        },
+        "velocity_bin": {
+          ".5-1.5": {
+            "matched": 1760,
+            "eligible": 4126,
+            "recall": 0.42656325739214734
+          }
+        },
+        "visibility": {
+          "occluded": {
+            "matched": 225,
+            "eligible": 877,
+            "recall": 0.25655644241733183
+          },
+          "visible": {
+            "matched": 1535,
+            "eligible": 3249,
+            "recall": 0.4724530624807633
+          }
+        }
+      }
+    },
+    "valid": {
+      "sequence_count": 36,
+      "frame_count": 2160,
+      "visible_detection_precision": 0.9093137254901961,
+      "visible_detection_recall": 0.5338129496402878,
+      "active_track_precision": 0.8865546218487395,
+      "active_track_recall": 0.4730941704035874,
+      "position_rmse_m": 0.4001137284331156,
+      "velocity_rmse_mps": 0.4132727754745164,
+      "id_switches": 17,
+      "track_fragmentations": 9,
+      "time_to_confirm_mean_s": 0.7066599028451103,
+      "first_visible_to_first_seed_mean_s": 0.2299892008304596,
+      "first_visible_to_first_component_mean_s": 0.4083291172981262,
+      "first_visible_to_dynamic_attention_mean_s": 0.7066599028451103,
+      "pixel_stage_metrics": {
+        "completed_component": {
+          "tp": 98678,
+          "fp": 204878,
+          "fn": 390926,
+          "precision": 0.32507346255715586,
+          "recall": 0.2015465559921896
+        },
+        "free_space_seed": {
+          "tp": 18197,
+          "fp": 73882,
+          "fn": 471407,
+          "precision": 0.19762377958057756,
+          "recall": 0.03716677151330463
+        },
+        "range_residual_seed": {
+          "tp": 112202,
+          "fp": 352284,
+          "fn": 377402,
+          "precision": 0.24156164017860604,
+          "recall": 0.2291688793392211
+        }
+      },
+      "foreground_latency_ms": {
+        "mean": 5.137895348156639,
+        "p95": 8.578352101540075
+      },
+      "complete_perception_latency_ms": {
+        "mean": 37.81601401433195,
+        "p95": 58.73647890057323
+      },
+      "bounded_capacity": {
+        "range_history_frames": 4,
+        "background_max_voxels": 200000
+      },
+      "no_target_false_positive_track_count": 6,
+      "no_target_false_positive_frame_fraction": 0.016666666666666666,
+      "never_observed_false_positive_match_count": 0,
+      "never_observed_false_positive_match_details": [],
+      "never_observed_actor_frame_count": 317,
+      "occluded_track_retention_same_id": 0.19796954314720813,
+      "occluded_eligible_frame_count": 197,
+      "attention_iou_mean": 0.5646929849604747,
+      "attention_center_error_cells": 0.2007141405556597,
+      "no_target_attention_nonzero_frame_fraction": 0.011111111111111112,
+      "no_target_attention_max": 0.9235234260559082,
+      "no_target_attention_mean": 0.00197434495203197,
+      "no_target_false_attention_cell_count_mean": 0.08055555555555556,
+      "scenario_metrics": {
+        "crossing": {
+          "frames": 360,
+          "dynamic_track_frame_fraction": 0.2
+        },
+        "head_on": {
+          "frames": 360,
+          "dynamic_track_frame_fraction": 0.3055555555555556
+        },
+        "multi_target": {
+          "frames": 360,
+          "dynamic_track_frame_fraction": 0.3416666666666667
+        },
+        "no_target": {
+          "frames": 360,
+          "dynamic_track_frame_fraction": 0.016666666666666666
+        },
+        "occluded_but_tracked": {
+          "frames": 360,
+          "dynamic_track_frame_fraction": 0.14722222222222223
+        },
+        "temporal_separation": {
+          "frames": 360,
+          "dynamic_track_frame_fraction": 0.14722222222222223
+        }
+      },
+      "stratified_active_recall": {
+        "actor_shape": {
+          "sphere": {
+            "matched": 271,
+            "eligible": 628,
+            "recall": 0.4315286624203822
+          },
+          "vertical_cylinder": {
+            "matched": 151,
+            "eligible": 264,
+            "recall": 0.571969696969697
+          }
+        },
+        "camera_rotation_bin": {
+          "high": {
+            "matched": 33,
+            "eligible": 90,
+            "recall": 0.36666666666666664
+          },
+          "low": {
+            "matched": 389,
+            "eligible": 802,
+            "recall": 0.4850374064837905
+          }
+        },
+        "camera_translation_bin": {
+          "high": {
+            "matched": 422,
+            "eligible": 880,
+            "recall": 0.47954545454545455
+          },
+          "low": {
+            "matched": 0,
+            "eligible": 12,
+            "recall": 0.0
+          }
+        },
+        "distance_bin": {
+          "0-4": {
+            "matched": 248,
+            "eligible": 511,
+            "recall": 0.48532289628180036
+          },
+          "4-8": {
+            "matched": 172,
+            "eligible": 351,
+            "recall": 0.49002849002849
+          },
+          "8-12": {
+            "matched": 2,
+            "eligible": 30,
+            "recall": 0.06666666666666667
+          }
+        },
+        "first_visible_frame": {
+          "0": {
+            "matched": 175,
+            "eligible": 299,
+            "recall": 0.5852842809364549
+          },
+          "12": {
+            "matched": 9,
+            "eligible": 17,
+            "recall": 0.5294117647058824
+          },
+          "16": {
+            "matched": 0,
+            "eligible": 10,
+            "recall": 0.0
+          },
+          "17": {
+            "matched": 3,
+            "eligible": 13,
+            "recall": 0.23076923076923078
+          },
+          "18": {
+            "matched": 5,
+            "eligible": 24,
+            "recall": 0.20833333333333334
+          },
+          "19": {
+            "matched": 3,
+            "eligible": 18,
+            "recall": 0.16666666666666666
+          },
+          "22": {
+            "matched": 5,
+            "eligible": 37,
+            "recall": 0.13513513513513514
+          },
+          "23": {
+            "matched": 0,
+            "eligible": 10,
+            "recall": 0.0
+          },
+          "25": {
+            "matched": 0,
+            "eligible": 17,
+            "recall": 0.0
+          },
+          "26": {
+            "matched": 20,
+            "eligible": 59,
+            "recall": 0.3389830508474576
+          },
+          "27": {
+            "matched": 13,
+            "eligible": 27,
+            "recall": 0.48148148148148145
+          },
+          "3": {
+            "matched": 57,
+            "eligible": 95,
+            "recall": 0.6
+          },
+          "38": {
+            "matched": 20,
+            "eligible": 39,
+            "recall": 0.5128205128205128
+          },
+          "4": {
+            "matched": 25,
+            "eligible": 48,
+            "recall": 0.5208333333333334
+          },
+          "5": {
+            "matched": 37,
+            "eligible": 68,
+            "recall": 0.5441176470588235
+          },
+          "7": {
+            "matched": 20,
+            "eligible": 26,
+            "recall": 0.7692307692307693
+          },
+          "8": {
+            "matched": 30,
+            "eligible": 85,
+            "recall": 0.35294117647058826
+          }
+        },
+        "map_id": {
+          "12": {
+            "matched": 75,
+            "eligible": 228,
+            "recall": 0.32894736842105265
+          },
+          "13": {
+            "matched": 146,
+            "eligible": 327,
+            "recall": 0.44648318042813456
+          },
+          "14": {
+            "matched": 201,
+            "eligible": 337,
+            "recall": 0.5964391691394659
+          }
+        },
+        "motion_type": {
+          "lateral": {
+            "matched": 232,
+            "eligible": 494,
+            "recall": 0.46963562753036436
+          },
+          "radial": {
+            "matched": 190,
+            "eligible": 398,
+            "recall": 0.47738693467336685
+          }
+        },
+        "pixel_area_bin": {
+          "0-25": {
+            "matched": 12,
+            "eligible": 134,
+            "recall": 0.08955223880597014
+          },
+          "100-400": {
+            "matched": 167,
+            "eligible": 291,
+            "recall": 0.5738831615120275
+          },
+          "25-100": {
+            "matched": 36,
+            "eligible": 131,
+            "recall": 0.2748091603053435
+          },
+          "400+": {
+            "matched": 207,
+            "eligible": 336,
+            "recall": 0.6160714285714286
+          }
+        },
+        "scenario": {
+          "crossing": {
+            "matched": 72,
+            "eligible": 133,
+            "recall": 0.5413533834586466
+          },
+          "head_on": {
+            "matched": 103,
+            "eligible": 149,
+            "recall": 0.6912751677852349
+          },
+          "multi_target": {
+            "matched": 144,
+            "eligible": 389,
+            "recall": 0.37017994858611825
+          },
+          "occluded_but_tracked": {
+            "matched": 50,
+            "eligible": 100,
+            "recall": 0.5
+          },
+          "temporal_separation": {
+            "matched": 53,
+            "eligible": 121,
+            "recall": 0.4380165289256198
+          }
+        },
+        "velocity_bin": {
+          ".5-1.5": {
+            "matched": 422,
+            "eligible": 892,
+            "recall": 0.4730941704035874
+          }
+        },
+        "visibility": {
+          "occluded": {
+            "matched": 45,
+            "eligible": 197,
+            "recall": 0.22842639593908629
+          },
+          "visible": {
+            "matched": 377,
+            "eligible": 695,
+            "recall": 0.5424460431654676
+          }
+        }
+      }
+    }
+  },
+  "hard_thresholds": {
+    "visible_precision_min": 0.5,
+    "active_precision_min": 0.5,
+    "recall_min": 0.2,
+    "position_rmse_max_m": 1.0,
+    "velocity_rmse_max_mps": 1.5,
+    "no_target_false_positive_frame_fraction_max": 0.1,
+    "no_target_attention_nonzero_frame_fraction_max": 0.05,
+    "attention_iou_min": 0.05,
+    "never_observed_false_matches": 0
+  },
+  "hard_failures": [],
+  "warnings": []
+}

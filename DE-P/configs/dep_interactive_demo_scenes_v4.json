@@ -1,0 +1,57 @@
+{
+  "contract_version": "dep_interactive_demo_scenes_v3",
+  "fixed_frame": "world",
+  "source": "route_a_v4_large_validation_maps_and_observed_free_poses",
+  "scenes": {
+    "cave": {
+      "display_name": "Cave V4 Large",
+      "map_uuid": "6c53f3ce-f8bc-5212-b0f1-98d6579437f8",
+      "pointcloud": "data/route_a_v4_static_yopo/maps/pointcloud-26.ply",
+      "authority_root": "data/route_a_v4_raw_static/geometry_authority/valid/6c53f3ce-f8bc-5212-b0f1-98d6579437f8",
+      "actor_xy_bounds": [[-27.0, 27.0], [-27.0, 27.0]],
+      "actor_z_bounds": [0.8, 14.0],
+      "start": [25.8592604307, 18.8522599133, 8.3549062861],
+      "suggested_goal": [-6.0820804666, -5.2197398209, 8.8761031429]
+    },
+    "forest": {
+      "display_name": "Forest V4 Large - Trunk Layer",
+      "map_uuid": "0f7557a7-4794-5d10-9e50-36d6a39dbc18",
+      "pointcloud": "data/route_a_v4_static_yopo/maps/pointcloud-2.ply",
+      "authority_root": "data/route_a_v4_raw_static/geometry_authority/valid/0f7557a7-4794-5d10-9e50-36d6a39dbc18",
+      "actor_xy_bounds": [[-28.0, 22.0], [-28.0, 22.0]],
+      "actor_z_bounds": [1.2, 5.5],
+      "start": [-28.49234, -2.236349, 2.215464],
+      "suggested_goal": [-0.860852, 19.216487, 3.313381]
+    },
+    "pillar": {
+      "display_name": "Pillar V4 Large",
+      "map_uuid": "93d78a28-45f4-5416-a07f-b5acdf1315fa",
+      "pointcloud": "data/route_a_v4_static_yopo/maps/pointcloud-37.ply",
+      "authority_root": "data/route_a_v4_raw_static/geometry_authority/valid/93d78a28-45f4-5416-a07f-b5acdf1315fa",
+      "actor_xy_bounds": [[-27.0, 27.0], [-27.0, 27.0]],
+      "actor_z_bounds": [0.8, 14.0],
+      "start": [19.5003911703, 5.7966770218, 8.7078172666],
+      "suggested_goal": [-18.6592617160, -5.9615920362, 11.0623387569]
+    },
+    "room": {
+      "display_name": "Room V4 Large",
+      "map_uuid": "e566d37b-de4b-5b65-b20f-12fdb4551d4e",
+      "pointcloud": "data/route_a_v4_static_yopo/maps/pointcloud-52.ply",
+      "authority_root": "data/route_a_v4_raw_static/geometry_authority/valid/e566d37b-de4b-5b65-b20f-12fdb4551d4e",
+      "actor_xy_bounds": [[-27.0, 27.0], [-27.0, 27.0]],
+      "actor_z_bounds": [0.8, 14.0],
+      "start": [9.4517462187, 23.8815967279, 9.7243551102],
+      "suggested_goal": [6.7844432694, -15.8565911471, 6.0154418629]
+    },
+    "wall": {
+      "display_name": "Wall V4 Large",
+      "map_uuid": "3e12ecd8-b711-54c0-983d-5ec78312274c",
+      "pointcloud": "data/route_a_v4_static_yopo/maps/pointcloud-15.ply",
+      "authority_root": "data/route_a_v4_raw_static/geometry_authority/valid/3e12ecd8-b711-54c0-983d-5ec78312274c",
+      "actor_xy_bounds": [[-28.0, 29.0], [-27.0, 31.0]],
+      "actor_z_bounds": [0.8, 14.0],
+      "start": [-19.5171060257, -9.0206597954, 10.1461578395],
+      "suggested_goal": [-28.5859938854, 29.9355695695, 10.3442594968]
+    }
+  }
+}

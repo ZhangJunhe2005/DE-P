@@ -1,0 +1,27 @@
+manifest_version: phase8_authoritative_v3_occlusion_map_eligibility_v1
+source_audit_version: phase8jqv2_4o1_map_occlusion_capability_v1
+source_authority_root_manifest_hash: a81319d734871c48d49058e22a36a733baead3d85db2ec39206221d3b154f723
+sensor_geometry:
+  backend: canonical_occupancy_cuda_raycast_v1
+  dynamic_actor_compositing: analytic_ray_sphere_nearest_v1
+  frame_period_ns: 100000000
+  height: 96
+  intrinsics:
+  - 80.0
+  - 80.0
+  - 80.0
+  - 45.0
+  max_depth_m: 20.0
+  ray_step_m: 0.1
+  width: 160
+minimum_diversity:
+  train_eligible_maps_min: 8
+  valid_eligible_maps_min: 3
+  maximum_sequence_share_per_map: 0.25
+formal_scenario_map_eligibility:
+  occluded_but_tracked:
+    train: []
+    valid: []
+split_isolation: true
+model_output_used: false
+test_or_blind_used: false

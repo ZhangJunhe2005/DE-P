@@ -1,0 +1,49 @@
+version: dynamic_integration_runtime_v1_candidate
+production_default_changed: false
+selected_fast_path: dynamic_perception_fast_path_v1
+reference_path: policy.dynamic.dynamic_perception.DynamicPerception
+runtime_measurement_contract: RuntimeMeasurementContractV2
+runtime_critical_path:
+  - depth_frame
+  - dynamic_perception
+  - provisional_availability
+  - formal_tracker
+  - geometry_reachability
+  - yopo_inference
+  - snapshot
+  - risk
+  - router
+offline_only:
+  - ground_truth
+  - owner_map
+  - offline_visibility
+  - exact_gt_risk
+  - report_serialization
+  - hashes
+pipeline_warmup_frames: 10
+deadline:
+  source: Simulator/src/config/config.yaml::depth_fps
+  expected_depth_fps: 33.0
+  gate_ms: 30.303030303030305
+telemetry:
+  enabled: true
+  bounded_capacity: 4096
+  overflow_is_reported: true
+semantic_equivalence:
+  discrete: exact
+  float_atol: 1.0e-9
+  float_rtol: 1.0e-9
+  frame_count: 360
+optional_overlap:
+  candidate: R9_SAME_FRAME_CPU_GPU_OVERLAP
+  enabled_in_production: false
+  cpu_task: dynamic_perception
+  gpu_task: yopo_inference
+  atomic_join_before_snapshot: true
+  cross_frame_queue_depth: 0
+forbidden_optimizations:
+  frame_skip: false
+  resolution_reduction: false
+  component_cap: false
+  threshold_change: false
+  yopo_candidate_reduction: false

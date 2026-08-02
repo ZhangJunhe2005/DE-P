@@ -1,0 +1,68 @@
+contract_version: route_a_static_yopo_v4
+route: A
+purpose: restore_original_yopo_scale_and_state_excitation
+
+static_policy_training:
+  actor_count: 0
+  reason: dynamic actors are handled by the deterministic Route-A safety layer
+  map_types: [cave, pillar, forest, room, wall]
+  map_size_large_m: [60.0, 60.0, 15.0]
+  large_map_share: 0.8
+  narrow_map_share: 0.2
+  local_planning_horizon_m: 10.0
+  closed_loop_route_length_m: [15.0, 40.0]
+  observation_contract: route_a_wide_state_v1
+  speed_mps:
+    range: [0.0, 6.0]
+    strata:
+      - {name: hover_recovery, probability: 0.05, range: [0.0, 0.5]}
+      - {name: low_speed, probability: 0.20, range: [0.5, 2.0]}
+      - {name: cruise, probability: 0.40, range: [2.0, 4.5]}
+      - {name: agile, probability: 0.35, range: [4.5, 6.0]}
+  acceleration_mps2:
+    range: [0.0, 6.0]
+    strata:
+      - {name: settled, probability: 0.10, range: [0.0, 0.5]}
+      - {name: mild, probability: 0.25, range: [0.5, 2.0]}
+      - {name: maneuvering, probability: 0.40, range: [2.0, 4.0]}
+      - {name: aggressive, probability: 0.25, range: [4.0, 6.0]}
+  goal_distance_m: [10.0, 40.0]
+  goal_yaw_std_deg: 20.0
+  goal_pitch_std_deg: 10.0
+
+dynamic_closed_loop_evaluation:
+  policy_input: static_depth_only
+  deterministic_safety_layer_enabled: true
+  actor_count_tiers: [0, 1, 2, 4, 8]
+  actor_placement: route_corridor_encounter_conditioned
+  minimum_route_encounter_probability:
+    one_or_more_actor: 0.80
+    multi_actor: 0.35
+  scenarios: [no_target, crossing, head_on, overtaking, multi_target]
+  note: actor count is not static-policy supervision
+
+training_readiness_gates:
+  physical_observation_immutable_through_network: true
+  selected_endpoint_distance_m:
+    mean_min: 3.0
+    p10_min: 1.0
+  selected_endpoint_speed_mps:
+    mean_min: 2.0
+  hover_selection_rate:
+    endpoint_distance_below_m: 0.75
+    maximum: 0.20
+  closed_loop:
+    goal_tolerance_m: 5.0
+    arrival_rate_min: 0.90
+    collision_rate_max: 0.05
+    report_per_map_type: true
+    report_mean_and_peak_speed: true
+  baseline_required:
+    checkpoint: saved/DEP_0/epoch10.pth
+    before_new_training: true
+
+prohibitions:
+  overwrite_v3_data: false
+  reuse_v3_checkpoint_as_v4_deployment_candidate: false
+  internal_test_access: false
+  training_during_data_generation: false

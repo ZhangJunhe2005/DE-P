@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+dynamic_dataset/
+reports/runtime/
+saved/DEP_dynamic_smoke_*/
+artifacts/phase8i/
+
+# Generated datasets, run products, caches, and binary checkpoints stay local.
+# Source modules intentionally living in data/ are re-included below.
+/artifacts/
+/cache/
+/diagnostics/
+/logs/
+/reports/
+/runs/
+/saved/
+/tensorboard/
+/checkpoints/
+/data/*
+!/data/*.py

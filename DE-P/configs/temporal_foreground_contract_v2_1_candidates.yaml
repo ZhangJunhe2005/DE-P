@@ -1,0 +1,40 @@
+contract_version: temporal_foreground_observability_contract_v2_1_candidates
+legacy_default: legacy_v1
+candidate_selected: false
+selected_candidate: null
+history_frames: 4
+runtime_bounds:
+  maximum_history_frames: 4
+  maximum_components: 64
+  maximum_full_image_passes: 12
+  maximum_runtime_ratio_to_legacy: 2.0
+candidates:
+  candidate_a:
+    family: causal_multiframe_evidence
+    grid:
+      - {decay: 0.75, minimum_weighted_closer_support: 1.0}
+      - {decay: 0.75, minimum_weighted_closer_support: 1.25}
+      - {decay: 0.50, minimum_weighted_closer_support: 1.0}
+      - {decay: 1.00, minimum_weighted_closer_support: 1.5}
+  candidate_b:
+    family: component_first_residual
+    grid:
+      - {weak_residual_m: 0.04, minimum_strong_seeds: 1, minimum_component_pixels: 8}
+      - {weak_residual_m: 0.06, minimum_strong_seeds: 1, minimum_component_pixels: 8}
+      - {weak_residual_m: 0.08, minimum_strong_seeds: 2, minimum_component_pixels: 10}
+      - {weak_residual_m: 0.10, minimum_strong_seeds: 2, minimum_component_pixels: 12}
+  candidate_c:
+    family: occupied_freed_dual_channel
+    grid:
+      - {minimum_channel_support: 1, require_closer_or_free: true}
+      - {minimum_channel_support: 2, require_closer_or_free: true}
+  candidate_d:
+    family: existing_track_reacquisition_only
+    grid:
+      - {roi_sigma: 2.0, minimum_residual_pixels: 4}
+      - {roi_sigma: 3.0, minimum_residual_pixels: 6}
+  ablation_seed7:
+    family: diagnostic_only_seed_threshold
+    selectable: false
+    grid:
+      - {minimum_seed_pixels: 7}

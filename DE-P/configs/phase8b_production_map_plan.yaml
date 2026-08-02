@@ -1,0 +1,18 @@
+plan_version: phase8b_production_maps_v1
+status: AWAITING_SEPARATE_CAPACITY_APPROVAL
+seeds:
+  map_seed: 810000
+  pose_seed: 820000
+  actor_seed: 830000
+map_ranges:
+  train: [810000, 810011]
+  valid: [820000, 820002]
+  test: [830000, 830002]
+required_scenarios_per_split: [no_target, crossing, head_on, multi_target, temporal_separation, occluded_but_tracked]
+held_out_test_actor_ranges:
+  speed_mps: [2.1, 2.8]
+  start_delay_seconds: [1.1, 1.8]
+  combinations: [crossing_plus_head_on, occlusion_plus_temporal]
+formal_sensor_source: depth
+pointcloud_training_allowed: false
+automatic_generation_allowed: false

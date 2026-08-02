@@ -1,0 +1,51 @@
+version: dynamic_measurement_contract_v1_candidate
+scope: development_shadow_only
+selected_candidate: D5_DYNAMIC_MEASUREMENT_CONTRACT_V1
+production_default_enabled: false
+strict_measurement:
+  implementation: frozen
+  thresholds_changed: false
+mar1:
+  implementation: frozen
+  salvage_rules_changed: false
+depth_semantics:
+  raw_depth_unit: metre
+  valid_depth_rule: finite_and_positive_and_ge_min_and_lt_max
+  provenance_invalid_fraction_name: temporal_provenance_invalid_fraction
+  formal_acceptance_behavior_changed: false
+bounded_support:
+  minimum_finite_points: 8
+  maximum_age_s: 0.15
+  uav_safety_radius_m: 0.30
+  frozen_extent_prior_m: 0.20
+  maximum_depth_span_m: 1.50
+  maximum_angular_span_rad: 1.40
+  minimum_temporal_support: 2
+  minimum_motion_speed_mps: 0.15
+  minimum_approach_fraction: 0.01
+  require_current_valid_subset: true
+  formal_tracker_feed: false
+unresolved_risk:
+  maximum_age_s: 0.15
+  minimum_component_pixels: 128
+  strong_near_maximum_depth_m: 0.75
+  minimum_provenance_invalid_fraction: 0.95
+  minimum_boundary_hazard_fraction: 0.90
+  reason_codes:
+    - CAUSAL_COMPONENT_WITHOUT_BOUNDED_SUPPORT
+    - RECENT_TRACK_WITHOUT_CURRENT_SUPPORT
+    - SENSOR_LIMIT_WITH_CAUSAL_HAZARD
+historical_context:
+  maximum_prediction_only_age_frames: 3
+  read_only: true
+  track_reactivation: false
+runtime:
+  required_candidate: R9_SAME_FRAME_CPU_GPU_OVERLAP
+  maximum_p95_overhead_ms: 0.75
+  gate_ms: 30.303030303030305
+  queue_depth: 0
+freeze:
+  runtime_gt_used: false
+  owner_map_used: false
+  future_frames_used: false
+  post_fresh_tuning_forbidden: true

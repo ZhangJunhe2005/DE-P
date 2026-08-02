@@ -1,0 +1,214 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Scene Map1
+        - /Planned Trajectories1
+    Tree Height: 620
+  - Class: rviz/Tool Properties
+    Expanded:
+      - /2D Nav Goal1
+    Name: Tool Properties
+  - Class: rviz/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz/Grid
+      Alpha: 0.35
+      Cell Size: 5
+      Color: 160; 160; 164
+      Enabled: true
+      Line Style:
+        Line Width: 0.029999999329447746
+        Value: Lines
+      Name: Ground Grid
+      Plane: XY
+      Plane Cell Count: 20
+      Reference Frame: <Fixed Frame>
+      Value: true
+    - Class: rviz/PointCloud2
+      Alpha: 0.65
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Color Transformer: AxisColor
+      Decay Time: 0
+      Enabled: true
+      Name: Scene Map
+      Position Transformer: XYZ
+      Queue Size: 2
+      Selectable: true
+      Size (Pixels): 2
+      Size (m): 0.08
+      Style: Flat Squares
+      Topic: /mock_map
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Class: rviz/Image
+      Enabled: true
+      Image Topic: /depth_image
+      Max Value: 20
+      Median window: 5
+      Min Value: 0
+      Name: Onboard Depth
+      Normalize Range: true
+      Queue Size: 2
+      Transport Hint: raw
+      Unreliable: false
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /quadrotor_simulator_so3/uav
+      Name: Drone
+      Namespaces:
+        mesh: true
+      Queue Size: 20
+      Value: true
+    - Class: rviz/MarkerArray
+      Enabled: true
+      Marker Topic: /dynamic_objects/markers
+      Name: Moving Actors
+      Namespaces: {}
+      Queue Size: 20
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: /dep_demo/collision_marker
+      Name: Collision Alarm
+      Namespaces:
+        dep_collision: true
+      Queue Size: 10
+      Value: true
+    - Class: rviz/Group
+      Displays:
+        - Class: rviz/PointCloud2
+          Alpha: 1
+          Autocompute Intensity Bounds: true
+          Autocompute Value Bounds:
+            Value: true
+          Axis: Z
+          Channel Name: intensity
+          Color: 255; 25; 25
+          Color Transformer: FlatColor
+          Decay Time: 0.4
+          Enabled: true
+          Name: Selected Trajectory
+          Position Transformer: XYZ
+          Queue Size: 3
+          Selectable: true
+          Size (Pixels): 8
+          Size (m): 0.18
+          Style: Points
+          Topic: /dep_net/best_traj_visual
+          Unreliable: false
+          Use Fixed Frame: true
+          Value: true
+        - Class: rviz/PointCloud2
+          Alpha: 0.55
+          Autocompute Intensity Bounds: true
+          Autocompute Value Bounds:
+            Value: true
+          Axis: Z
+          Channel Name: intensity
+          Color Transformer: Intensity
+          Decay Time: 0.4
+          Enabled: true
+          Name: Network Candidates
+          Position Transformer: XYZ
+          Queue Size: 3
+          Selectable: true
+          Size (Pixels): 3
+          Size (m): 0.08
+          Style: Flat Squares
+          Topic: /dep_net/trajs_visual
+          Unreliable: false
+          Use Fixed Frame: true
+          Value: true
+        - Class: rviz/PointCloud2
+          Alpha: 0.25
+          Autocompute Intensity Bounds: true
+          Autocompute Value Bounds:
+            Value: true
+          Axis: Z
+          Channel Name: intensity
+          Color: 0; 85; 255
+          Color Transformer: FlatColor
+          Decay Time: 0.4
+          Enabled: false
+          Name: Lattice Primitives
+          Position Transformer: XYZ
+          Queue Size: 3
+          Selectable: true
+          Size (Pixels): 2
+          Size (m): 0.05
+          Style: Flat Squares
+          Topic: /dep_net/lattice_trajs_visual
+          Unreliable: false
+          Use Fixed Frame: true
+          Value: false
+      Enabled: true
+      Name: Planned Trajectories
+    - Class: rviz/MarkerArray
+      Enabled: false
+      Marker Topic: /dep_net/dynamic_tracks
+      Name: Experimental Dynamic Tracks
+      Namespaces: {}
+      Queue Size: 10
+      Value: false
+  Enabled: true
+  Global Options:
+    Background Color: 245; 245; 245
+    Default Light: true
+    Fixed Frame: world
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz/Interact
+      Hide Inactive Objects: true
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+    - Class: rviz/FocusCamera
+    - Class: rviz/Measure
+    - Class: rviz/SetGoal
+      Topic: /move_base_simple/goal
+    - Class: rviz/PublishPoint
+      Single click: true
+      Topic: /clicked_point
+  Value: true
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Distance: 55
+      Enable Stereo Rendering:
+        Value: false
+      Field of View: 0.785398
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 3
+      Invert Z Axis: false
+      Name: Current View
+      Near Clip Distance: 0.01
+      Pitch: 0.85
+      Target Frame: world
+      Yaw: 1.2
+    Saved: ~
+Window Geometry:
+  Displays:
+    collapsed: false
+  Height: 1000
+  Hide Left Dock: false
+  Hide Right Dock: false
+  Tool Properties:
+    collapsed: false
+  Views:
+    collapsed: false
+  Width: 1800
+  X: 60
+  Y: 30

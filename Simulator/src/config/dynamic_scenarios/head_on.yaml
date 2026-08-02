@@ -1,0 +1,16 @@
+dynamic_scenario:
+  enabled: true
+  scenario_id: head_on_smoke
+  seed: 3001
+  actors:
+    - id: 11
+      enabled: true
+      shape: vertical_cylinder
+      radius: 0.4
+      height: 1.8
+      initial_position_world: [11.0, 2.0, 1.3]
+      trajectory:
+        type: delayed_linear
+        velocity_world: [-0.8, 0.0, 0.0]
+        start_time: 1.0
+        end_time: 8.0

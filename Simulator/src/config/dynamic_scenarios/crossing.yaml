@@ -1,0 +1,25 @@
+dynamic_scenario:
+  enabled: true
+  scenario_id: crossing_smoke
+  seed: 2001
+  actors:
+    - id: 1
+      enabled: true
+      shape: sphere
+      radius: 0.45
+      initial_position_world: [7.0, -2.0, 1.6]
+      trajectory:
+        type: linear
+        velocity_world: [0.0, 1.0, 0.0]
+        start_time: 0.5
+        end_time: 7.5
+    - id: 2
+      enabled: true
+      shape: sphere
+      radius: 0.35
+      initial_position_world: [10.0, 4.0, 1.6]
+      trajectory:
+        type: delayed_linear
+        velocity_world: [0.0, -0.55, 0.0]
+        start_time: 2.0
+        end_time: 8.0

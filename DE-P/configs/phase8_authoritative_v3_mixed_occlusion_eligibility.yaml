@@ -1,0 +1,73 @@
+manifest_version: phase8_authoritative_v3_mixed_occlusion_eligibility_v1
+source_audit_version: phase8jqv2_4m1_map_type_sweep_v1
+minimum_diversity:
+  train_eligible_maps_min: 12
+  valid_eligible_maps_min: 4
+  maximum_sequence_share_per_map: 0.1
+formal_scenario_map_eligibility:
+  occluded_but_tracked:
+    train:
+    - ca19b7d8-2b60-529f-a8ce-0fc67ef29439
+    - d9a48024-a53f-595c-b42b-97c471a2fc5c
+    - e0d3bc0c-ab2b-5392-81cb-93d0280ea252
+    - d6114d0b-8409-58ef-8fe5-06d0f40f7368
+    - d34d7ae3-1187-55e2-bf44-e413c852f69d
+    - e2b969b0-f333-55a7-a1a7-bb839ffb863e
+    - 7acaaf2d-f050-58b0-8d10-c68b6bf988ad
+    - 257fc036-6dc0-5173-af90-01c98bd9bb72
+    - 4e17a9b8-b279-55fc-a1f8-6a98693f9c5e
+    - 8d8f6311-0cdd-5ef4-bb89-197c2b1273e5
+    - e0376c93-98c3-5875-ab91-1ba822d7ac4a
+    - 6eacd2b4-c5b5-5aee-8503-a2d2c541d8ac
+    - 8348f469-2f84-5348-905f-8425c180e93a
+    - d2ccebdc-2129-5398-b05f-dffc7f89e77e
+    - eb73e810-368d-5eb9-950c-ba118548f0b8
+    - 590f7f85-a755-5e87-8b42-2ed86a14cd9a
+    - 0e897fb8-696b-5df4-b2dd-c6efedbb64d9
+    - 92a6fec2-f808-5cde-bc61-9e513f293f3f
+    - 7b83e3d9-31c3-5c45-a5db-0bb66604f1ad
+    - 2f17c503-050e-5090-8576-41bb6eae45d1
+    - 672d1ac5-83c7-5014-b8c8-12a069f58160
+    - e7cdd109-78ec-5cc6-b473-10c07129bc78
+    - 470f8b4a-b03e-5178-b3e9-89000028e99f
+    - e4b7a426-7bb2-5ada-89be-da5d032a8733
+    - ef98c334-4bf7-5aa9-96a6-139727d10a58
+    - 03468838-831f-58f2-a3ac-97b79829197f
+    - 1860fd90-4b2d-5705-a2a1-3176e82ef0ad
+    - 73ae8330-4705-57ee-8530-73bc5d4e698f
+    - df257a8d-80ac-50d9-9760-e4b09d05a05d
+    - 69ffc896-9dac-5dd0-b9b9-10f1b5eee9ac
+    - 747086cd-d26e-5c07-af34-8ce3651dd0eb
+    - 9b378d04-ca23-5b8a-ac61-39946e198042
+    - edb85a1d-a297-5b02-ae31-d8f39dfb47a3
+    - 1ecd12e3-3d76-5ec3-9d6c-48795abae35f
+    - deb54cfd-0d5c-5f37-a19d-22d61f9f0dba
+    - 8a2e87b0-ad49-513f-aec5-f97663850cdb
+    - fd9d0208-3251-580e-8a78-c562a0577282
+    - a183ff5a-65c7-5b0a-94fc-8613fcd979ca
+    - 01818590-159f-5625-95aa-c58a8a16589d
+    - 9cbf079e-c8e0-53f3-9496-d9e470a8fccf
+    - cf145658-138b-51a7-98c3-8cb0d1a8716e
+    - 6380c5bb-696a-5c8e-a748-0eacf2b3cb57
+    - 25c22af2-8912-5ce7-8f29-12d3409614e8
+    - b5d49547-e385-5458-b635-aa367ac7f434
+    - e4d09bbf-d747-5c03-bce4-2d0e9e47952f
+    - 8e2b25c0-02b2-532b-aa47-07e644be13eb
+    - 917ad60b-4604-5163-b597-70f53a51641c
+    - 1a2aabd8-9276-511f-86ce-a4d5b730c56f
+    valid:
+    - 53a39282-644e-5421-b75b-5114607eae70
+    - 91cd0b8a-d7e5-5e54-999b-c4d795a37b5a
+    - 0615a15f-e5f5-5d1e-b970-b47b6b4263d1
+    - 23609151-6346-5064-9b78-ed23bcd42092
+    - 9bf25d2c-1ff8-5325-8c49-dffe66bc535f
+    - 34f11f2d-c343-5bd0-9d2d-c5def4d339d3
+    - 621dccd0-d9d2-55b3-b317-04efdda9edfc
+    - 7385f32a-f05d-53dd-b7cb-2b0a8c2b97b7
+    - 40c6dc46-2eb9-5abf-9200-4598a389ff17
+    - 32d161b0-29d7-5013-b7fc-ef2d0bcb1c0e
+    - 1cba33ec-3f6a-5b4f-a9d1-d9564eaf9cd8
+    - 6eaa767a-3127-5f3f-a0f4-6b2eba3c9c8c
+split_isolation: true
+model_output_used: false
+test_or_blind_used: false

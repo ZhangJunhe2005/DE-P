@@ -1,0 +1,8 @@
+{
+  "status": "PASS",
+  "perception_ready": true,
+  "phase8h_blind_run_count": 1,
+  "phase8g_blind_consumed": true,
+  "blind_manifest_sha256": "639cb83ba69d346f1f45e806a464954ada25a58eb1a132bc91c3506702fea916",
+  "quality_report": "/home/zjh/YOPO/DE-P/reports/phase8h_blind_once_quality.json"
+}

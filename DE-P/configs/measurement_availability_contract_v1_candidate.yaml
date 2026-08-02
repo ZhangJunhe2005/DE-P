@@ -1,0 +1,50 @@
+version: measurement_availability_contract_v1_candidate
+scope: development_shadow_only
+selected_candidate: M7_SAFETY_MEASUREMENT_AVAILABILITY_V1
+production_default_enabled: false
+strict_formal_measurement:
+  implementation: frozen
+  thresholds_changed: false
+safety_weak_measurement:
+  maximum_age_s: 0.35
+  maximum_missed_frames: 1
+  maximum_observations: 4
+  association_distance_m: 1.0
+  maximum_boundary_hazard_fraction: 0.70
+  maximum_fov_boundary_fraction: 0.50
+  maximum_depth_invalid_fraction: 0.50
+  minimum_finite_points: 8
+  minimum_stable_overlap_fraction: 0.90
+  minimum_approach_fraction: 0.01
+  minimum_world_speed_mps: 0.15
+  maximum_world_speed_mps: 3.0
+  minimum_direction_consistency: 0.40
+  minimum_temporal_support: 2
+  single_frame_minimum_pixels: 32
+  pure_motion_minimum_pixels: 128
+  pure_motion_minimum_temporal_support: 3
+  pure_motion_minimum_direction_consistency: 0.70
+  pure_motion_maximum_boundary_hazard_fraction: 0.25
+  support_uncertainty_m: 0.20
+  maximum_speed_mps: 3.0
+  maximum_acceleration_mps2: 6.0
+fragment_support:
+  maximum_centroid_distance_m: 0.65
+  maximum_bbox_gap_pixels: 8
+  maximum_depth_gap_m: 0.35
+  maximum_group_components: 4
+  cross_target_merge_forbidden: true
+provisional_feed:
+  strict_precedence: true
+  duplicate_suppression: true
+  formal_tracker_feed: false
+runtime:
+  required_candidate: R9_SAME_FRAME_CPU_GPU_OVERLAP
+  maximum_p95_overhead_ms: 1.0
+  gate_ms: 30.303030303030305
+  queue_depth: 0
+freeze:
+  after_validation_tuning_forbidden: true
+  runtime_gt_used: false
+  owner_map_used: false
+  future_frames_used: false

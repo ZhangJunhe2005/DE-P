@@ -1,0 +1,39 @@
+{
+  "status": "APPROVED",
+  "approval": {
+    "approved_by": "user",
+    "approved_for": "phase8c_formal_dataset_generation",
+    "approved_sequence_count": 216,
+    "approved_estimated_dataset_gib": 0.7129071922972798,
+    "approval_date": "2026-07-22"
+  },
+  "source": "/home/zjh/YOPO/DE-P/data/phase7_dynamic_pilot",
+  "pilot": {
+    "bytes": 85076694,
+    "sequences": 24,
+    "frames": 1440,
+    "bytes_per_sequence": 3543880.875,
+    "bytes_per_frame": 59064.68125
+  },
+  "proposed": {
+    "train_maps": 12,
+    "valid_maps": 3,
+    "test_maps": 3,
+    "sequences_per_map": 12,
+    "total_sequences": 216,
+    "estimated_dataset_bytes": 765478269,
+    "estimated_dataset_gib": 0.7129071922972798,
+    "simulated_duration_hours": 0.36,
+    "estimated_context_cache_bytes": 61238261,
+    "estimated_context_cache_gib": 0.05703257538378239,
+    "validation_time_estimate_minutes": 32.4,
+    "recording_wall_time_estimate_hours": 0.54
+  },
+  "assumptions": {
+    "record_rate_hz": 10.0,
+    "frames_per_sequence": 60.0,
+    "recording_realtime_factor": 1.5,
+    "estimated_cache_ratio": 0.08,
+    "production_recording_started": false
+  }
+}

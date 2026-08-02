@@ -1,0 +1,95 @@
+profiles_version: natural_gap1_corpus_profiles_v1
+purpose: development_only_gap1_capacity_audit
+formal_eligible: false
+annex_allowed: false
+primitive_set: original_yopo_maps_only
+common:
+  resolution: 0.1
+  complexity: 0.025
+  fill: 0.06
+  fractal: 1
+  attenuation: 0.1
+  width_min: 0.8
+  width_max: 1.8
+  obstacle_number: 36
+  road_width: 3.0
+  add_wall_x: 1
+  add_wall_y: 1
+  tree_file: /home/zjh/YOPO/Simulator/src/pointcloud/tree.ply
+  tree_dist: 9.0
+  room_number: 2
+  max_windows: 3
+  window_size_min: 2.4
+  window_size_max: 3.6
+  add_ceiling: 0
+  wall_width_min: 1.2
+  wall_width_max: 4.0
+  wall_thick: 0.3
+  wall_number: 18
+  wall_ceiling: 0
+  occlusion_annex: false
+profiles:
+  pillar_sparse_corridor:
+    maze_type: 2
+    semantic_name: pillar_random_solid
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    obstacle_number: 24
+    width_min: 0.8
+    width_max: 1.2
+    post_translate: [0.0, 0.0, 0.0]
+  pillar_sparse_wide:
+    maze_type: 2
+    semantic_name: pillar_random_solid
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    obstacle_number: 28
+    width_min: 1.1
+    width_max: 1.6
+    post_translate: [0.0, 0.0, 0.0]
+  room_open_single:
+    maze_type: 6
+    semantic_name: room_window_grid
+    x_length: 30
+    y_length: 30
+    z_length: 8
+    room_number: 1
+    max_windows: 3
+    window_size_min: 3.0
+    window_size_max: 4.0
+    post_translate: [-15.0, -15.0, 0.0]
+  room_open_double:
+    maze_type: 6
+    semantic_name: room_window_grid
+    x_length: 30
+    y_length: 30
+    z_length: 8
+    room_number: 2
+    max_windows: 4
+    window_size_min: 2.6
+    window_size_max: 3.8
+    post_translate: [-15.0, -15.0, 0.0]
+  wall_sparse_thin:
+    maze_type: 7
+    semantic_name: random_wall_field
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    wall_width_min: 1.2
+    wall_width_max: 3.5
+    wall_thick: 0.2
+    wall_number: 12
+    post_translate: [0.0, 0.0, 0.0]
+  wall_sparse_long:
+    maze_type: 7
+    semantic_name: random_wall_field
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    wall_width_min: 2.0
+    wall_width_max: 5.0
+    wall_thick: 0.3
+    wall_number: 16
+    post_translate: [0.0, 0.0, 0.0]

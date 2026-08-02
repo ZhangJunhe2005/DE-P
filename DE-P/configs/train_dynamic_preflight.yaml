@@ -1,0 +1,61 @@
+config_version: phase8_preflight_v1
+run_kind: preflight
+architecture: corrected
+initialization_checkpoint: /home/zjh/YOPO/DE-P/saved/DEP_corrected_init/epoch10_converted.pth
+dataset_mode: dynamic
+dataset_root: /home/zjh/YOPO/DE-P/data/phase8_preflight_multimap
+dataset_manifest: /home/zjh/YOPO/DE-P/data/phase8_preflight_multimap/dataset_manifest.yaml
+map_split: {train: [0, 1], valid: [2], test: [3]}
+batch_size: 4
+epochs: 1
+learning_rate: 0.0001
+freeze_policy: late
+loss_weight: [1.0, 1.0]
+dynamic_loss:
+  enabled: true
+  weight: 0.1
+  uav_radius: 0.3
+  default_obstacle_radius: 0.3
+  covariance_sigma: 2.0
+  covariance_growth_rate: 0.05
+  temperature: 0.2
+  time_discount: 0.2
+  max_track_age: 0.5
+  obstacle_aggregation: max
+  eval_points: 30
+  target_source: recorded_future_gt
+dynamic_training:
+  dataset_version: dep_dynamic_sequence_v1
+  history_length: 4
+  window_stride: 1
+  cache_size: 16
+  context_source: ground_truth
+  loss_target_source: recorded_future_gt
+  max_obstacles: 16
+  max_grad_norm: 0.1
+  static_batch_ratio: 0.5
+  noise_seed: 8000
+  position_noise_std: 0.05
+  velocity_noise_std: 0.10
+  visibility_noise_std: 0.05
+  attention_noise_std: 0.02
+  estimated_cache_dir: /tmp/dep_phase8_estimated_cache
+  sampler_weights: {no_target: 1.0, visible_low_risk: 1.0, visible_high_risk: 2.0, temporally_separated: 1.5, occluded_but_tracked: 2.0, multi_target: 2.0}
+  curriculum:
+    - {start_epoch: 0, context_source: ground_truth, ratio: 1.0}
+optimizer: {name: AdamW, weight_decay: 0.01}
+scheduler: {name: ReduceLROnPlateau, factor: 0.5, patience: 2, min_lr: 0.000001}
+early_stopping: {patience: 3, min_delta: 0.0001}
+save_interval: 1
+validation_frequency: 1
+best_metric: valid_total_loss
+random_seed: 8008
+num_workers: 0
+max_steps_per_epoch: 8
+max_validation_batches: 16
+abort_thresholds:
+  max_gradient_norm: 1000.0
+  min_free_disk_gib: 2.0
+  dataloader_stall_seconds: 30.0
+  static_regression_ratio: 1.5
+  gpu_memory_growth_bytes: 67108864

@@ -1,0 +1,121 @@
+profiles_version: mixed_scene_map_profiles_v4_route_a
+common:
+  resolution: 0.1
+  complexity: 0.025
+  fill: 0.06
+  fractal: 1
+  attenuation: 0.1
+  width_min: 0.8
+  width_max: 1.8
+  obstacle_number: 300
+  road_width: 3.0
+  add_wall_x: 1
+  add_wall_y: 1
+  tree_file: /home/zjh/YOPO/Simulator/src/pointcloud/tree.ply
+  tree_dist: 9.0
+  room_number: 6
+  max_windows: 2
+  window_size_min: 1.8
+  window_size_max: 2.8
+  add_ceiling: 0
+  wall_width_min: 1.5
+  wall_width_max: 6.0
+  wall_thick: 0.4
+  wall_number: 180
+  wall_ceiling: 0
+  occlusion_annex: false
+  occlusion_annex_length_m: 20.0
+  occlusion_panel_width_m: 0.2
+
+profiles:
+  cave_large_v4:
+    maze_type: 1
+    semantic_name: cave_perlin
+    size_class: large
+    x_length: 60
+    y_length: 60
+    z_length: 15
+    fill: 0.055
+    post_translate: [0.0, 0.0, 0.0]
+  pillar_large_v4:
+    maze_type: 2
+    semantic_name: pillar_random_solid
+    size_class: large
+    x_length: 60
+    y_length: 60
+    z_length: 15
+    obstacle_number: 300
+    post_translate: [0.0, 0.0, 0.0]
+  forest_large_v4:
+    maze_type: 5
+    semantic_name: forest_tree_asset
+    size_class: large
+    x_length: 60
+    y_length: 60
+    z_length: 15
+    tree_dist: 9.0
+    post_translate: [0.0, 0.0, 0.0]
+  room_large_v4:
+    maze_type: 6
+    semantic_name: room_window_grid
+    size_class: large
+    x_length: 60
+    y_length: 60
+    z_length: 15
+    room_number: 6
+    post_translate: [-30.0, -30.0, 0.0]
+  wall_large_v4:
+    maze_type: 7
+    semantic_name: random_wall_field
+    size_class: large
+    x_length: 60
+    y_length: 60
+    z_length: 15
+    wall_number: 180
+    post_translate: [0.0, 0.0, 0.0]
+
+  cave_narrow_v4:
+    maze_type: 1
+    semantic_name: cave_perlin
+    size_class: narrow
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    fill: 0.055
+    post_translate: [0.0, 0.0, 0.0]
+  pillar_narrow_v4:
+    maze_type: 2
+    semantic_name: pillar_random_solid
+    size_class: narrow
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    obstacle_number: 75
+    post_translate: [0.0, 0.0, 0.0]
+  forest_narrow_v4:
+    maze_type: 5
+    semantic_name: forest_tree_asset
+    size_class: narrow
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    tree_dist: 9.0
+    post_translate: [0.0, 0.0, 0.0]
+  room_narrow_v4:
+    maze_type: 6
+    semantic_name: room_window_grid
+    size_class: narrow
+    x_length: 24
+    y_length: 24
+    z_length: 8
+    room_number: 3
+    post_translate: [-12.0, -12.0, 0.0]
+  wall_narrow_v4:
+    maze_type: 7
+    semantic_name: random_wall_field
+    size_class: narrow
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    wall_number: 45
+    post_translate: [0.0, 0.0, 0.0]

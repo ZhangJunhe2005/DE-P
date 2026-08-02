@@ -1,0 +1,51 @@
+version: provisional_dynamic_safety_contract_v2_candidate
+scope: development_shadow_only
+selected_candidate: PROVISIONAL_DYNAMIC_SAFETY_CONTRACT_V1
+production_default_enabled: false
+sensor:
+  frequency_hz: 33.0
+  frame_period_s: 0.030303030303030304
+lifecycle:
+  measurement_max_age_s: 0.08
+  support_max_age_s: 0.08
+  unresolved_max_age_s: 0.05
+  formal_unconfirmed_max_age_s: 0.08
+  maximum_missed_frames: 2
+  minimum_evidence_frames: 1
+  promotion_timeout_s: 0.12
+  gap1_allowed: true
+  gap2_allowed: true
+  gap3_default_expired: true
+association:
+  maximum_position_distance_m: 1.0
+  minimum_bbox_iou: 0.01
+  maximum_support_gap_m: 0.50
+  one_to_one: true
+  gt_identity_forbidden: true
+support_birth:
+  require_dynamic_safety_context: true
+  allowed_context:
+    - current_approach_evidence
+    - recent_formal_track_context
+  pure_static_support_action: static_occupancy_diagnostic_only
+reconciliation:
+  maximum_time_delta_s: 0.12
+  maximum_position_distance_m: 1.0
+  minimum_support_iou: 0.01
+  generation_safe: true
+  formal_precedence: true
+motion:
+  maximum_speed_mps: 3.0
+  maximum_acceleration_mps2: 6.0
+  unconfirmed_reference_uncertainty_m: 0.25
+runtime:
+  required_candidate: R9_SAME_FRAME_CPU_GPU_OVERLAP
+  maximum_p95_overhead_ms: 1.0
+  gate_ms: 30.303030303030305
+  queue_depth: 0
+freeze:
+  runtime_gt_used: false
+  owner_map_used: false
+  future_frames_used: false
+  formal_tracker_feed: false
+  post_fresh_tuning_forbidden: true

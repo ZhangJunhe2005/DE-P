@@ -1,0 +1,2 @@
+# The automated baseline uses Python's standard-library unittest framework.
+# No additional development package is required for tests/run_baseline.py.

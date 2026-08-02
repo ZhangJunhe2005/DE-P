@@ -1,0 +1,7 @@
+completion_status: complete
+map_seed: 830000
+pose_seed: 1020000
+actor_seed: 1030000
+env_num: 1
+image_num: 64
+reachability_status: pending_external_validation

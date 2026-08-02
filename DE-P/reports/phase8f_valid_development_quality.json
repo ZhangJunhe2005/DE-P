@@ -1,0 +1,300 @@
+{
+  "status": "PASS",
+  "evaluator_version": "phase8f_range_image_stages_v1",
+  "dataset": "/home/zjh/YOPO/DE-P/data/phase8_dynamic_production",
+  "causal": true,
+  "future_gt_used_by_tracker": false,
+  "evaluated_splits": [
+    "valid"
+  ],
+  "max_sequences_per_scenario": 1,
+  "foreground_mode": "range_image_hybrid",
+  "sequence_manifests": {
+    "valid": [
+      "phase8c_valid_0001",
+      "phase8c_valid_0003",
+      "phase8c_valid_0005",
+      "phase8c_valid_0007",
+      "phase8c_valid_0009",
+      "phase8c_valid_0011"
+    ]
+  },
+  "sequence_manifest_sha256": {
+    "valid": "a7f0b9b99a3139b295336a2c16622ec712737acee944fd621df93131582f9f0a"
+  },
+  "implementation_sha256": "567f87962bcc83d26f080c044462562ecc574d7f217f045519b54faadc12d447",
+  "metric_semantics": {
+    "visible": "active, inside image, non-occluded, visibility>0",
+    "active_track": "active and visible, or previously observed within max_missed_frames",
+    "visible_false_positive": "unmatched estimated track; correctly retained occluded matches excluded",
+    "no_target": "every dynamic track is a hard false positive"
+  },
+  "split_metrics": {
+    "valid": {
+      "sequence_count": 6,
+      "frame_count": 360,
+      "visible_detection_precision": 0.9714285714285714,
+      "visible_detection_recall": 0.4927536231884058,
+      "active_track_precision": 0.9473684210526315,
+      "active_track_recall": 0.375,
+      "position_rmse_m": 0.37226076481853776,
+      "velocity_rmse_mps": 0.7005537135487074,
+      "id_switches": 0,
+      "track_fragmentations": 0,
+      "time_to_confirm_mean_s": 0.4666730562845866,
+      "first_visible_to_first_seed_mean_s": 0.13333002726236978,
+      "first_visible_to_first_component_mean_s": 0.6333420276641846,
+      "first_visible_to_dynamic_attention_mean_s": 0.4666730562845866,
+      "pixel_stage_metrics": {
+        "completed_component": {
+          "tp": 11161,
+          "fp": 15929,
+          "fn": 46280,
+          "precision": 0.4119970468807678,
+          "recall": 0.1943037203391306
+        },
+        "free_space_seed": {
+          "tp": 3243,
+          "fp": 14051,
+          "fn": 54198,
+          "precision": 0.18752168382097836,
+          "recall": 0.05645793074633102
+        },
+        "range_residual_seed": {
+          "tp": 6872,
+          "fp": 51140,
+          "fn": 50569,
+          "precision": 0.11845825001723781,
+          "recall": 0.11963580021239184
+        }
+      },
+      "foreground_latency_ms": {
+        "mean": 5.778026674973565,
+        "p95": 9.670207149792986
+      },
+      "complete_perception_latency_ms": {
+        "mean": 47.570706033350994,
+        "p95": 61.89665105048334
+      },
+      "bounded_capacity": {
+        "range_history_frames": 4,
+        "background_max_voxels": 200000
+      },
+      "no_target_false_positive_track_count": 0,
+      "no_target_false_positive_frame_fraction": 0.0,
+      "never_observed_false_positive_match_count": 0,
+      "never_observed_actor_frame_count": 95,
+      "occluded_track_retention_same_id": 0.07407407407407407,
+      "occluded_eligible_frame_count": 27,
+      "attention_iou_mean": 0.5505296786546786,
+      "attention_center_error_cells": 0.19210675953726555,
+      "no_target_attention_nonzero_frame_fraction": 0.0,
+      "no_target_attention_max": 0.0,
+      "no_target_attention_mean": 0.0,
+      "no_target_false_attention_cell_count_mean": 0.0,
+      "scenario_metrics": {
+        "crossing": {
+          "frames": 60,
+          "dynamic_track_frame_fraction": 0.2
+        },
+        "head_on": {
+          "frames": 60,
+          "dynamic_track_frame_fraction": 0.16666666666666666
+        },
+        "multi_target": {
+          "frames": 60,
+          "dynamic_track_frame_fraction": 0.23333333333333334
+        },
+        "no_target": {
+          "frames": 60,
+          "dynamic_track_frame_fraction": 0.0
+        },
+        "occluded_but_tracked": {
+          "frames": 60,
+          "dynamic_track_frame_fraction": 0.0
+        },
+        "temporal_separation": {
+          "frames": 60,
+          "dynamic_track_frame_fraction": 0.0
+        }
+      },
+      "stratified_active_recall": {
+        "actor_shape": {
+          "sphere": {
+            "matched": 26,
+            "eligible": 80,
+            "recall": 0.325
+          },
+          "vertical_cylinder": {
+            "matched": 10,
+            "eligible": 16,
+            "recall": 0.625
+          }
+        },
+        "camera_rotation_bin": {
+          "high": {
+            "matched": 2,
+            "eligible": 12,
+            "recall": 0.16666666666666666
+          },
+          "low": {
+            "matched": 34,
+            "eligible": 84,
+            "recall": 0.40476190476190477
+          }
+        },
+        "camera_translation_bin": {
+          "high": {
+            "matched": 36,
+            "eligible": 94,
+            "recall": 0.3829787234042553
+          },
+          "low": {
+            "matched": 0,
+            "eligible": 2,
+            "recall": 0.0
+          }
+        },
+        "distance_bin": {
+          "0-4": {
+            "matched": 33,
+            "eligible": 74,
+            "recall": 0.44594594594594594
+          },
+          "4-8": {
+            "matched": 3,
+            "eligible": 22,
+            "recall": 0.13636363636363635
+          }
+        },
+        "first_visible_frame": {
+          "0": {
+            "matched": 26,
+            "eligible": 41,
+            "recall": 0.6341463414634146
+          },
+          "16": {
+            "matched": 0,
+            "eligible": 10,
+            "recall": 0.0
+          },
+          "25": {
+            "matched": 0,
+            "eligible": 17,
+            "recall": 0.0
+          },
+          "26": {
+            "matched": 0,
+            "eligible": 12,
+            "recall": 0.0
+          },
+          "5": {
+            "matched": 10,
+            "eligible": 16,
+            "recall": 0.625
+          }
+        },
+        "map_id": {
+          "12": {
+            "matched": 36,
+            "eligible": 96,
+            "recall": 0.375
+          }
+        },
+        "motion_type": {
+          "lateral": {
+            "matched": 26,
+            "eligible": 74,
+            "recall": 0.35135135135135137
+          },
+          "radial": {
+            "matched": 10,
+            "eligible": 22,
+            "recall": 0.45454545454545453
+          }
+        },
+        "pixel_area_bin": {
+          "0-25": {
+            "matched": 1,
+            "eligible": 22,
+            "recall": 0.045454545454545456
+          },
+          "100-400": {
+            "matched": 7,
+            "eligible": 22,
+            "recall": 0.3181818181818182
+          },
+          "25-100": {
+            "matched": 1,
+            "eligible": 12,
+            "recall": 0.08333333333333333
+          },
+          "400+": {
+            "matched": 27,
+            "eligible": 40,
+            "recall": 0.675
+          }
+        },
+        "scenario": {
+          "crossing": {
+            "matched": 12,
+            "eligible": 20,
+            "recall": 0.6
+          },
+          "head_on": {
+            "matched": 10,
+            "eligible": 16,
+            "recall": 0.625
+          },
+          "multi_target": {
+            "matched": 14,
+            "eligible": 33,
+            "recall": 0.42424242424242425
+          },
+          "occluded_but_tracked": {
+            "matched": 0,
+            "eligible": 10,
+            "recall": 0.0
+          },
+          "temporal_separation": {
+            "matched": 0,
+            "eligible": 17,
+            "recall": 0.0
+          }
+        },
+        "velocity_bin": {
+          ".5-1.5": {
+            "matched": 36,
+            "eligible": 96,
+            "recall": 0.375
+          }
+        },
+        "visibility": {
+          "occluded": {
+            "matched": 2,
+            "eligible": 27,
+            "recall": 0.07407407407407407
+          },
+          "visible": {
+            "matched": 34,
+            "eligible": 69,
+            "recall": 0.4927536231884058
+          }
+        }
+      }
+    }
+  },
+  "hard_thresholds": {
+    "visible_precision_min": 0.5,
+    "active_precision_min": 0.5,
+    "recall_min": 0.2,
+    "position_rmse_max_m": 1.0,
+    "velocity_rmse_max_mps": 1.5,
+    "no_target_false_positive_frame_fraction_max": 0.1,
+    "no_target_attention_nonzero_frame_fraction_max": 0.05,
+    "attention_iou_min": 0.05,
+    "never_observed_false_matches": 0
+  },
+  "hard_failures": [],
+  "warnings": []
+}

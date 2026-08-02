@@ -1,0 +1,61 @@
+contract_version: provisional_evidence_contract_v1_candidate
+scope: development_shadow_only
+selected_candidate: E5_PROVISIONAL_EVIDENCE_AUTHORIZER_V1
+production_default_enabled: false
+support_quality:
+  minimum_finite_points: 8
+  maximum_position_set_diagonal_m: 4.0
+  tiny_support_max_points: 12
+  high_boundary_hazard_fraction: 0.95
+  high_fov_boundary_fraction: 0.50
+  weak_provenance_fraction: 0.50
+  low_component_fill_fraction: 0.35
+evidence:
+  minimum_temporal_support_frames: 2
+  minimum_stable_overlap_fraction: 0.25
+  minimum_motion_speed_mps: 0.30
+  maximum_motion_speed_mps: 8.0
+  minimum_direction_consistency: 0.70
+  minimum_approach_fraction: 0.0
+  no_history_minimum_independent_families: 2
+history:
+  maximum_direct_evidence_age_s: 0.08
+  maximum_position_gap_m: 0.50
+  require_generation: true
+  accepted_safety_evidence:
+    - DIRECT_MEASUREMENT_HISTORY
+    - VALID_SAFETY_WEAK_MEASUREMENT
+    - PROVISIONAL_DYNAMIC_EVIDENCE
+no_history:
+  maximum_age_s: 0.05
+  require_temporal_persistence: true
+  tiny_high_boundary_requires_history_or_cross_source: true
+  single_artifact_minimum_independent_families: 3
+  multiple_artifact_flags_require_cross_source: true
+validation:
+  true_support_recall_minimum: 0.70
+  baseline_true_support_retention_minimum: 0.95
+  history_support_recall_minimum: 0.90
+  no_history_eligible_recall_minimum: 0.85
+  no_target_birth_maximum: 0
+  static_false_dynamic_birth_maximum: 0
+runtime:
+  authorizer_overhead_p95_ms: 0.50
+  full_cycle_gate_ms: 30.303030303030305
+  deadline_miss_rate_maximum: 0.01
+  consecutive_deadline_miss_maximum: 1
+  queue_depth: 0
+forbidden:
+  - gt_actor_identity
+  - gt_geometry
+  - owner_map
+  - future_frames
+  - sequence_id_special_case
+  - formal_track_birth
+  - formal_track_mutation
+  - unresolved_risk_conversion
+  - lifecycle_mutation
+  - association_mutation
+  - consumer_mutation
+production_activation_authorized: false
+training_authorized: false

@@ -1,0 +1,21 @@
+{
+  "status": "PASS",
+  "gates": {
+    "explicit_map_pose_actor_seeds": true,
+    "random_device_removed": true,
+    "existing_output_refused_by_default": true,
+    "overwrite_lists_and_confirms_target": true,
+    "unique_staging_and_atomic_rename": true,
+    "compiled_binary_current": true,
+    "reachability_and_non_destructive_fixtures": true,
+    "map_splits_disjoint": true,
+    "all_six_scenarios_required_per_split": true,
+    "held_out_test_actor_ranges_declared": true,
+    "automatic_generation_disabled": true
+  },
+  "test_stdout": "",
+  "test_stderr": "...\n----------------------------------------------------------------------\nRan 3 tests in 2.051s\n\nOK\n",
+  "full_dual_dataset_generation_performed": false,
+  "production_data_recording_started": false,
+  "note": "Determinism is exercised on a bounded reachability fixture; formal map generation remains capacity-gated."
+}

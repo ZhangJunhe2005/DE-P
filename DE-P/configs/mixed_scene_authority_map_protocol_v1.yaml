@@ -1,0 +1,41 @@
+protocol_version: mixed_scene_authority_map_protocol_v1
+dataset_version: phase8_authoritative_v3_mixed_v1
+authority_version: static_geometry_authority_v1
+authority_rule: raw_unfiltered_procedural_cloud_to_canonical_0_1m_occupancy
+visualization_ply_authoritative: false
+resolution_m: 0.1
+frame_id: odom
+parent_repository: /home/zjh/YOPO
+original_yopo_root: /home/zjh/YOPO/YOPO
+simulator_source_root: /home/zjh/YOPO/Simulator/src
+tree_asset: /home/zjh/YOPO/Simulator/src/pointcloud/tree.ply
+development:
+  output_root: /home/zjh/YOPO/DE-P/data/phase8_authoritative_v3_map_sweep_v4
+  maps_per_type: 3
+  seed_base: 831000000
+  namespace: mixed_scene_authority_map_sweep_v1
+formal:
+  map_output_root: /home/zjh/YOPO/DE-P/data/phase8_authoritative_v3_mixed_maps
+  dataset_output_root: /home/zjh/YOPO/DE-P/data/phase8_authoritative_v3
+  train_maps: 48
+  valid_maps: 12
+  train_seed_base: 832000000
+  valid_seed_base: 833000000
+  train_namespace: mixed_scene_authority_formal_train_v1
+  valid_namespace: mixed_scene_authority_formal_valid_v1
+selection:
+  candidate_maze_types: [1, 2, 5, 6, 7]
+  minimum_passing_types: 4
+  round_robin: true
+  maximum_type_count_difference: 1
+  occlusion_train_maps_min: 12
+  occlusion_train_types_min: 3
+  occlusion_valid_maps_min: 4
+  occlusion_valid_types_min: 2
+frozen_generation:
+  frames_per_sequence: 60
+  train_frames: 1000000
+  valid_frames: 100000
+  test_disabled: true
+  blind_disabled: true
+  training_disabled: true

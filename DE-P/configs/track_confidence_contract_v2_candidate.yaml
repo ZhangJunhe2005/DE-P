@@ -1,0 +1,43 @@
+version: track_confidence_contract_v2_candidate
+status: candidate_not_activated
+states:
+  OBSERVED_DYNAMIC:
+    requires: [track_exists, confirmed, direct_measurement, is_dynamic]
+  COASTING_DYNAMIC:
+    requires:
+      - track_exists
+      - confirmed
+      - previously_dynamic
+      - measurement_missing
+      - missed_count_within_bound
+      - covariance_within_bound
+    requires_current_is_dynamic: false
+    may_birth_track: false
+  OBSERVED_UNCERTAIN:
+    requires:
+      - track_exists
+      - confirmed
+      - direct_measurement
+      - recent_previously_dynamic
+    requires_current_is_dynamic: false
+    may_birth_track: false
+  LOST:
+    any:
+      - track_deleted
+      - missed_count_exceeds_bound
+      - covariance_exceeds_bound
+shadow_bounds:
+  maximum_coasting_misses: 3
+  maximum_position_std_m: 1.0
+  covariance_sigma: 2.0
+  covariance_growth_rate: 0.10
+  clearance_margin_m: 0.10
+semantics:
+  changes_kalman_state: false
+  changes_track_manager: false
+  changes_formal_control: false
+  planner_safety_relevance_only: true
+  gt_runtime_input: false
+activation:
+  enabled: false
+  production_default_changed: false

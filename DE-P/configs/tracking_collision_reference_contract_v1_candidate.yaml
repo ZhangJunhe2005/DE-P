@@ -1,0 +1,62 @@
+phase_id: phase8jqv2_4_prediction_timeline_alignment_repair
+repair_target: prediction_reference_origin_alignment_repair
+contract_version: tracking_collision_reference_contract_v1_candidate
+status: development_candidate_frozen_before_fresh_validation
+
+references:
+  measurement_reference: visible_surface_cluster_centroid
+  track_state_reference: visible_surface_cluster_centroid
+  collision_reference: actor_geometric_center_or_conservative_occupancy_support
+  actor_extent_reference: geometric_center
+  covariance_reference:
+    surface: current_component_centroid_sampling_and_extent
+    reference_transform: geometry_model_radius_and_observability
+    center: surface_plus_reference_transform
+    occupancy: bounded_support_envelope
+
+runtime_extent_prior:
+  provenance: fixed_contract_prior
+  runtime_gt: false
+  radius_prior_min_m: 0.18
+  radius_prior_max_m: 0.42
+  vertical_half_extent_upper_m: 0.80
+  supported_shapes:
+    - sphere
+    - vertical_cylinder
+  shape_class_runtime_observable: false
+  implicit_legacy_default_m: 0.30
+
+bridge:
+  radius_prior_min_m: 0.18
+  radius_prior_max_m: 0.42
+  vertical_half_extent_upper_m: 0.80
+  minimum_fit_points: 12
+  minimum_angular_span_rad: 0.025
+  maximum_fit_residual_m: 0.055
+  maximum_fit_condition_number: 2000000.0
+  maximum_fit_evaluations: 40
+  border_guard_px: 2
+  reference_model_floor_m: 0.035
+  weak_reference_model_floor_m: 0.10
+  interval_lateral_floor_m: 0.06
+  fixed_shift_scales: [0.5, 0.75, 1.0]
+
+fresh_validation_gates:
+  center_median_error_max_m: 0.15
+  center_p90_error_max_m: 0.25
+  center_p95_error_max_m: 0.35
+  median_reduction_min_fraction: 0.50
+  major_scenario_p90_regression_max_fraction: 0.10
+  r1_scenario_p90_regression_hard_max_fraction: 0.20
+  reference_bridge_p95_runtime_max_ms: 6.0
+  combined_shadow_p95_runtime_max_ms: 15.0
+  unsafe_recommendation_increase_max: 0
+  negative_false_veto_max: 0
+
+selection:
+  candidate: hybrid_reference_bridge
+  r1_fixed_shift_selectable: false
+  formal_tracker_modified: false
+  formal_kalman_modified: false
+  formal_planner_modified: false
+  production_activation_authorized: false

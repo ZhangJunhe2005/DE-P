@@ -1,0 +1,14 @@
+catalog_version: 1
+generation_scope: legacy_yopo_static_training_maps
+dataset_root: /home/zjh/YOPO/dataset
+maps:
+- {map_id: 0, static_ply: /home/zjh/YOPO/dataset/pointcloud-0.ply, static_map_sha256: 1eef8fcf5c6f7a8c7d57cbf5cce8fd9fd65f163d439c7baa65a80b8200e66973}
+- {map_id: 1, static_ply: /home/zjh/YOPO/dataset/pointcloud-1.ply, static_map_sha256: d18184bdd58d290bfb098ca588741c280f070326dbbc3cc49519d37b23e5afa9}
+- {map_id: 2, static_ply: /home/zjh/YOPO/dataset/pointcloud-2.ply, static_map_sha256: 1765ccd6afad2b060477e09e30bbb94b61b42b25932e37c6f48609ed58f46aef}
+- {map_id: 3, static_ply: /home/zjh/YOPO/dataset/pointcloud-3.ply, static_map_sha256: f22a375866f2204ccf09902525f9e76a141fae4b9f4ffbcad3e56888e77e4196}
+- {map_id: 4, static_ply: /home/zjh/YOPO/dataset/pointcloud-4.ply, static_map_sha256: f5b870c00fb34a60f0dcc4cea4a1f8b88bbfd3b44a55ec0f9987a2f5168b9814}
+- {map_id: 5, static_ply: /home/zjh/YOPO/dataset/pointcloud-5.ply, static_map_sha256: 0f39d6b731b30ad6c62953ec4c111bb58cdc3dfcee3465cb6f0895995b1c065c}
+- {map_id: 6, static_ply: /home/zjh/YOPO/dataset/pointcloud-6.ply, static_map_sha256: 6349b7c16f4bb6fd4635a194d5694fab9dc00614677fdfc8486fb24f314d65b0}
+- {map_id: 7, static_ply: /home/zjh/YOPO/dataset/pointcloud-7.ply, static_map_sha256: cd8c781192cd05c65e06bff652fee345e4010caf69d0daf334172abc553c6a63}
+- {map_id: 8, static_ply: /home/zjh/YOPO/dataset/pointcloud-8.ply, static_map_sha256: f5bad5e2d85fc106c28ec234750be250283613f3ad23f816c7ab3a5b29566eab}
+- {map_id: 9, static_ply: /home/zjh/YOPO/dataset/pointcloud-9.ply, static_map_sha256: 4b85ece3316eb72782b45a56ebf6ea55fa2122657e49c6756c5549e356a62fbf}

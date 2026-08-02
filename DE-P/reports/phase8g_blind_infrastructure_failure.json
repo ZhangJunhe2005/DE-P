@@ -1,0 +1,59 @@
+{
+  "status": "INFRASTRUCTURE_FAIL",
+  "phase": "8G",
+  "blind_run_count": 1,
+  "perception_evaluation_started": false,
+  "perception_ready": false,
+  "failed_sequence": "phase8g_blind_00_02",
+  "failed_stage": "simulator_scenario_yaml_load",
+  "exception": "YAML::TypedBadConversion<unsigned int>",
+  "root_cause": {
+    "field": "dynamic_scenario.actors[].id",
+    "generator_expression": "actor_seed * 10 + actor_slot",
+    "failing_actor_id": 7248162161,
+    "uint32_max": 4294967295,
+    "classification": "deterministic integer overflow in generated actor ID"
+  },
+  "recovery_hardening": {
+    "secondary_boundary_found": "ROS instance encoding is signed 32SC1, so IDs must be <= 2147483647 even though the C++ actor state is uint32_t.",
+    "fixed_actor_id_expression": "actor_seed * 4 + actor_slot",
+    "maximum_recovery_blind_seed": 336868795,
+    "simulator_exit_diagnostics_now_include": [
+      "return code",
+      "exact log path",
+      "last 12 log lines"
+    ]
+  },
+  "evidence": {
+    "workers_with_same_yaml_exception": [1, 2, 3, 4, 5, 6, 7],
+    "no_target_worker_loaded_map": true,
+    "ros_masters_started_on_distinct_ports": [
+      13300,
+      13301,
+      13302,
+      13303,
+      13304,
+      13305,
+      13306,
+      13307
+    ],
+    "shared_config_yaml_modified_by_workers": false,
+    "per_worker_ros_home": true,
+    "per_sequence_scenario_file": true,
+    "per_sequence_log_file": true
+  },
+  "ruled_out_as_primary_cause": [
+    "CUDA out of memory",
+    "system memory exhaustion",
+    "file descriptor exhaustion",
+    "ROS master port collision",
+    "shared Simulator config.yaml overwrite",
+    "map reachability failure"
+  ],
+  "failed_artifacts_preserved": {
+    "lock": "reports/.phase8g_blind_once.lock",
+    "staging": "data/phase8g_perception_protocol/.blind.staging-765b43634c5044c6b5ed88531b04c0d6",
+    "static_maps": "data/phase8g_perception_protocol/blind_static_maps"
+  },
+  "retry_policy": "Phase 8G and its seed are consumed and must not be rerun. Recovery uses a new Phase 8H lock, root, maps and user-supplied seed."
+}

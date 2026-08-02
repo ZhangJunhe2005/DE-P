@@ -1,0 +1,65 @@
+phase_id: phase8jqv2_4_bounded_dynamic_reachability_review
+contract_version: bounded_dynamic_reachability_contract_v1_candidate
+status: development_candidates
+
+time_origin:
+  maximum_stale_age_s: 0.25
+  direct_age_tolerance_s: 0.000001
+  double_age_guard: explicit_position_reference_timestamp
+  missing_age_policy: UNRESOLVED_DYNAMIC_RISK
+
+velocity_set:
+  maximum_speed_mps: 4.0
+  sphere_minimum_half_width_mps: [0.12, 0.12, 0.12]
+  cylinder_minimum_half_width_mps: [0.25, 0.25, 0.50]
+  covariance_sigma_scale: 2.0
+  weak_vertical_point_velocity_allowed: false
+
+acceleration_set:
+  provenance: frozen_development_motion_contract
+  isotropic_bound_mps2: 0.55
+  future_gt_acceleration_used: false
+
+reference_drift:
+  stable_geometric_center_rate_mps: 0.02
+  weak_or_ambiguous_rate_mps: 0.12
+  support_only_rate_mps: 0.18
+  minimum_bound_m: 0.01
+
+expiry:
+  gap1_frames: 1
+  gap2_frames: 2
+  gap3: EXPIRED
+  long_gap: EXPIRED
+
+candidates:
+  - id: B1_STALE_AGE_CORRECTED
+    use_velocity_set: false
+    use_acceleration_set: false
+    use_reference_drift: false
+  - id: B8_BOUNDED_DYNAMIC_REACHABILITY_V1
+    use_velocity_set: true
+    use_acceleration_set: true
+    use_reference_drift: true
+
+runtime_gates:
+  direct_geometry_p95_ms: 6.0
+  stale_time_update_p95_ms: 0.5
+  reachability_generation_p95_ms: 2.0
+  cached_reachability_risk_p95_ms: 15.0
+
+risk_gates:
+  unsafe_recommendations_max: 0
+  top3_unsafe_miss_max: 0
+  global_unsafe_miss_rate_max: 0.05
+  multi_target_stale_miss_max: 0
+  safe_candidate_false_veto_rate_max: 0.30
+  sequence_false_emergency_rate_max: 0.10
+  no_target_false_veto_max: 0
+
+selection:
+  maximum_development_candidates: 2
+  selected_candidate: null
+  formal_integration_authorized: false
+  production_activation_authorized: false
+

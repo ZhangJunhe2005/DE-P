@@ -1,0 +1,41 @@
+{
+  "contract_version": "dep_interactive_demo_scenes_v1",
+  "fixed_frame": "world",
+  "scenes": {
+    "cave": {
+      "display_name": "Cave",
+      "map_uuid": "03468838-831f-58f2-a3ac-97b79829197f",
+      "pointcloud": "data/phase8_mixed_scene_static_yopo_derived_v2/maps/pointcloud-1.ply",
+      "start": [-2.4910454634, 5.9827008229, 4.6244841160],
+      "suggested_goal": [13.9016243405, -12.9062897614, 3.1588613553]
+    },
+    "forest": {
+      "display_name": "Forest",
+      "map_uuid": "1a2aabd8-9276-511f-86ce-a4d5b730c56f",
+      "pointcloud": "data/phase8_mixed_scene_static_yopo_derived_v2/maps/pointcloud-4.ply",
+      "start": [-10.8434033572, 8.8667172540, 5.9858829895],
+      "suggested_goal": [8.4490199966, -11.8673263502, 0.6349399146]
+    },
+    "pillar": {
+      "display_name": "Pillar",
+      "map_uuid": "0e897fb8-696b-5df4-b2dd-c6efedbb64d9",
+      "pointcloud": "data/phase8_mixed_scene_static_yopo_derived_v2/maps/pointcloud-2.ply",
+      "start": [-12.6042414914, -1.0733705482, 7.8426118173],
+      "suggested_goal": [14.8326224163, -10.5461592642, 6.3699749985]
+    },
+    "room": {
+      "display_name": "Room",
+      "map_uuid": "01818590-159f-5625-95aa-c58a8a16589d",
+      "pointcloud": "data/phase8_mixed_scene_static_yopo_derived_v2/maps/pointcloud-0.ply",
+      "start": [-10.1747231306, 2.9493080895, 4.4586787743],
+      "suggested_goal": [10.0873317230, -11.1125940664, 3.7073337431]
+    },
+    "wall": {
+      "display_name": "Wall",
+      "map_uuid": "2f17c503-050e-5090-8576-41bb6eae45d1",
+      "pointcloud": "data/phase8_mixed_scene_static_yopo_derived_v2/maps/pointcloud-8.ply",
+      "start": [-10.5802063197, -8.6651600357, 2.5546522587],
+      "suggested_goal": [13.8851558628, 11.0337578221, 9.5554928318]
+    }
+  }
+}

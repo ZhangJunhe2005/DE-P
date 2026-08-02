@@ -1,0 +1,45 @@
+version: natural_short_full_occlusion_v2
+historical_contract:
+  version: natural_full_occlusion_gap1_v1
+  modified: false
+sensor:
+  frame_period_ns: 100000000
+  height: 96
+  width: 160
+  intrinsics: [80.0, 80.0, 80.0, 45.0]
+  min_depth_m: 0.1
+  max_depth_m: 20.0
+  ray_step_m: 0.1
+actor:
+  allowed_radius_m: [0.20, 0.25, 0.30]
+  minimum_radius_m: 0.20
+  default_radius_m: 0.30
+  speed_mps: [0.8, 1.1, 1.4]
+occlusion:
+  accepted_exact_gap_frames: [1, 2]
+  rejected_strict_gap_frames: [0, 3]
+  pre_gap_visible_frames: 4
+  post_gap_visible_frames: 3
+  severe_partial_blocked_fraction: 0.95
+  full_definition:
+    projected_positive: true
+    visible_pixels: 0
+    static_blocked_equals_projected: true
+    artificial_hiding: false
+search_bounds:
+  historical_near_misses: 5
+  contract_variants_per_near_miss: 4
+  anchors_per_variant: 16
+  directions_per_anchor: 12
+  camera_motions_per_direction: 8
+  analytic_candidates_max: 30720
+  exact_continuous_candidates_max: 960
+  cuda_candidates_max: 120
+  independent_rerenders_max: 12
+strict_exclusions:
+  annex: true
+  fov_exit: true
+  behind_camera: true
+  max_depth_exit: true
+  metadata_hiding: true
+  gap3_or_longer: true

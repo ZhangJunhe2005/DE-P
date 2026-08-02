@@ -1,0 +1,32 @@
+version: kalman_uncertainty_contract_v1_candidate
+status: blocked_by_prediction_origin_integrity_gate
+activation:
+  enabled: false
+  formal_kalman_modified: false
+  formal_tracker_modified: false
+  formal_planner_modified: false
+  runtime_gt_used: false
+integrity_result:
+  timeline_alignment: PASS
+  world_frame_alignment: PASS
+  reference_point_alignment: FAIL
+  track_reference_point: visible_surface_cluster_centroid
+  gt_reference_point: actor_geometric_center
+candidates:
+  U0_RAW:
+    status: HISTORICAL_BASELINE_REPRODUCED
+  U1_SCALAR:
+    status: NOT_RUN_BLOCKED_BY_INTEGRITY_GATE
+  U2_AFFINE_FLOOR:
+    status: NOT_RUN_BLOCKED_BY_INTEGRITY_GATE
+  U3_HORIZON:
+    status: NOT_RUN_BLOCKED_BY_INTEGRITY_GATE
+  U4_CONFORMAL:
+    status: NOT_RUN_BLOCKED_BY_INTEGRITY_GATE
+  U5_DIRECTIONAL:
+    status: NOT_RUN_BLOCKED_BY_INTEGRITY_GATE
+  U6_ACCELERATION:
+    status: NOT_RUN_BLOCKED_BY_INTEGRITY_GATE
+  U7_SHADOW_KALMAN:
+    status: NOT_RUN_BLOCKED_BY_INTEGRITY_GATE
+next_allowed_phase: phase8jqv2_4_prediction_timeline_alignment_repair

@@ -1,0 +1,5 @@
+dynamic_scenario:
+  enabled: false
+  scenario_id: no_target_control
+  seed: 1001
+  actors: []

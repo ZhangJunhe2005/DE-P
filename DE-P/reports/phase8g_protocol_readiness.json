@@ -1,0 +1,55 @@
+{
+  "status": "FAIL",
+  "phase": "8G_consumed_blind_infrastructure_failure",
+  "protocol_ready": true,
+  "perception_ready": false,
+  "next_allowed_phase": null,
+  "development_gate": "PASS",
+  "shadow_validation_gate": "PASS",
+  "formal_shadow_cycle": 3,
+  "live_ros_smoke": "PASS",
+  "instance_ground_truth_validation": "PASS",
+  "regression_tests": {
+    "status": "PASS",
+    "full_suite_tests": 211,
+    "skipped": 1,
+    "expected_failures": 1,
+    "phase8g_targeted_tests": 12
+  },
+  "historical_consumed_test_audit": {
+    "phase8f_test_rerun": false,
+    "used_for_parameter_selection": false,
+    "historical_frame_records": 13,
+    "historical_unique_track_actor_events": 3
+  },
+  "blind": {
+    "executed": true,
+    "blind_run_count": 1,
+    "blind_seed_known_to_implementation": true,
+    "user_must_supply_seed_after_freeze": true,
+    "automatic_retry": false,
+    "lock_enforced": true,
+    "hash_enforced": true,
+    "historical_test_rerun_refused": true,
+    "execution_ready": false,
+    "execution_blocker": "Phase 8G blind is consumed by a deterministic actor-ID uint32 overflow. It cannot be rerun; use the Phase 8H recovery protocol after committing the fix."
+  },
+  "frozen_inputs": {
+    "implementation_sha256": "126d9edd3387114e7e8016c04438dce5a4bfb62d3150f0817d6776c3f9cad89d",
+    "config_sha256": "c899bea3535716fe040e2733573d7d8c3b8887bb55b3b414157e5802689eb6b9",
+    "evaluator_sha256": "79ec0019d8de7607690b480ee0b06c4537c740ee4e1c57f4c95a43443bb9e4a0",
+    "development_report_sha256": "24276b933ceb3ee7247aeb0cc3a36a9f494e2a13771626763636f71147fa9b0b",
+    "shadow_validation_report_sha256": "e7febc97bfb8ecd85226010450a7d9200d5c1bf0bc0bfab9464add8b7d5e6372",
+    "live_ros_smoke_report_sha256": "9c4f4dcb60c7c6d867cedd6f5b14d0d402ce3d298accd51a0c65432864a51904"
+  },
+  "prohibited_work": {
+    "candidate_coverage_or_score_selection_executed": false,
+    "safety_first_score_label_executed": false,
+    "ranking_loss_executed": false,
+    "learnable_gated_fusion_executed": false,
+    "estimated_context_network_training_executed": false,
+    "neural_foreground_refiner": "disabled",
+    "network_training_executed": false
+  },
+  "required_user_action": "Commit the Phase 8G failure audit and Phase 8H infrastructure fix, then execute the Phase 8H one-shot protocol with a new secret seed."
+}

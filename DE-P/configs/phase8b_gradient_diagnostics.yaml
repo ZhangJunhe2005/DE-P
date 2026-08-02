@@ -1,0 +1,62 @@
+config_version: phase8b_diagnostics_v1
+run_kind: diagnostics
+architecture: corrected
+initialization_checkpoint: /home/zjh/YOPO/DE-P/saved/DEP_corrected_init/epoch10_converted.pth
+dataset_root: /home/zjh/YOPO/DE-P/data/phase8_preflight_multimap
+dataset_manifest: /home/zjh/YOPO/DE-P/data/phase8_preflight_multimap/dataset_manifest.yaml
+batch_size: 4
+learning_rate: 0.0001
+freeze_policy: late
+loss_weight: [1.0, 1.0]
+random_seed: 8008
+steps: 40
+seeds: [8101, 8102, 8103, 8104, 8105]
+dynamic_loss:
+  enabled: true
+  weight: 0.1
+  uav_radius: 0.3
+  default_obstacle_radius: 0.3
+  covariance_sigma: 2.0
+  covariance_growth_rate: 0.05
+  temperature: 0.2
+  time_discount: 0.2
+  max_track_age: 0.5
+  obstacle_aggregation: max
+  eval_points: 30
+  target_source: recorded_future_gt
+risk_metrics:
+  clearance_threshold: 0.0
+  cost_epsilon: 0.4804530139182014
+  cvar_fraction: 0.26666666666666666
+  hard_window_threshold: 0.15
+dynamic_objective:
+  mean_coefficient: 1.0
+  cvar_coefficient: 0.0
+  cvar_fraction: 0.26666666666666666
+  reference_scale: 1.0
+  gradient_strategy: weighted_sum
+  pcgrad_other_norm_ratio: 1.0
+  pcgrad_risk_gate: false
+  pcgrad_activation_clearance: 0.15
+  pcgrad_dynamic_grad_epsilon: 1.0e-12
+  pcgrad_ratio_switch_step: -1
+  pcgrad_late_other_norm_ratio: 0.25
+dynamic_training:
+  dataset_version: dep_dynamic_sequence_v1
+  history_length: 4
+  window_stride: 1
+  cache_size: 16
+  context_source: ground_truth
+  loss_target_source: recorded_future_gt
+  max_obstacles: 16
+  max_grad_norm: 0.1
+  static_batch_ratio: 0.5
+  noise_seed: 8000
+  position_noise_std: 0.05
+  velocity_noise_std: 0.10
+  visibility_noise_std: 0.05
+  attention_noise_std: 0.02
+  estimated_cache_dir: /tmp/dep_phase8b_estimated_cache
+  sampler_weights: {no_target: 1.0, visible_low_risk: 1.0, visible_high_risk: 2.0, temporally_separated: 1.5, occluded_but_tracked: 2.0, multi_target: 2.0}
+  curriculum:
+    - {start_epoch: 0, context_source: ground_truth, ratio: 1.0}

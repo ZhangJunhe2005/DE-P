@@ -1,0 +1,9 @@
+catalog_version: 1
+maps:
+  - map_id: 700
+    map_seed: 700
+    static_ply: /home/zjh/YOPO/Simulator/src/pointcloud/stage7_control.ply
+    static_map_sha256: 288a00863f0f28b202ebd4b34235abd22521b1ec3ffa743102f5f412825292b2
+    bounds: [[-12.0, -8.0, 0.0], [12.0, 8.0, 6.0]]
+    obstacle_density: 0.0
+    reachability: control_map_open_space

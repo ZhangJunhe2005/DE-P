@@ -1,0 +1,196 @@
+{
+  "status": "PASS",
+  "root": "/home/zjh/YOPO/DE-P/data/phase7_dynamic_pilot",
+  "manifest": {
+    "dataset_version": "dep_dynamic_sequence_v1",
+    "sensor_source": "depth",
+    "time_unit": "second",
+    "distance_unit": "meter",
+    "splits": {
+      "train": "splits/train.txt",
+      "valid": "splits/valid.txt",
+      "test": "splits/test.txt"
+    }
+  },
+  "sequence_count": 24,
+  "frame_count": 1440,
+  "split_counts": {
+    "train": 16,
+    "valid": 4,
+    "test": 4
+  },
+  "split_scene_coverage": {
+    "train": [
+      "crossing",
+      "head_on",
+      "multi_target",
+      "no_target"
+    ],
+    "valid": [
+      "crossing",
+      "head_on",
+      "multi_target",
+      "no_target"
+    ],
+    "test": [
+      "crossing",
+      "head_on",
+      "multi_target",
+      "no_target"
+    ]
+  },
+  "unique_seed_count": 24,
+  "static_map_sha256": [
+    "288a00863f0f28b202ebd4b34235abd22521b1ec3ffa743102f5f412825292b2"
+  ],
+  "scenario_stats": {
+    "no_target": {
+      "sequences": 6,
+      "frames": 360,
+      "visible_frames": 0,
+      "collision_frames": 0,
+      "active_invisible_frames": 0,
+      "occluded_frames": 0,
+      "behind_camera_frames": 0,
+      "maximum_active_objects": 0,
+      "depth_error_max_m": 0.0,
+      "stored_center_depth_error_max_m": 0.0,
+      "velocity_error_max_mps": 0.0,
+      "duration_min_seconds": 5.899948835372925,
+      "duration_max_seconds": 5.9666829109191895
+    },
+    "crossing": {
+      "sequences": 6,
+      "frames": 360,
+      "visible_frames": 153,
+      "collision_frames": 10,
+      "active_invisible_frames": 356,
+      "occluded_frames": 0,
+      "behind_camera_frames": 291,
+      "maximum_active_objects": 2,
+      "depth_error_max_m": 0.0,
+      "stored_center_depth_error_max_m": 0.0,
+      "velocity_error_max_mps": 6.4622702136141186e-06,
+      "duration_min_seconds": 5.900060653686523,
+      "duration_max_seconds": 5.966687917709351
+    },
+    "head_on": {
+      "sequences": 6,
+      "frames": 360,
+      "visible_frames": 177,
+      "collision_frames": 27,
+      "active_invisible_frames": 183,
+      "occluded_frames": 0,
+      "behind_camera_frames": 183,
+      "maximum_active_objects": 1,
+      "depth_error_max_m": 0.0,
+      "stored_center_depth_error_max_m": 0.0,
+      "velocity_error_max_mps": 1.2068529104403147e-05,
+      "duration_min_seconds": 5.900009870529175,
+      "duration_max_seconds": 6.033306360244751
+    },
+    "multi_target": {
+      "sequences": 6,
+      "frames": 360,
+      "visible_frames": 185,
+      "collision_frames": 52,
+      "active_invisible_frames": 705,
+      "occluded_frames": 15,
+      "behind_camera_frames": 642,
+      "maximum_active_objects": 3,
+      "depth_error_max_m": 0.0002856254577636719,
+      "stored_center_depth_error_max_m": 4.279509544372559,
+      "velocity_error_max_mps": 9.753100772891266e-06,
+      "duration_min_seconds": 5.8999269008636475,
+      "duration_max_seconds": 6.000173807144165
+    }
+  },
+  "offline_dynamic_loss": {
+    "no_target": {
+      "window_count": 342,
+      "positive_window_count": 0,
+      "maximum": 0.0,
+      "minimum_positive": null,
+      "dynamic_obstacle_batch_shapes": [
+        [
+          1,
+          0,
+          3
+        ]
+      ],
+      "dynamic_context_shape": [
+        1,
+        1,
+        3,
+        5
+      ]
+    },
+    "crossing": {
+      "window_count": 342,
+      "positive_window_count": 139,
+      "maximum": 7.973861217498779,
+      "minimum_positive": 1.795745582381579e-17,
+      "dynamic_obstacle_batch_shapes": [
+        [
+          1,
+          1,
+          3
+        ],
+        [
+          1,
+          2,
+          3
+        ]
+      ],
+      "dynamic_context_shape": [
+        1,
+        1,
+        3,
+        5
+      ]
+    },
+    "head_on": {
+      "window_count": 342,
+      "positive_window_count": 159,
+      "maximum": 6.846123218536377,
+      "minimum_positive": 6.357282701142003e-17,
+      "dynamic_obstacle_batch_shapes": [
+        [
+          1,
+          1,
+          3
+        ]
+      ],
+      "dynamic_context_shape": [
+        1,
+        1,
+        3,
+        5
+      ]
+    },
+    "multi_target": {
+      "window_count": 342,
+      "positive_window_count": 167,
+      "maximum": 10.0457124710083,
+      "minimum_positive": 1.951461436888735e-09,
+      "dynamic_obstacle_batch_shapes": [
+        [
+          1,
+          3,
+          3
+        ]
+      ],
+      "dynamic_context_shape": [
+        1,
+        1,
+        3,
+        5
+      ]
+    }
+  },
+  "future_information_in_context": false,
+  "future_gt_used_by_loss": "constant_velocity_extrapolation",
+  "official_sensor_source": "depth",
+  "formal_pointcloud_training_allowed": false,
+  "failures": []
+}

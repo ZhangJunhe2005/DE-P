@@ -1,0 +1,85 @@
+phase: 8J-A
+baseline_checkpoint: /home/zjh/YOPO/DE-P/runs/phase8d_shakedown/fixed_050_seed8403/checkpoints/best_dynamic.pt
+base_config: /home/zjh/YOPO/DE-P/runs/phase8d_shakedown/fixed_050_seed8403/config.yaml
+estimated_cache_validation: /home/zjh/YOPO/DE-P/reports/phase8i_estimated_cache_validation.json
+seeds: [8511, 8512, 8513]
+prescreen_epochs: 1
+final_epochs: 3
+learning_rate: 5.0e-5
+score_branch_frozen: true
+candidate_count: 15
+candidate_order: vertical_horizon_row_major
+safety_tolerance_m: 1.0e-6
+
+# Fixed before any Phase 8J optimization. These values may not be relaxed after
+# viewing validation results.
+secondary_regression_limits:
+  guidance_mean_ratio_max: 1.35
+  smoothness_mean_ratio_max: 1.35
+  static_cost_mean_ratio_max: 1.15
+  static_coverage_absolute_regression_max: 0.02
+  endpoint_radius_max_m: 10.0001
+  near_duplicate_relative_ratio_max: 1.10
+  endpoint_diversity_relative_ratio_min: 0.95
+  trajectory_diversity_relative_ratio_min: 0.95
+
+common:
+  enabled: true
+  dynamic_cvar_fraction: 0.26666666666666666
+  softmin_temperature: 0.10
+  safe_count_temperature: 0.10
+  endpoint_margin_normalized: 0.025
+  trajectory_margin_normalized: 0.015
+  position_scale_m: 10.0
+  violation_clip_m: 3.0
+
+ablations:
+  A:
+    dynamic_cvar_weight: 0.0
+    best_safe_weight: 0.0
+    safe_count_weight: 0.0
+    safe_count_k: 1
+    endpoint_diversity_weight: 0.0
+    trajectory_diversity_weight: 0.0
+  B:
+    dynamic_cvar_weight: 0.20
+    best_safe_weight: 1.0
+    safe_count_weight: 0.0
+    safe_count_k: 1
+    endpoint_diversity_weight: 0.0
+    trajectory_diversity_weight: 0.0
+  C_k1:
+    dynamic_cvar_weight: 0.20
+    best_safe_weight: 1.0
+    safe_count_weight: 0.05
+    safe_count_k: 1
+    endpoint_diversity_weight: 0.0
+    trajectory_diversity_weight: 0.0
+  C_k2:
+    dynamic_cvar_weight: 0.20
+    best_safe_weight: 1.0
+    safe_count_weight: 0.05
+    safe_count_k: 2
+    endpoint_diversity_weight: 0.0
+    trajectory_diversity_weight: 0.0
+  C_k3:
+    dynamic_cvar_weight: 0.20
+    best_safe_weight: 1.0
+    safe_count_weight: 0.05
+    safe_count_k: 3
+    endpoint_diversity_weight: 0.0
+    trajectory_diversity_weight: 0.0
+  D:
+    dynamic_cvar_weight: 0.20
+    best_safe_weight: 1.0
+    safe_count_weight: 0.05
+    safe_count_k: 2
+    endpoint_diversity_weight: 10.0
+    trajectory_diversity_weight: 0.0
+  E:
+    dynamic_cvar_weight: 0.20
+    best_safe_weight: 1.0
+    safe_count_weight: 0.05
+    safe_count_k: 2
+    endpoint_diversity_weight: 10.0
+    trajectory_diversity_weight: 10.0

@@ -1,0 +1,152 @@
+{
+  "status": "FAIL",
+  "dataset": "/home/zjh/YOPO/DE-P/data/phase8_dynamic_production",
+  "causal_history_and_current_only": true,
+  "future_gt_used_by_tracker": false,
+  "split_metrics": {
+    "train": {
+      "sequence_count": 144,
+      "frame_count": 8640,
+      "detection_precision": 0.015421796878246056,
+      "detection_recall": 0.685441674361342,
+      "position_rmse_m": 0.5373849662624769,
+      "velocity_rmse_mps": 0.8978548337298348,
+      "id_switches": 177,
+      "track_fragmentations": 76,
+      "time_to_confirm_mean_s": 0.4743781206084461,
+      "no_target_false_positive_frames": 1365,
+      "no_target_false_positive_frame_fraction": 0.9479166666666666,
+      "attention_iou_mean": 0.624065909795399,
+      "attention_center_error_cells": 0.7540183444863128,
+      "matched_detection_count": 2227
+    },
+    "valid": {
+      "sequence_count": 36,
+      "frame_count": 2160,
+      "detection_precision": 0.01672499663480953,
+      "detection_recall": 0.7151079136690648,
+      "position_rmse_m": 0.5771038192211845,
+      "velocity_rmse_mps": 0.7189778345907424,
+      "id_switches": 22,
+      "track_fragmentations": 13,
+      "time_to_confirm_mean_s": 0.46837753515977126,
+      "no_target_false_positive_frames": 342,
+      "no_target_false_positive_frame_fraction": 0.95,
+      "attention_iou_mean": 0.6166662002796457,
+      "attention_center_error_cells": 0.8246466002169768,
+      "matched_detection_count": 497
+    },
+    "test": {
+      "sequence_count": 36,
+      "frame_count": 2160,
+      "detection_precision": 0.01236850880649953,
+      "detection_recall": 0.6732673267326733,
+      "position_rmse_m": 0.6513173073437297,
+      "velocity_rmse_mps": 2.215307549953062,
+      "id_switches": 55,
+      "track_fragmentations": 14,
+      "time_to_confirm_mean_s": 0.4142764592782045,
+      "no_target_false_positive_frames": 337,
+      "no_target_false_positive_frame_fraction": 0.9361111111111111,
+      "attention_iou_mean": 0.7098813612172392,
+      "attention_center_error_cells": 0.7388109663470912,
+      "matched_detection_count": 408
+    }
+  },
+  "network_gt_vs_estimated": {
+    "train": {
+      "compared_windows": 144,
+      "endstate_mae": 2.4059159536328583,
+      "score_mae": 3.494661573320627,
+      "best_primitive_changed_fraction": 0.9097222222222222,
+      "window_attention_iou_mean": 0.3445080382580382,
+      "window_attention_center_error_cells": 1.0126126613546376,
+      "gt_selected_raw_risk_mean": 0.21065731825959783,
+      "estimated_selected_raw_risk_mean": 0.21835091822597674,
+      "estimated_minus_gt_selected_raw_risk": 0.007693599966378917,
+      "gt_selected_collision_fraction": 0.2986111111111111,
+      "estimated_selected_collision_fraction": 0.2986111111111111,
+      "estimated_minus_gt_selected_collision_fraction": 0.0
+    },
+    "valid": {
+      "compared_windows": 36,
+      "endstate_mae": 2.1757160276174545,
+      "score_mae": 3.791198240386115,
+      "best_primitive_changed_fraction": 0.8611111111111112,
+      "window_attention_iou_mean": 0.32706552706552705,
+      "window_attention_center_error_cells": 0.8525405163765365,
+      "gt_selected_raw_risk_mean": 0.22767831178700776,
+      "estimated_selected_raw_risk_mean": 0.25445392794912985,
+      "estimated_minus_gt_selected_raw_risk": 0.026775616162122096,
+      "gt_selected_collision_fraction": 0.3611111111111111,
+      "estimated_selected_collision_fraction": 0.3611111111111111,
+      "estimated_minus_gt_selected_collision_fraction": 0.0
+    },
+    "test": {
+      "compared_windows": 36,
+      "endstate_mae": 2.4944011767705283,
+      "score_mae": 3.2866833905378976,
+      "best_primitive_changed_fraction": 0.9722222222222222,
+      "window_attention_iou_mean": 0.33597883597883604,
+      "window_attention_center_error_cells": 0.543352250657473,
+      "gt_selected_raw_risk_mean": 0.04713106750008094,
+      "estimated_selected_raw_risk_mean": 0.05485657531577667,
+      "estimated_minus_gt_selected_raw_risk": 0.007725507815695733,
+      "gt_selected_collision_fraction": 0.1388888888888889,
+      "estimated_selected_collision_fraction": 0.1388888888888889,
+      "estimated_minus_gt_selected_collision_fraction": 0.0
+    }
+  },
+  "estimated_cache_dir": "/home/zjh/YOPO/DE-P/cache/phase8c_estimated_context_quality",
+  "estimated_cache_files": 216,
+  "cache_key_includes_config_version_sequence_hash_and_timestamps": true,
+  "hard_thresholds": {
+    "precision_min": 0.5,
+    "recall_min": 0.2,
+    "position_rmse_max_m": 1.0,
+    "velocity_rmse_max_mps": 1.5,
+    "attention_iou_min": 0.05,
+    "no_target_false_positive_frame_fraction_max": 0.1,
+    "selected_raw_risk_delta_max": 0.25,
+    "selected_collision_fraction_delta_max": 0.1
+  },
+  "warning_thresholds": {
+    "precision_min": 0.7,
+    "recall_min": 0.4,
+    "position_rmse_max_m": 0.5,
+    "velocity_rmse_max_mps": 1.0,
+    "attention_iou_min": 0.15,
+    "no_target_false_positive_frame_fraction_max": 0.05,
+    "selected_raw_risk_delta_max": 0.1,
+    "selected_collision_fraction_delta_max": 0.05
+  },
+  "recommendation": {
+    "estimated_context_training_sufficient": false,
+    "recommended_start_epoch": null,
+    "recommended_ratio": 0.0,
+    "action": "improve perception/cache quality before estimated-context training"
+  },
+  "hard_failures": [
+    "train: detection precision below 0.5",
+    "train: no-target false-positive frames exceed 0.1",
+    "valid: detection precision below 0.5",
+    "valid: no-target false-positive frames exceed 0.1",
+    "test: detection precision below 0.5",
+    "test: velocity RMSE exceeds 1.5 m/s",
+    "test: no-target false-positive frames exceed 0.1"
+  ],
+  "warnings": [
+    "train: position RMSE exceeds warning level 0.5 m",
+    "valid: position RMSE exceeds warning level 0.5 m",
+    "test: position RMSE exceeds warning level 0.5 m"
+  ],
+  "failures": [
+    "train: detection precision below 0.5",
+    "train: no-target false-positive frames exceed 0.1",
+    "valid: detection precision below 0.5",
+    "valid: no-target false-positive frames exceed 0.1",
+    "test: detection precision below 0.5",
+    "test: velocity RMSE exceeds 1.5 m/s",
+    "test: no-target false-positive frames exceed 0.1"
+  ]
+}

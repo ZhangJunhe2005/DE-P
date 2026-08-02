@@ -1,0 +1,76 @@
+contract_version: dynamic_perception_physical_control_contract_v1
+suite_version: phase8_dynamic_perception_controls_v1
+scope: development_evaluation_fixture_only
+forbidden_scopes: [train, valid, formal_v3, test, blind]
+official_sensor: depth
+sensor:
+  width: 160
+  height: 96
+  intrinsics: [80.0, 80.0, 80.0, 45.0]
+  min_depth_m: 0.1
+  max_depth_m: 20.0
+  ray_step_m: 0.1
+  frame_period_s: 0.1
+physics:
+  actor_radii_m: [0.20, 0.30]
+  center_distances_m: [0.60, 1.00, 1.40, 1.80]
+  detection_center_distance_max_m: 1.80
+  uav_radius_m: 0.30
+  actor_uav_clearance_margin_m: 0.10
+  radial_speeds_mps: [0.90, 1.05, 1.20]
+  tangential_speeds_mps: [1.45, 1.60, 1.75]
+  acceleration_max_mps2: 0.00001
+  image_positions:
+    center: [80.0, 45.0]
+    left_stable_interior: [40.0, 45.0]
+    right_stable_interior: [120.0, 45.0]
+    upper_stable_interior: [80.0, 20.0]
+    lower_stable_interior: [80.0, 70.0]
+    near_left_edge_full: [24.0, 45.0]
+    near_right_edge_full: [136.0, 45.0]
+  backgrounds:
+    - distant_plane
+    - near_plane
+    - sparse_natural
+    - cave_like
+    - forest_like
+    - room_wall_like
+camera_motion:
+  yaw_rad_per_frame:
+    small: 0.01
+    medium: 0.03
+    contract_valid_large: 0.06
+  translation_m_per_frame:
+    lateral: [0.0, 0.05, 0.0]
+    forward: [0.05, 0.0, 0.0]
+    backward: [-0.05, 0.0, 0.0]
+    vertical: [0.0, 0.0, 0.05]
+  combined:
+    yaw_lateral: {yaw_rad: 0.03, translation_m: [0.0, 0.04, 0.0]}
+    yaw_forward: {yaw_rad: 0.03, translation_m: [0.04, 0.0, 0.0]}
+latency:
+  causal_support_frames_k: 3
+  source: frozen_frame_rate_and_maximum_0.30_second_detection_latency
+  frame_rate_hz: 10.0
+  maximum_latency_seconds: 0.30
+validation:
+  projection_diameter_abs_tolerance_px: 2.5
+  projection_area_relative_tolerance: 0.20
+  metadata_position_abs_tolerance_m: 0.000001
+  velocity_abs_tolerance_mps: 0.00001
+  acceleration_abs_tolerance_mps2: 0.00001
+  rerender_depth_abs_tolerance_m: 0.0
+  warp_depth_consistency_tolerance_m: 0.20
+  warp_roundtrip_tolerance_px: 1.5
+  minimum_changed_pixels: 1
+  minimum_provenance_pixels: 1
+  deterministic_byte_exact: true
+split:
+  development_seed_namespace: ccr1_development
+  sealed_holdout_seed_namespace: ccr1_control_holdout
+  development_seed: 842100
+  sealed_holdout_seed: 842900
+  holdout_architecture_evaluation_allowed: false
+historical_controls:
+  legacy_small_projection: fixture_semantics_invalid
+  legacy_fov_boundary_change: fixture_semantics_invalid
