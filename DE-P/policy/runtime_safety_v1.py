@@ -352,6 +352,48 @@ class RuntimeTrajectorySafetyV1:
                 return candidate, float(duration), True
         return (*last, False) if last is not None else (None, None, False)
 
+    def recovery_trajectory(self, position, velocity, acceleration, target):
+        """Construct a bounded point-to-point retreat after braking.
+
+        This does not certify unseen space.  Its caller may only supply a
+        recent, actually flown breadcrumb and must retain that provenance in
+        telemetry.  The method owns only the vehicle-limit calculation.
+        """
+        position = np.asarray(position, dtype=np.float64).reshape(3)
+        velocity = np.asarray(velocity, dtype=np.float64).reshape(3)
+        acceleration = np.asarray(acceleration, dtype=np.float64).reshape(3)
+        target = np.asarray(target, dtype=np.float64).reshape(3)
+        if not all(np.isfinite(value).all() for value in (
+            position, velocity, acceleration, target
+        )):
+            raise FloatingPointError("recovery state contains NaN/Inf")
+        durations = np.arange(
+            max(1.0, self.config.braking_duration_min_s),
+            max(3.0, self.config.braking_duration_max_s) + 0.05,
+            self.config.braking_duration_step_s,
+        )
+        last = None
+        for duration in durations:
+            candidate = tuple(
+                Poly5Solver(
+                    position[axis], velocity[axis], acceleration[axis],
+                    target[axis], 0.0, 0.0, float(duration),
+                )
+                for axis in range(3)
+            )
+            _, sampled_velocity, sampled_acceleration = _sample_polynomials(
+                [candidate], duration, self.config.trajectory_samples
+            )
+            last = (candidate, float(duration))
+            if (
+                float(np.max(np.linalg.norm(sampled_velocity[0], axis=1)))
+                <= self.config.max_speed_mps + self.config.limit_tolerance
+                and float(np.max(np.linalg.norm(sampled_acceleration[0], axis=1)))
+                <= self.config.max_acceleration_mps2 + self.config.limit_tolerance
+            ):
+                return candidate, float(duration), True
+        return (*last, False) if last is not None else (None, None, False)
+
 
 def clamp_vector_norm_v1(value, maximum):
     value = np.asarray(value, dtype=np.float64).reshape(3)

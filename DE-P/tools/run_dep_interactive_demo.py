@@ -75,6 +75,10 @@ def parse_args():
         "--runtime-safety", type=int, choices=(0, 1), default=1,
         help="enable the hard trajectory safety shield (default: 1)",
     )
+    parser.add_argument(
+        "--deadlock-recovery", type=int, choices=(0, 1), default=1,
+        help="enable deterministic brake/scan/breadcrumb recovery (default: 1)",
+    )
     parser.add_argument("--ros-master-port", type=int, default=11311)
     parser.add_argument("--scenes-config", type=Path, default=DEFAULT_SCENES)
     parser.add_argument("--no-rviz", action="store_true")
@@ -703,6 +707,7 @@ def main():
         "relocated_actor_count": actor_contract["relocated_actor_count"],
         "dynamic_mode": args.dynamic_mode,
         "runtime_safety_enabled": bool(args.runtime_safety),
+        "deadlock_recovery_enabled": bool(args.deadlock_recovery),
         **preflight,
     }
     print(json.dumps(summary, indent=2, default=str))
@@ -827,6 +832,7 @@ def main():
                 "--wait-for-goal 1 --hold-on-arrival 1 "
                 f"--dynamic-enabled {dynamic_enabled} "
                 f"--runtime-safety-enabled {args.runtime_safety} "
+                f"--deadlock-recovery-enabled {args.deadlock_recovery} "
                 f"--safety-telemetry {quoted(runtime / 'safety_decisions.jsonl')}"
             ),
             visible=True,

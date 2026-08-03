@@ -29,6 +29,23 @@ runtime_safety:
   clearance_escape_drop_tolerance_m: 0.05
   clearance_escape_gain_m: 0.10
 
+# Recovery is deliberately outside the single-frame neural policy. The policy
+# has a forward-only 15-primitive lattice and a forward depth camera; when all
+# forward actions are blocked, a bounded stop/scan (or recent-path retreat)
+# changes the observation before returning translation authority to YOPO.
+deadlock_recovery:
+  enabled: true
+  zero_feasible_trigger_replans: 15
+  collision_floor_trigger_replans: 5
+  release_feasible_replans: 5
+  stationary_speed_mps: 0.35
+  yaw_scan_rate_deg_s: 45.0
+  breadcrumb_spacing_m: 0.12
+  breadcrumb_capacity: 600
+  retreat_enabled: true
+  retreat_distance_m: 1.20
+  retreat_arrival_radius_m: 0.20
+
 # IMPORTANT: weight of costs for unit speed (can be visualized in tensorboard)
 wg: 0.6   # guidance
 ws: 1   # smoothness

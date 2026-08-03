@@ -34,6 +34,10 @@ from policy.runtime_safety_v1 import (
     clamp_vector_norm_v1,
     depth_to_body_points_v1,
 )
+from policy.deadlock_recovery_v1 import (
+    DeadlockRecoveryConfigV1,
+    DeadlockRecoveryV1,
+)
 from policy.state_transform import *
 from policy.dynamic.context import DynamicContext
 from policy.dynamic.types import DynamicPerceptionConfig
@@ -144,6 +148,18 @@ class DepNet:
             safety_mapping["enabled"] = bool(config["runtime_safety_enabled"])
         self.runtime_safety_config = RuntimeSafetyConfigV1.from_mapping(safety_mapping)
         self.runtime_safety = RuntimeTrajectorySafetyV1(self.runtime_safety_config)
+        recovery_mapping = dict(cfg["deadlock_recovery"])
+        if config.get("deadlock_recovery_enabled") is not None:
+            recovery_mapping["enabled"] = bool(
+                config["deadlock_recovery_enabled"]
+            )
+        self.deadlock_recovery_config = (
+            DeadlockRecoveryConfigV1.from_mapping(recovery_mapping)
+        )
+        self.deadlock_recovery = DeadlockRecoveryV1(
+            self.deadlock_recovery_config
+        )
+        self.recovery_retreat_installed = False
         self.active_traj_duration = self.traj_time
         telemetry_value = config.get("safety_telemetry")
         self.safety_telemetry_path = (
@@ -154,6 +170,9 @@ class DepNet:
         self.safety_command_clamp_count = 0
         print("Runtime safety contract:", json.dumps(
             self.runtime_safety_config.contract(), sort_keys=True
+        ))
+        print("Deadlock recovery contract:", json.dumps(
+            self.deadlock_recovery_config.contract(), sort_keys=True
         ))
 
         # eval
@@ -481,6 +500,15 @@ class DepNet:
 
         # 可选：重置坐标系轨迹（到达新目标时清空历史坐标系）
         with self.lock:
+            position = None
+            if self.odom_init:
+                position = np.asarray([
+                    self.odom.pose.pose.position.x,
+                    self.odom.pose.pose.position.y,
+                    self.odom.pose.pose.position.z,
+                ], dtype=np.float64)
+            self.deadlock_recovery.reset(position)
+            self.recovery_retreat_installed = False
             self.frame_list.clear()
             self.next_frame_id = 0
 
@@ -519,6 +547,8 @@ class DepNet:
         orientation.w = self.odom.pose.pose.orientation.w
 
         with self.lock:
+            if self.deadlock_recovery.mode == DeadlockRecoveryV1.NORMAL:
+                self.deadlock_recovery.record_position(pos)
             # 添加当前坐标系到缓存
             self.frame_list.append((
                 self.next_frame_id,  # 唯一ID
@@ -765,9 +795,68 @@ class DepNet:
                         start_pos, self.Rotation_wc,
                     )
                     selection = self.runtime_safety.select(raw_scores, evaluations)
-                    action_id = selection.action_id
+                    feasible_candidate_count = int(sum(
+                        item.feasible for item in evaluations
+                    ))
+                    current_observed_clearance = (
+                        float(np.min(np.linalg.norm(obstacle_points, axis=1)))
+                        if len(obstacle_points) else None
+                    )
+                    collision_floor_present = (
+                        current_observed_clearance is not None
+                        and current_observed_clearance < max(
+                            0.0,
+                            self.runtime_safety_config.vehicle_radius_m
+                            - self.runtime_safety_config.clearance_sensor_tolerance_m,
+                        )
+                    )
+                    recovery = self.deadlock_recovery.observe(
+                        feasible_candidate_count=feasible_candidate_count,
+                        collision_floor_present=collision_floor_present,
+                        speed_mps=float(np.linalg.norm(start_vel)),
+                        position_world=start_pos,
+                        depth=depth_raw,
+                    )
+                    if recovery.transition is not None:
+                        rospy.logwarn(
+                            "DE-P recovery transition: %s", recovery.transition
+                        )
+                    action_id = (
+                        selection.action_id
+                        if recovery.mode == DeadlockRecoveryV1.NORMAL
+                        else None
+                    )
                     braking_compliant = None
-                    if action_id is None:
+                    retreat_compliant = None
+                    if recovery.mode == DeadlockRecoveryV1.RETREAT:
+                        needs_install = (
+                            recovery.transition
+                            == "braking_to_breadcrumb_retreat"
+                            or not self.recovery_retreat_installed
+                            or self.ctrl_time is None
+                            or self.ctrl_time >= self.active_traj_duration
+                        )
+                        if needs_install:
+                            retreat, duration, retreat_compliant = (
+                                self.runtime_safety.recovery_trajectory(
+                                    start_pos, start_vel, start_acc,
+                                    recovery.retreat_target_world,
+                                )
+                            )
+                            if retreat is None or not retreat_compliant:
+                                self.deadlock_recovery.mode = (
+                                    DeadlockRecoveryV1.YAW_SCAN
+                                )
+                                self.recovery_retreat_installed = False
+                                rospy.logerr(
+                                    "DE-P breadcrumb retreat was not limit-compliant; "
+                                    "falling back to stationary yaw scan"
+                                )
+                            else:
+                                self._install_trajectory(retreat, duration)
+                                self.recovery_retreat_installed = True
+                    elif action_id is None:
+                        self.recovery_retreat_installed = False
                         braking, duration, braking_compliant = (
                             self.runtime_safety.braking_trajectory(
                                 start_pos, start_vel, start_acc
@@ -778,19 +867,28 @@ class DepNet:
                             return
                         self._install_trajectory(braking, duration)
                     else:
+                        self.recovery_retreat_installed = False
                         self._install_trajectory(candidates[action_id], self.traj_time)
                     self._write_safety_telemetry({
-                        "mode": selection.mode,
+                        "mode": recovery.mode,
+                        "network_selection_mode": selection.mode,
+                        "recovery_transition": recovery.transition,
+                        "recovery_retreat_target_world": (
+                            recovery.retreat_target_world
+                        ),
                         "action_id": action_id,
                         "network_best_action_id": int(np.argmin(raw_scores)),
                         "network_best_rejected": (
                             not evaluations[int(np.argmin(raw_scores))].feasible
                         ),
-                        "feasible_candidate_count": int(sum(
-                            item.feasible for item in evaluations
-                        )),
+                        "feasible_candidate_count": feasible_candidate_count,
+                        "collision_floor_present": collision_floor_present,
+                        "current_observed_clearance_m": (
+                            current_observed_clearance
+                        ),
                         "observed_point_count": int(len(obstacle_points)),
                         "braking_limit_compliant": braking_compliant,
+                        "retreat_limit_compliant": retreat_compliant,
                         "projection_scales": projection_scales,
                         "projection_succeeded": projection_succeeded,
                         "projected_candidate_count": int(sum(
@@ -867,7 +965,16 @@ class DepNet:
             self.desire_vel = np.array([control_msg.velocity.x, control_msg.velocity.y, control_msg.velocity.z])
             self.desire_acc = np.array([control_msg.acceleration.x, control_msg.acceleration.y, control_msg.acceleration.z])
             goal_dir = self.goal - self.desire_pos
-            yaw, yaw_dot = calculate_yaw(self.desire_vel, goal_dir, self.last_yaw, self.ctrl_dt)
+            if self.deadlock_recovery.mode == DeadlockRecoveryV1.YAW_SCAN:
+                yaw, yaw_dot = self.deadlock_recovery.yaw_command(
+                    self.last_yaw, self.ctrl_dt
+                )
+            elif self.deadlock_recovery.mode == DeadlockRecoveryV1.RETREAT:
+                yaw, yaw_dot = self.last_yaw, 0.0
+            else:
+                yaw, yaw_dot = calculate_yaw(
+                    self.desire_vel, goal_dir, self.last_yaw, self.ctrl_dt
+                )
             self.last_yaw = yaw
             control_msg.yaw = yaw
             control_msg.yaw_dot = yaw_dot
@@ -1049,6 +1156,8 @@ def parser():
                         help="publish a zero-velocity position hold after arrival")
     parser.add_argument("--runtime-safety-enabled", type=int, choices=(0, 1), default=None,
                         help="override the versioned runtime trajectory safety shield")
+    parser.add_argument("--deadlock-recovery-enabled", type=int, choices=(0, 1), default=None,
+                        help="override deterministic brake/scan/breadcrumb recovery")
     parser.add_argument("--safety-telemetry", type=Path, default=None,
                         help="optional JSONL path for per-replan safety decisions")
     # --------------- 新增：坐标系相关命令行参数 ---------------
@@ -1138,6 +1247,7 @@ if __name__ == "__main__":
                 'wait_for_goal': bool(args.wait_for_goal),
                 'hold_on_arrival': bool(args.hold_on_arrival),
                 'runtime_safety_enabled': args.runtime_safety_enabled,
+                'deadlock_recovery_enabled': args.deadlock_recovery_enabled,
                 'safety_telemetry': args.safety_telemetry,
                 'frame_decay_time': args.frame_decay_time,
                 'frame_size': args.frame_size,
