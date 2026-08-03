@@ -2,6 +2,7 @@ import importlib.util
 from argparse import Namespace
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from policy.checkpoint_utils import load_checkpoint_payload, unpack_checkpoint
@@ -145,3 +146,40 @@ def test_run_directory_epoch_selection():
     )
     assert best.name == "best.pth"
     assert epoch.name == "epoch_014.pth"
+
+
+def test_swept_sphere_detects_thin_obstacle_between_clear_samples():
+    authority = DEMO.CanonicalOccupancy.__new__(DEMO.CanonicalOccupancy)
+    authority.origin = np.zeros(3, dtype=np.float64)
+    authority.dimensions = np.asarray([20, 20, 20], dtype=np.int64)
+    authority.resolution = 0.1
+    authority.grid = np.zeros((20, 20, 20), dtype=bool)
+    authority.grid[10, 10, 10] = True
+    authority.bounds_min = authority.origin
+    authority.bounds_max = authority.origin + (
+        authority.dimensions * authority.resolution
+    )
+
+    start = np.asarray([0.7, 1.05, 1.05])
+    end = np.asarray([1.4, 1.05, 1.05])
+    radius = 0.12
+    assert not authority.sphere_collides(start, radius)
+    assert not authority.sphere_collides(end, radius)
+    assert authority.swept_sphere_collides(start, end, radius)
+
+
+def test_swept_sphere_stays_clear_away_from_obstacle():
+    authority = DEMO.CanonicalOccupancy.__new__(DEMO.CanonicalOccupancy)
+    authority.origin = np.zeros(3, dtype=np.float64)
+    authority.dimensions = np.asarray([20, 20, 20], dtype=np.int64)
+    authority.resolution = 0.1
+    authority.grid = np.zeros((20, 20, 20), dtype=bool)
+    authority.grid[10, 10, 10] = True
+    authority.bounds_min = authority.origin
+    authority.bounds_max = authority.origin + (
+        authority.dimensions * authority.resolution
+    )
+
+    assert not authority.swept_sphere_collides(
+        [0.7, 0.5, 0.5], [1.4, 0.5, 0.5], 0.12
+    )

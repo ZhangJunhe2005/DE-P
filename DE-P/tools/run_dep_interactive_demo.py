@@ -184,6 +184,33 @@ class CanonicalOccupancy:
         delta = np.maximum(np.maximum(box_min - center, center - box_max), 0.0)
         return bool(np.any(np.einsum("ij,ij->i", delta, delta) <= radius ** 2))
 
+    def swept_sphere_collides(self, start, end, radius, max_step=None):
+        """Conservatively check the complete motion between two odometry samples.
+
+        The interactive controller can move farther than one occupancy voxel
+        between callbacks.  Testing only the two reported centres can therefore
+        miss a thin wall or tree trunk.  Sampling at no more than half a voxel
+        makes the swept-sphere monitor independent of the odometry frequency.
+        """
+        start = np.asarray(start, dtype=np.float64)
+        end = np.asarray(end, dtype=np.float64)
+        if start.shape != (3,) or end.shape != (3,):
+            raise ValueError("swept sphere endpoints must be XYZ vectors")
+        if not np.all(np.isfinite(start)) or not np.all(np.isfinite(end)):
+            return True
+        radius = float(radius)
+        if radius <= 0.0:
+            raise ValueError("swept sphere radius must be positive")
+        step = 0.5 * self.resolution if max_step is None else float(max_step)
+        if not np.isfinite(step) or step <= 0.0:
+            raise ValueError("swept sphere max_step must be finite and positive")
+        distance = float(np.linalg.norm(end - start))
+        sample_count = max(1, int(math.ceil(distance / step)))
+        for amount in np.linspace(0.0, 1.0, sample_count + 1):
+            if self.sphere_collides(start + amount * (end - start), radius):
+                return True
+        return False
+
     def cylinder_collides(self, center, radius, height):
         center = np.asarray(center, dtype=np.float64)
         half_height = 0.5 * float(height)
