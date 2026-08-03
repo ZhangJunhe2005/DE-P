@@ -52,6 +52,7 @@ TRAINING_IMPLEMENTATION_FILES = (
     ROOT / "policy/state_transform.py",
     ROOT / "policy/static_yopo_safety_first_v1.py",
     ROOT / "policy/static_yopo_kinodynamic_v2.py",
+    ROOT / "policy/static_yopo_preventive_safety_v1.py",
     ROOT / "loss/loss_function.py",
     ROOT / "loss/safety_loss.py",
 )
@@ -110,7 +111,10 @@ def load_contract(config_path):
             sha256_file(source_manifest_path), expected_source,
         ),
         "initial_checkpoint": (
-            sha256_file(config["model"]["initial_checkpoint"]), INITIAL_CHECKPOINT_SHA256
+            sha256_file(config["model"]["initial_checkpoint"]),
+            config["model"].get(
+                "initial_checkpoint_sha256", INITIAL_CHECKPOINT_SHA256
+            ),
         ),
         "preprocessing": (manifest["preprocessing_hash"],
                           __import__("data.static_yopo_preprocessing_v1",
@@ -205,8 +209,10 @@ def finite_details(details):
         "total_loss", "trajectory_loss", "score_loss", "smoothness_loss",
         "static_safety_loss", "guidance_loss", "dynamic_safety_loss",
         "ranking_loss", "safety_cvar_loss", "kinematic_loss",
+        "preventive_safety_loss", "preventive_ranking_loss",
         "candidate_smooth_cost", "candidate_static_cost",
-        "candidate_guidance_cost", "candidate_kinodynamic_cost", "score_label",
+        "candidate_guidance_cost", "candidate_kinodynamic_cost",
+        "candidate_preventive_cost", "score_label",
     )
     return {
         name: bool(torch.isfinite(details[name]).all())
@@ -380,6 +386,7 @@ def main():
         ),
         safety_first_config=config.get("safety_first"),
         kinodynamic_config=config.get("kinodynamic_v2"),
+        preventive_safety_config=config.get("preventive_safety"),
     ).to(device)
     optimizer = build_optimizer(model, config)
     scheduler = build_scheduler(optimizer, config)
@@ -461,6 +468,8 @@ def main():
                 "smoothness_loss": 0.0, "static_safety_loss": 0.0,
                 "guidance_loss": 0.0, "ranking_loss": 0.0,
                 "safety_cvar_loss": 0.0, "kinematic_loss": 0.0,
+                "preventive_safety_loss": 0.0,
+                "preventive_ranking_loss": 0.0,
             }
             print(json.dumps({
                 "event": "epoch_start", "epoch": epoch,
@@ -595,6 +604,13 @@ def main():
                 "ranking_loss": 0.0,
                 "safety_cvar_loss": 0.0,
                 "kinematic_loss": 0.0,
+                "preventive_safety_loss": 0.0,
+                "preventive_ranking_loss": 0.0,
+                "preventive_required_clearance": 0.0,
+                "preventive_sample_weight": 0.0,
+                "clear_candidate_count": 0.0,
+                "selected_clearance": 0.0,
+                "anticipatory_unsafe_selection": 0.0,
                 "unsafe_selection": 0.0,
                 "hardware_unsafe_selection": 0.0,
                 "selected_trajectory_max_speed": 0.0,
@@ -738,6 +754,24 @@ def main():
                     validation_means["selected_time_dilation"]
                     <= float(selection_gate_config.get(
                         "selected_time_dilation_mean_max", float("inf")
+                    ))
+                ),
+                "anticipatory_unsafe_selection_rate": (
+                    validation_means["anticipatory_unsafe_selection"]
+                    <= float(selection_gate_config.get(
+                        "anticipatory_unsafe_selection_rate_max", 1.0
+                    ))
+                ),
+                "selected_clearance_mean": (
+                    validation_means["selected_clearance"]
+                    >= float(selection_gate_config.get(
+                        "selected_clearance_mean_min", 0.0
+                    ))
+                ),
+                "clear_candidate_count_mean": (
+                    validation_means["clear_candidate_count"]
+                    >= float(selection_gate_config.get(
+                        "clear_candidate_count_mean_min", 0.0
                     ))
                 ),
             }

@@ -23,6 +23,10 @@ from policy.static_yopo_kinodynamic_v2 import (
     KinodynamicFeasibilityConfigV2,
     dense_quintic_kinodynamic_objective_v2,
 )
+from policy.static_yopo_preventive_safety_v1 import (
+    PreventiveSafetyConfigV1,
+    preventive_safety_objective_v1,
+)
 
 
 def local_planning_goal(goal_body, horizon_m):
@@ -59,7 +63,8 @@ class MixedSceneStaticYOPOV1(torch.nn.Module):
 
 class MixedSceneStaticYOPOObjectiveV1(torch.nn.Module):
     def __init__(self, map_catalog, local_goal_horizon_m=None,
-                 safety_first_config=None, kinodynamic_config=None):
+                 safety_first_config=None, kinodynamic_config=None,
+                 preventive_safety_config=None):
         super().__init__()
         self.local_goal_horizon_m = (
             None if local_goal_horizon_m is None
@@ -72,6 +77,9 @@ class MixedSceneStaticYOPOObjectiveV1(torch.nn.Module):
         )
         self.kinodynamic_config = KinodynamicFeasibilityConfigV2.from_mapping(
             kinodynamic_config
+        )
+        self.preventive_safety_config = PreventiveSafetyConfigV1.from_mapping(
+            preventive_safety_config
         )
         if self.dep_loss.dynamic_loss_config.enabled:
             raise RuntimeError("static objective must disable dynamic loss")
@@ -148,6 +156,17 @@ class MixedSceneStaticYOPOObjectiveV1(torch.nn.Module):
                         end.permute(0, 2, 1), batch_size, candidate_count,
                     )
                 )
+            preventive = None
+            if self.preventive_safety_config.enabled:
+                preventive = preventive_safety_objective_v1(
+                    predicted_scores,
+                    details.static_min_distance.reshape(
+                        batch_size, candidate_count
+                    ),
+                    physical_observation[:, 0:3].norm(dim=1),
+                    depth,
+                    self.preventive_safety_config,
+                )
             if self.safety_first_config.enabled:
                 safety_first = safety_first_score_objective_v1(
                     predicted_scores, base_label_scores,
@@ -157,6 +176,10 @@ class MixedSceneStaticYOPOObjectiveV1(torch.nn.Module):
                     candidate_kinematic_cost=(
                         None if kinodynamic is None
                         else kinodynamic["candidate_label_cost"]
+                    ),
+                    candidate_preventive_cost=(
+                        None if preventive is None
+                        else preventive["candidate_label_cost"]
                     ),
                 )
                 label_scores = safety_first["labels"]
@@ -171,7 +194,10 @@ class MixedSceneStaticYOPOObjectiveV1(torch.nn.Module):
                     "selected_hardware_unsafe"
                 ]
             else:
-                label_scores = base_label_scores
+                label_scores = (
+                    base_label_scores if preventive is None
+                    else base_label_scores + preventive["candidate_label_cost"]
+                )
                 per_sample_score_loss = F.smooth_l1_loss(
                     predicted_scores, label_scores, reduction="none"
                 ).mean(dim=1)
@@ -182,6 +208,20 @@ class MixedSceneStaticYOPOObjectiveV1(torch.nn.Module):
                     batch_size, device=endstate.device, dtype=torch.bool
                 )
                 selected_hardware_unsafe = selected_unsafe
+            if preventive is None:
+                zero_per_sample = candidate_static_cost[:, 0] * 0.0
+                preventive = {
+                    "per_sample_loss": zero_per_sample,
+                    "ranking_per_sample": zero_per_sample,
+                    "candidate_loss": candidate_static_cost * 0.0,
+                    "required_clearance": zero_per_sample,
+                    "sample_weight": zero_per_sample + 1.0,
+                    "clear_candidate_count": zero_per_sample,
+                    "selected_clearance": zero_per_sample,
+                    "selected_below_margin": torch.zeros_like(
+                        zero_per_sample, dtype=torch.bool
+                    ),
+                }
             labels = label_scores.reshape(-1)
             candidate_endstate = endstate.permute(0, 2, 3, 1).reshape(
                 batch_size, candidate_count, 9
@@ -232,11 +272,19 @@ class MixedSceneStaticYOPOObjectiveV1(torch.nn.Module):
             ranking_loss = per_sample_ranking_loss.mean()
             safety_cvar_loss = per_sample_safety_cvar.mean()
             kinematic_loss = per_sample_kinematic_loss.mean()
+            preventive_safety_loss = preventive["per_sample_loss"].mean()
+            preventive_ranking_loss = preventive[
+                "ranking_per_sample"
+            ].mean()
             total = (
                 details.trajectory_training_loss + score_loss
                 + self.safety_first_config.ranking_weight * ranking_loss
                 + self.safety_first_config.safety_cvar_weight * safety_cvar_loss
                 + self.safety_first_config.kinematic_weight * kinematic_loss
+                + self.preventive_safety_config.loss_weight
+                * preventive_safety_loss
+                + self.preventive_safety_config.ranking_weight
+                * preventive_ranking_loss
             )
             per_sample_smoothness = details.smooth_cost.reshape(
                 batch_size, candidate_count
@@ -259,6 +307,8 @@ class MixedSceneStaticYOPOObjectiveV1(torch.nn.Module):
             "ranking_loss": ranking_loss,
             "safety_cvar_loss": safety_cvar_loss,
             "kinematic_loss": kinematic_loss,
+            "preventive_safety_loss": preventive_safety_loss,
+            "preventive_ranking_loss": preventive_ranking_loss,
             "smoothness_loss": details.smooth_cost.mean(),
             "static_safety_loss": details.static_safety_cost.mean(),
             "guidance_loss": details.guidance_cost.mean(),
@@ -271,17 +321,35 @@ class MixedSceneStaticYOPOObjectiveV1(torch.nn.Module):
                 candidate_static_cost * 0.0 if kinodynamic is None
                 else kinodynamic["candidate_loss"]
             ),
+            "candidate_preventive_cost": preventive["candidate_loss"],
             "per_sample_total_loss": (
                 per_sample_trajectory + per_sample_score_loss
                 + self.safety_first_config.ranking_weight * per_sample_ranking_loss
                 + self.safety_first_config.safety_cvar_weight * per_sample_safety_cvar
                 + self.safety_first_config.kinematic_weight * per_sample_kinematic_loss
+                + self.preventive_safety_config.loss_weight
+                * preventive["per_sample_loss"]
+                + self.preventive_safety_config.ranking_weight
+                * preventive["ranking_per_sample"]
             ),
             "per_sample_trajectory_loss": per_sample_trajectory,
             "per_sample_score_loss": per_sample_score_loss,
             "per_sample_ranking_loss": per_sample_ranking_loss,
             "per_sample_safety_cvar_loss": per_sample_safety_cvar,
             "per_sample_kinematic_loss": per_sample_kinematic_loss,
+            "per_sample_preventive_safety_loss":
+                preventive["per_sample_loss"],
+            "per_sample_preventive_ranking_loss":
+                preventive["ranking_per_sample"],
+            "per_sample_preventive_required_clearance":
+                preventive["required_clearance"],
+            "per_sample_preventive_sample_weight":
+                preventive["sample_weight"],
+            "per_sample_clear_candidate_count":
+                preventive["clear_candidate_count"].to(endstate.dtype),
+            "per_sample_selected_clearance": preventive["selected_clearance"],
+            "per_sample_anticipatory_unsafe_selection":
+                preventive["selected_below_margin"].float(),
             "per_sample_unsafe_selection": selected_unsafe.float(),
             "per_sample_hardware_unsafe_selection":
                 selected_hardware_unsafe.float(),

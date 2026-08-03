@@ -83,7 +83,8 @@ def safety_first_score_objective_v1(predicted_scores, base_labels,
                                     config: StaticSafetyFirstConfigV1,
                                     trajectory_max_speed=None,
                                     trajectory_max_acceleration=None,
-                                    candidate_kinematic_cost=None):
+                                    candidate_kinematic_cost=None,
+                                    candidate_preventive_cost=None):
     """Build lexicographic labels and safe-vs-unsafe pairwise ranking loss."""
     config.validate()
     if predicted_scores.shape != base_labels.shape:
@@ -106,6 +107,10 @@ def safety_first_score_objective_v1(predicted_scores, base_labels,
         candidate_kinematic_cost = torch.zeros_like(base_labels)
     if candidate_kinematic_cost.shape != base_labels.shape:
         raise ValueError("candidate kinematic cost and label shapes differ")
+    if candidate_preventive_cost is None:
+        candidate_preventive_cost = torch.zeros_like(base_labels)
+    if candidate_preventive_cost.shape != base_labels.shape:
+        raise ValueError("candidate preventive cost and label shapes differ")
     # Keep the lexicographic unsafe priority, but add a continuous detached
     # feasibility target.  This preserves a useful ordering when every one of
     # the 15 candidates is initially hardware-unsafe and pairwise safe/unsafe
@@ -114,6 +119,7 @@ def safety_first_score_objective_v1(predicted_scores, base_labels,
         base_labels
         + unsafe.to(base_labels.dtype) * config.unsafe_label_priority
         + candidate_kinematic_cost.detach()
+        + candidate_preventive_cost.detach()
     )
     regression_per_sample = F.smooth_l1_loss(
         predicted_scores, labels.detach(), reduction="none"

@@ -36,6 +36,11 @@ class RuntimeSafetyConfigV1:
     clearance_sensor_tolerance_m: float = 0.08
     clearance_escape_drop_tolerance_m: float = 0.05
     clearance_escape_gain_m: float = 0.10
+    dynamic_track_prediction_enabled: bool = True
+    dynamic_track_radius_m: float = 0.35
+    dynamic_track_prediction_margin_m: float = 0.25
+    dynamic_track_uncertainty_growth_mps: float = 0.20
+    dynamic_track_max_age_s: float = 0.25
 
     @classmethod
     def from_mapping(cls, value):
@@ -73,6 +78,13 @@ class RuntimeSafetyConfigV1:
                self.clearance_escape_drop_tolerance_m,
                self.clearance_escape_gain_m) < 0:
             raise ValueError("clearance tolerances must be non-negative")
+        if min(
+            self.dynamic_track_radius_m,
+            self.dynamic_track_prediction_margin_m,
+            self.dynamic_track_uncertainty_growth_mps,
+            self.dynamic_track_max_age_s,
+        ) < 0:
+            raise ValueError("dynamic prediction geometry must be non-negative")
 
     def contract(self):
         return {
@@ -92,6 +104,7 @@ class CandidateSafetyV1:
     max_acceleration_mps2: float
     min_observed_clearance_m: float | None
     endpoint_progress_m: float
+    min_predicted_dynamic_clearance_m: float | None = None
 
     def as_dict(self):
         return asdict(self)
@@ -163,7 +176,8 @@ class RuntimeTrajectorySafetyV1:
         self.config = config
 
     def evaluate(self, polynomials: Sequence[Sequence[Poly5Solver]], duration_s,
-                 obstacle_points_body, origin_world, rotation_world_from_body):
+                 obstacle_points_body, origin_world, rotation_world_from_body,
+                 dynamic_tracks=(), query_timestamp=None):
         if not polynomials:
             raise ValueError("at least one candidate polynomial is required")
         positions, velocities, accelerations = _sample_polynomials(
@@ -173,6 +187,13 @@ class RuntimeTrajectorySafetyV1:
         rotation = np.asarray(rotation_world_from_body, dtype=np.float64).reshape(3, 3)
         points = np.asarray(obstacle_points_body, dtype=np.float64).reshape(-1, 3)
         tree = cKDTree(points) if len(points) else None
+        tracks = tuple(dynamic_tracks or ())
+        if tracks and query_timestamp is None:
+            raise ValueError("query_timestamp is required with dynamic tracks")
+        times = np.linspace(
+            0.0, float(duration_s), self.config.trajectory_samples,
+            dtype=np.float64,
+        )
         results = []
         for candidate_position, candidate_velocity, candidate_acceleration in zip(
             positions, velocities, accelerations
@@ -191,6 +212,36 @@ class RuntimeTrajectorySafetyV1:
                 final_clearance = float(clearance_samples[-1])
             progress = float(np.linalg.norm(candidate_position[-1] - origin))
             reasons = []
+            predicted_dynamic_clearance = None
+            if self.config.dynamic_track_prediction_enabled and tracks:
+                dynamic_clearances = []
+                for track in tracks:
+                    if not bool(getattr(track, "is_dynamic", False)):
+                        continue
+                    track_timestamp = float(track.timestamp)
+                    age = float(query_timestamp) - track_timestamp
+                    if age < -1.0e-6 or age > self.config.dynamic_track_max_age_s:
+                        continue
+                    horizon = np.maximum(0.0, age + times)
+                    center = (
+                        np.asarray(track.position_world, dtype=np.float64)[None, :]
+                        + horizon[:, None]
+                        * np.asarray(track.velocity_world, dtype=np.float64)[None, :]
+                    )
+                    occupied_radius = (
+                        self.config.vehicle_radius_m
+                        + self.config.dynamic_track_radius_m
+                        + self.config.dynamic_track_prediction_margin_m
+                        + self.config.dynamic_track_uncertainty_growth_mps * horizon
+                    )
+                    signed = np.linalg.norm(
+                        candidate_position - center, axis=1
+                    ) - occupied_radius
+                    dynamic_clearances.append(float(np.min(signed)))
+                if dynamic_clearances:
+                    predicted_dynamic_clearance = min(dynamic_clearances)
+                    if predicted_dynamic_clearance < 0.0:
+                        reasons.append("predicted_dynamic_clearance")
             if not (np.isfinite(candidate_position).all()
                     and np.isfinite(candidate_velocity).all()
                     and np.isfinite(candidate_acceleration).all()):
@@ -239,6 +290,7 @@ class RuntimeTrajectorySafetyV1:
                 max_acceleration_mps2=float(np.max(acceleration)),
                 min_observed_clearance_m=clearance,
                 endpoint_progress_m=progress,
+                min_predicted_dynamic_clearance_m=predicted_dynamic_clearance,
             ))
         return tuple(results)
 

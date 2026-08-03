@@ -1,4 +1,5 @@
 import numpy as np
+from types import SimpleNamespace
 
 from policy.dynamic.types import CameraModel
 from policy.poly_solver import Poly5Solver
@@ -131,3 +132,43 @@ def test_close_start_moving_closer_is_rejected():
     assert not evaluation.feasible
     assert any(reason.startswith("clearance_escape") or reason == "observed_collision_floor"
                for reason in evaluation.reasons)
+
+
+def test_causal_dynamic_track_prediction_rejects_future_crossing():
+    shield = RuntimeTrajectorySafetyV1(RuntimeSafetyConfigV1())
+    forward = straight([3.4, 0.0, 0.0], [2.0, 0.0, 0.0])
+    # Actor is currently clear on the left, but crosses the candidate during
+    # the 1.7 s horizon.  No simulator identity or future ground truth is used.
+    track = SimpleNamespace(
+        is_dynamic=True, timestamp=10.0,
+        position_world=(1.7, 2.0, 0.0),
+        velocity_world=(0.0, -2.35, 0.0),
+    )
+    evaluation = shield.evaluate(
+        [forward], 1.7, np.empty((0, 3)), np.zeros(3), np.eye(3),
+        dynamic_tracks=(track,), query_timestamp=10.0,
+    )[0]
+    assert not evaluation.feasible
+    assert "predicted_dynamic_clearance" in evaluation.reasons
+    assert evaluation.min_predicted_dynamic_clearance_m < 0.0
+
+
+def test_static_or_stale_tracks_do_not_create_dynamic_veto():
+    shield = RuntimeTrajectorySafetyV1(RuntimeSafetyConfigV1())
+    forward = straight([3.4, 0.0, 0.0], [2.0, 0.0, 0.0])
+    tracks = (
+        SimpleNamespace(
+            is_dynamic=False, timestamp=10.0, position_world=(1.7, 0.0, 0.0),
+            velocity_world=(0.0, 0.0, 0.0),
+        ),
+        SimpleNamespace(
+            is_dynamic=True, timestamp=9.0, position_world=(1.7, 0.0, 0.0),
+            velocity_world=(0.0, 0.0, 0.0),
+        ),
+    )
+    evaluation = shield.evaluate(
+        [forward], 1.7, np.empty((0, 3)), np.zeros(3), np.eye(3),
+        dynamic_tracks=tracks, query_timestamp=10.0,
+    )[0]
+    assert evaluation.feasible
+    assert evaluation.min_predicted_dynamic_clearance_m is None

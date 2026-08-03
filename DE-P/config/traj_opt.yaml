@@ -28,6 +28,13 @@ runtime_safety:
   clearance_sensor_tolerance_m: 0.08
   clearance_escape_drop_tolerance_m: 0.05
   clearance_escape_gain_m: 0.10
+  # Optional Route-A actor prediction.  Only confirmed causal tracker outputs
+  # are extrapolated; ground truth and actor identities are never consumed.
+  dynamic_track_prediction_enabled: true
+  dynamic_track_radius_m: 0.35
+  dynamic_track_prediction_margin_m: 0.25
+  dynamic_track_uncertainty_growth_mps: 0.20
+  dynamic_track_max_age_s: 0.25
 
 # Recovery is deliberately outside the single-frame neural policy. The policy
 # has a forward-only 15-primitive lattice and a forward depth camera; when all

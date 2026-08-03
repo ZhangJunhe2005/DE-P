@@ -138,6 +138,9 @@ class DepNet:
         )
         self.last_dynamic_update_wall = None
         self.dynamic_perception = None
+        self.dynamic_network_attention_enabled = bool(
+            config.get("dynamic_network_attention_enabled", True)
+        )
         self.dynamic_camera_model = camera_model_from_config(self.dynamic_config)
         self.last_control_msg = None
         self.state_transform = StateTransform()
@@ -730,12 +733,17 @@ class DepNet:
         # Forward (TensorRT: inference speed increased by 5x)
         if dynamic_context is None:
             dynamic_context = self._context_for_depth(data)
+        runtime_dynamic_context = dynamic_context
+        network_dynamic_context = (
+            dynamic_context if self.dynamic_network_attention_enabled else None
+        )
         try:
             if self.use_trt:
                 endstate_pred, score_pred = self.policy(depth_input, obs_input)
             else:
                 endstate_pred, score_pred = self.policy(
-                    depth_input, obs_input, dynamic_context=dynamic_context
+                    depth_input, obs_input,
+                    dynamic_context=network_dynamic_context
                 )
             if not bool(torch.isfinite(endstate_pred).all()) or not bool(torch.isfinite(score_pred).all()):
                 raise FloatingPointError("network output contains NaN/Inf")
@@ -793,6 +801,12 @@ class DepNet:
                     evaluations = self.runtime_safety.evaluate(
                         candidates, self.traj_time, obstacle_points,
                         start_pos, self.Rotation_wc,
+                        dynamic_tracks=(
+                            runtime_dynamic_context.dynamic_tracks
+                            if runtime_dynamic_context is not None
+                            and runtime_dynamic_context.valid else ()
+                        ),
+                        query_timestamp=message_timestamp(data),
                     )
                     selection = self.runtime_safety.select(raw_scores, evaluations)
                     feasible_candidate_count = int(sum(
@@ -887,6 +901,11 @@ class DepNet:
                             current_observed_clearance
                         ),
                         "observed_point_count": int(len(obstacle_points)),
+                        "predicted_dynamic_track_count": int(
+                            len(runtime_dynamic_context.dynamic_tracks)
+                            if runtime_dynamic_context is not None
+                            and runtime_dynamic_context.valid else 0
+                        ),
                         "braking_limit_compliant": braking_compliant,
                         "retreat_limit_compliant": retreat_compliant,
                         "projection_scales": projection_scales,
@@ -1146,6 +1165,11 @@ def parser():
                         help="override dynamic_perception.enabled")
     parser.add_argument("--dynamic-source", choices=("depth", "pointcloud"), default=None,
                         help="override dynamic_perception.source")
+    parser.add_argument(
+        "--dynamic-network-attention-enabled", type=int, choices=(0, 1),
+        default=1,
+        help="allow tracker attention into CNN; set 0 for deterministic safety only",
+    )
     parser.add_argument("--goal-z", type=float, default=2.0,
                         help="fixed goal altitude used by the RViz 2D Nav Goal tool")
     parser.add_argument("--arrival-radius", type=float, default=5.0,
@@ -1248,6 +1272,9 @@ if __name__ == "__main__":
                 'hold_on_arrival': bool(args.hold_on_arrival),
                 'runtime_safety_enabled': args.runtime_safety_enabled,
                 'deadlock_recovery_enabled': args.deadlock_recovery_enabled,
+                'dynamic_network_attention_enabled': bool(
+                    args.dynamic_network_attention_enabled
+                ),
                 'safety_telemetry': args.safety_telemetry,
                 'frame_decay_time': args.frame_decay_time,
                 'frame_size': args.frame_size,

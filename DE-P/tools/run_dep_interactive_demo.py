@@ -66,9 +66,14 @@ def parse_args():
         help="total vertical distribution/motion span in metres (0-6)",
     )
     parser.add_argument(
-        "--dynamic-mode", choices=("static_reactive", "dynamic_attention"),
+        "--dynamic-mode", choices=(
+            "static_reactive", "dynamic_safety", "dynamic_attention"
+        ),
         default="static_reactive",
-        help="static_reactive is the valid default for statically trained checkpoints",
+        help=(
+            "dynamic_safety enables causal actor prediction only in the hard "
+            "safety layer; dynamic_attention also feeds attention into the CNN"
+        ),
     )
     parser.add_argument("--arrival-radius", type=float, default=5.0)
     parser.add_argument(
@@ -820,7 +825,12 @@ def main():
             ),
             visible=True,
         )
-        dynamic_enabled = 1 if args.dynamic_mode == "dynamic_attention" else 0
+        dynamic_enabled = int(args.dynamic_mode in {
+            "dynamic_safety", "dynamic_attention"
+        })
+        dynamic_network_attention = int(
+            args.dynamic_mode == "dynamic_attention"
+        )
         start(
             "planner",
             shell_command(
@@ -831,6 +841,8 @@ def main():
                 f"--arrival-radius {args.arrival_radius} "
                 "--wait-for-goal 1 --hold-on-arrival 1 "
                 f"--dynamic-enabled {dynamic_enabled} "
+                f"--dynamic-network-attention-enabled "
+                f"{dynamic_network_attention} "
                 f"--runtime-safety-enabled {args.runtime_safety} "
                 f"--deadlock-recovery-enabled {args.deadlock_recovery} "
                 f"--safety-telemetry {quoted(runtime / 'safety_decisions.jsonl')}"
