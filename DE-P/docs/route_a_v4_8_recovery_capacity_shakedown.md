@@ -36,3 +36,11 @@ bash scripts/route_a_v4_8_training_status.sh
 bash scripts/route_a_v4_8_summary.sh
 bash scripts/route_a_v4_8_rviz_host.sh pillar
 ```
+
+If the five-epoch run is interrupted, resume from its newest completed epoch
+checkpoint (not from a partially written batch):
+
+```bash
+bash scripts/route_a_v4_8_train_host.sh \
+  --resume runs/route_a_static_yopo_v4_8_recovery_capacity_shakedown/<run>/checkpoints/epoch_XXX.pth
+```

@@ -215,6 +215,7 @@ def test_v4_8_shell_entries_preserve_launch_contract():
     assert "prepare_route_a_v4_8_training_config.py" in train
     assert "--verify-only" in train
     assert "--authorized" in train
+    assert "--resume" in train
     assert "generate_dataset" not in train
 
     rviz = (ROOT / "scripts/route_a_v4_8_rviz_host.sh").read_text()

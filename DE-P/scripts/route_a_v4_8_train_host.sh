@@ -4,10 +4,16 @@ set -euo pipefail
 ROOT="/home/zjh/YOPO/DE-P"
 CONFIG="$ROOT/configs/route_a_v4_8_recovery_capacity_shakedown.yaml"
 DRY_RUN=0
+RESUME=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) DRY_RUN=1; shift ;;
+    --resume)
+      [[ $# -ge 2 ]] || { echo "--resume requires a checkpoint path" >&2; exit 2; }
+      RESUME="$2"
+      shift 2
+      ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
@@ -32,4 +38,5 @@ conda run --no-capture-output -n yopo \
 # Reaching this line means the user explicitly launched this host entry.
 args=(python tools/train_mixed_static_yopo_v1.py --config "$CONFIG" --authorized)
 if [[ "$DRY_RUN" -eq 1 ]]; then args+=(--dry-run); fi
+if [[ -n "$RESUME" ]]; then args+=(--resume "$RESUME"); fi
 conda run --no-capture-output -n yopo "${args[@]}"
