@@ -33,6 +33,41 @@ def test_balanced_profile_prefers_small_safe_detour_but_not_large_detour():
     assert shield.select([0.0, 0.20], (close, clear)).action_id == 0
 
 
+def test_recovery_can_disable_clearance_preference_without_relaxing_safety():
+    config = RuntimeSafetyConfigV1.from_mapping(
+        runtime_safety_mapping_v4_7({})
+    )
+    shield = RuntimeTrajectorySafetyV1(config)
+    close, clear = _evaluation(0.36), _evaluation(1.25)
+
+    # Normal flight retains the small bounded clearance tie-breaker.
+    normal = shield.select([0.0, 0.04], (close, clear))
+    assert normal.action_id == 1
+    assert normal.mode == "network_safe_clearance_preference"
+
+    # Bounded scan handoff uses the unmodified learned score, while the same
+    # feasibility mask remains authoritative.
+    recovery = shield.select(
+        [0.0, 0.04], (close, clear), apply_clearance_preference=False,
+    )
+    assert recovery.action_id == 0
+    assert recovery.mode == "network_safe"
+
+    rejected = CandidateSafetyV1(
+        feasible=False,
+        reasons=("collision_floor",),
+        max_speed_mps=3.0,
+        max_acceleration_mps2=2.0,
+        min_observed_clearance_m=0.05,
+        endpoint_progress_m=5.0,
+    )
+    still_safe = shield.select(
+        [-100.0, 0.04], (rejected, clear),
+        apply_clearance_preference=False,
+    )
+    assert still_safe.action_id == 1
+
+
 def test_balanced_clearance_preference_is_bounded_and_saturates():
     config = RuntimeSafetyConfigV1.from_mapping(
         runtime_safety_mapping_v4_7({})

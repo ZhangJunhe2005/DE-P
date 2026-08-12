@@ -1020,7 +1020,27 @@ class DepNet:
                         goal_world=self.goal,
                         flight_bounds=self.flight_bounds,
                     )
-                    selection = self.runtime_safety.select(raw_scores, evaluations)
+                    # During bounded scan recovery, candidate handoff must use
+                    # the learned network score among physically feasible
+                    # trajectories.  The normal-flight clearance preference is
+                    # deliberately disabled here so a clearer but non-progressing
+                    # candidate cannot keep resetting recovery confirmation.
+                    recovery_selection_active = bool(
+                        self.deadlock_recovery_profile == "bounded_scan_v3"
+                        and self.deadlock_recovery.mode
+                        != DeadlockRecoveryV2.NORMAL
+                    )
+                    selection = self.runtime_safety.select(
+                        raw_scores, evaluations,
+                        apply_clearance_preference=(
+                            not recovery_selection_active
+                        ),
+                    )
+                    clearance_preference_applied = bool(
+                        not recovery_selection_active
+                        and selection.mode
+                        == "network_safe_clearance_preference"
+                    )
                     visualization_candidates = candidates
                     visualization_evaluations = evaluations
                     visualization_durations = candidate_durations
@@ -1193,6 +1213,12 @@ class DepNet:
                     self._write_safety_telemetry({
                         "mode": recovery.mode,
                         "network_selection_mode": selection.mode,
+                        "clearance_preference_applied": (
+                            clearance_preference_applied
+                        ),
+                        "recovery_selection_uses_raw_network_score": (
+                            recovery_selection_active
+                        ),
                         "recovery_transition": recovery.transition,
                         "recovery_retreat_target_world": (
                             recovery.retreat_target_world

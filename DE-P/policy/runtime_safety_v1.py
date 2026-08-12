@@ -843,7 +843,9 @@ class RuntimeTrajectorySafetyV1:
             projected.append(accepted)
         return tuple(projected), tuple(used_scales), tuple(projection_succeeded)
 
-    def select(self, scores, evaluations):
+    def select(
+        self, scores, evaluations, *, apply_clearance_preference=True,
+    ):
         scores = np.asarray(scores, dtype=np.float64).reshape(-1)
         if len(scores) != len(evaluations):
             raise ValueError("score/evaluation candidate counts differ")
@@ -876,7 +878,11 @@ class RuntimeTrajectorySafetyV1:
                 tuple(evaluations),
             )
         effective_scores = scores.copy()
-        if self.config.clearance_preference_weight > 0.0:
+        clearance_preference_active = bool(
+            apply_clearance_preference
+            and self.config.clearance_preference_weight > 0.0
+        )
+        if clearance_preference_active:
             # This is a bounded preference, not another feasibility Gate.  It
             # only breaks close score decisions in favour of a little more
             # physical clearance; the benefit saturates so a very wide detour
@@ -907,7 +913,7 @@ class RuntimeTrajectorySafetyV1:
             int(np.argmin(safe_scores)),
             (
                 "network_safe_clearance_preference"
-                if self.config.clearance_preference_weight > 0.0
+                if clearance_preference_active
                 else "network_safe"
             ),
             tuple(evaluations),

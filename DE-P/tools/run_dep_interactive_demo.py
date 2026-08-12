@@ -68,6 +68,7 @@ UNGATED_STATIC_TRAINING_CONTRACTS = {
     "route_a_static_yopo_training_v4_5_10_controlled_continuation_v1",
     "route_a_static_yopo_training_v4_6_four_scene_finetune_v1",
     "route_a_static_yopo_training_v4_7_original_density_finetune_v1",
+    "route_a_static_yopo_training_v4_8_recovery_capacity_shakedown_v1",
 }
 
 

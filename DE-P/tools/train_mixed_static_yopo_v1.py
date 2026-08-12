@@ -29,6 +29,9 @@ from data.static_yopo_loader_v1 import make_static_yopo_loader_v1
 from data.static_yopo_subset_v1 import StaticYOPOMapTypeSubsetV1
 from policy.static_yopo_wide_state_v1 import StaticYOPOWideStateDatasetV1
 from policy.static_yopo_recovery_state_v2 import StaticYOPORecoveryStateDatasetV2
+from policy.static_yopo_recovery_state_v4_8 import (
+    StaticYOPORecoveryStateDatasetV48,
+)
 from policy.static_yopo_original_state_v4_4 import (
     StaticYOPOOriginalStateDatasetV44,
 )
@@ -57,6 +60,7 @@ TRAINING_IMPLEMENTATION_FILES = (
     ROOT / "data/static_yopo_loader_v1.py",
     ROOT / "policy/static_yopo_wide_state_v1.py",
     ROOT / "policy/static_yopo_recovery_state_v2.py",
+    ROOT / "policy/static_yopo_recovery_state_v4_8.py",
     ROOT / "policy/state_transform.py",
     ROOT / "policy/static_yopo_safety_first_v1.py",
     ROOT / "policy/static_yopo_kinodynamic_v2.py",
@@ -78,6 +82,7 @@ TRAINING_IMPLEMENTATION_FILES = (
     ROOT / "policy/static_yopo_parity_v4_5_8.py",
     ROOT / "policy/static_yopo_parity_v4_5_9.py",
     ROOT / "policy/static_yopo_parity_v4_5_10.py",
+    ROOT / "policy/static_yopo_recovery_coverage_v4_8.py",
     ROOT / "data/static_yopo_subset_v1.py",
     ROOT / "loss/loss_function.py",
     ROOT / "loss/safety_loss.py",
@@ -124,6 +129,7 @@ def training_contract_classification(config):
             "route_a_v4_5_8_localized_safety_retimed_v1",
             "route_a_v4_5_9_time_mean_localized_safety_v1",
             "route_a_v4_5_10_tail_aware_safety_v1",
+            "route_a_v4_8_recovery_capacity_v1",
         },
         "diagnostic": config.get("experiment_role") in {
             "map_type_convergence_probe",
@@ -137,6 +143,7 @@ def training_contract_classification(config):
             "time_mean_localized_safety_shakedown",
             "tail_aware_safety_shakedown",
             "tail_aware_controlled_continuation",
+            "recovery_capacity_five_epoch_shakedown",
         },
     }
 
@@ -309,6 +316,11 @@ def finite_details(details):
     if "clearance_barrier_loss" in details:
         names.extend((
             "clearance_barrier_loss", "candidate_clearance_barrier_cost",
+        ))
+    if "safe_sector_coverage_loss" in details:
+        names.extend((
+            "safe_sector_coverage_loss",
+            "candidate_safe_sector_coverage_cost",
         ))
     if "candidate_score_target_cost" in details:
         names.extend((
@@ -602,6 +614,14 @@ def main():
     elif observation_contract == "route_a_recovery_state_v2":
         train_data = StaticYOPORecoveryStateDatasetV2(train_data, seed=seed)
         valid_data = StaticYOPORecoveryStateDatasetV2(valid_data, seed=seed + 1)
+    elif observation_contract == "route_a_recovery_state_v4_8":
+        observation_seed = int(config.get("observation", {}).get("seed", seed))
+        train_data = StaticYOPORecoveryStateDatasetV48(
+            train_data, seed=observation_seed,
+        )
+        valid_data = StaticYOPORecoveryStateDatasetV48(
+            valid_data, seed=observation_seed + 1,
+        )
     elif observation_contract != "frozen_dataset_observation":
         raise ValueError(
             f"unsupported observation contract: {observation_contract}"
@@ -658,6 +678,7 @@ def main():
         static_yopo_v4_5_8_config=config.get("static_yopo_v4_5_8"),
         static_yopo_v4_5_9_config=config.get("static_yopo_v4_5_9"),
         static_yopo_v4_5_10_config=config.get("static_yopo_v4_5_10"),
+        static_yopo_v4_8_config=config.get("static_yopo_v4_8"),
     ).to(device)
     optimizer = build_optimizer(model, config)
     scheduler = build_scheduler(optimizer, config)
@@ -711,10 +732,11 @@ def main():
     v458_enabled = bool(config.get("static_yopo_v4_5_8", {}).get("enabled"))
     v459_enabled = bool(config.get("static_yopo_v4_5_9", {}).get("enabled"))
     v4510_enabled = bool(config.get("static_yopo_v4_5_10", {}).get("enabled"))
+    v48_enabled = bool(config.get("static_yopo_v4_8", {}).get("enabled"))
     v45_family_enabled = (
         v45_enabled or v451_enabled or v452_enabled or v453_enabled
         or v454_enabled or v455_enabled or v456_enabled or v458_enabled
-        or v459_enabled or v4510_enabled
+        or v459_enabled or v4510_enabled or v48_enabled
     )
     progress_every = int(config["logging"]["progress_every_batches"])
     minimum_epoch = int(config["validation"]["minimum_epoch"])
@@ -774,9 +796,11 @@ def main():
             }
             if v45_family_enabled:
                 train_sums["dangerous_segment_loss"] = 0.0
-            if v4510_enabled:
+            if v4510_enabled or v48_enabled:
                 train_sums["static_time_mean_cost"] = 0.0
                 train_sums["static_worst_five_cost"] = 0.0
+            if v48_enabled:
+                train_sums["safe_sector_coverage_loss"] = 0.0
             if v453_enabled or v454_enabled or v456_enabled:
                 train_sums["clearance_barrier_loss"] = 0.0
             if v456_enabled:
@@ -968,19 +992,29 @@ def main():
                     "oracle_level_primitive": 0.0,
                     "oracle_downward_primitive": 0.0,
                 })
-            if v4510_enabled:
+            if v4510_enabled or v48_enabled:
                 validation_sums.update({
                     "static_time_mean_cost": 0.0,
                     "static_worst_five_cost": 0.0,
                 })
+            if v48_enabled:
+                validation_sums.update({
+                    "safe_sector_coverage_loss": 0.0,
+                    "recovery_sample_fraction": 0.0,
+                    "recovery_open_sector_soft_count": 0.0,
+                    "recovery_mean_endpoint_distance": 0.0,
+                    "recovery_max_endpoint_distance": 0.0,
+                })
             if (v453_enabled or v454_enabled or v456_enabled
-                    or v458_enabled or v459_enabled or v4510_enabled):
+                    or v458_enabled or v459_enabled or v4510_enabled
+                    or v48_enabled):
                 validation_sums["clearance_barrier_loss"] = 0.0
-            if v456_enabled or v458_enabled or v459_enabled or v4510_enabled:
+            if (v456_enabled or v458_enabled or v459_enabled
+                    or v4510_enabled or v48_enabled):
                 validation_sums["clearance_pairwise_ranking_loss"] = 0.0
             if (v451_enabled or v452_enabled or v453_enabled or v454_enabled
                     or v455_enabled or v456_enabled or v458_enabled
-                    or v459_enabled or v4510_enabled):
+                    or v459_enabled or v4510_enabled or v48_enabled):
                 validation_sums.update({
                     "score_label_scale": 0.0,
                     "selected_absolute_vertical_displacement": 0.0,
@@ -990,7 +1024,7 @@ def main():
                 })
             if (v452_enabled or v453_enabled or v454_enabled or v455_enabled
                     or v456_enabled or v458_enabled or v459_enabled
-                    or v4510_enabled):
+                    or v4510_enabled or v48_enabled):
                 validation_sums.update({
                     "speed_unsafe_selection": 0.0,
                     "acceleration_unsafe_selection": 0.0,
@@ -1007,7 +1041,7 @@ def main():
                     "oracle_physical_unsafe": 0.0,
                 })
             if (v455_enabled or v456_enabled or v458_enabled
-                    or v459_enabled or v4510_enabled):
+                    or v459_enabled or v4510_enabled or v48_enabled):
                 validation_sums.update({
                     "coarse_false_safe_candidate_count": 0.0,
                     "dense_clearance_drop": 0.0,
@@ -1089,6 +1123,24 @@ def main():
                 key: value / validation_count
                 for key, value in validation_sums.items()
             }
+            if v48_enabled:
+                recovery_fraction = validation_means[
+                    "recovery_sample_fraction"
+                ]
+                if recovery_fraction <= 0.0:
+                    raise RuntimeError(
+                        "V4.8 validation contains no recovery observations"
+                    )
+                for name in (
+                    "recovery_open_sector_soft_count",
+                    "recovery_mean_endpoint_distance",
+                    "recovery_max_endpoint_distance",
+                ):
+                    # The objective emits zeros for ordinary samples.  Report
+                    # these diagnostics conditionally over the deterministic
+                    # recovery subset, while the loss itself remains averaged
+                    # over the full 80/20 training population.
+                    validation_means[name] /= recovery_fraction
             validation_map_type_metrics = {
                 map_type: {
                     "samples": values["samples"],
@@ -1102,6 +1154,20 @@ def main():
                 }
                 for map_type, values in sorted(validation_by_type.items())
             }
+            if v48_enabled:
+                for values in validation_map_type_metrics.values():
+                    recovery_fraction = values["recovery_sample_fraction"]
+                    if recovery_fraction <= 0.0:
+                        raise RuntimeError(
+                            "V4.8 map-type validation contains no recovery "
+                            "observations"
+                        )
+                    for name in (
+                        "recovery_open_sector_soft_count",
+                        "recovery_mean_endpoint_distance",
+                        "recovery_max_endpoint_distance",
+                    ):
+                        values[name] /= recovery_fraction
             for values in validation_map_type_metrics.values():
                 values["projected_conditional_selection_error_rate"] = (
                     values[
@@ -1131,6 +1197,7 @@ def main():
                 "route_a_v4_5_8_localized_safety_retimed_v1",
                 "route_a_v4_5_9_time_mean_localized_safety_v1",
                 "route_a_v4_5_10_tail_aware_safety_v1",
+                "route_a_v4_8_recovery_capacity_v1",
             }:
                 # These contracts deliberately have no qualification lattice. The
                 # scalar held-out loss selects best.pth; physical deployment

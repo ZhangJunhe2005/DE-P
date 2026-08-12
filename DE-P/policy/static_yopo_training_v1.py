@@ -81,6 +81,10 @@ from policy.static_yopo_parity_v4_5_9 import (
 from policy.static_yopo_parity_v4_5_10 import (
     StaticYOPOParityConfigV4510, static_yopo_parity_objective_v4_5_10,
 )
+from policy.static_yopo_recovery_coverage_v4_8 import (
+    StaticYOPORecoveryCoverageConfigV48,
+    static_yopo_recovery_coverage_objective_v4_8,
+)
 
 
 def local_planning_goal(goal_body, horizon_m):
@@ -134,7 +138,8 @@ class MixedSceneStaticYOPOObjectiveV1(torch.nn.Module):
                  static_yopo_v4_5_6_config=None,
                  static_yopo_v4_5_8_config=None,
                  static_yopo_v4_5_9_config=None,
-                 static_yopo_v4_5_10_config=None):
+                 static_yopo_v4_5_10_config=None,
+                 static_yopo_v4_8_config=None):
         super().__init__()
         self.local_goal_horizon_m = (
             None if local_goal_horizon_m is None
@@ -217,6 +222,11 @@ class MixedSceneStaticYOPOObjectiveV1(torch.nn.Module):
                 static_yopo_v4_5_10_config
             )
         )
+        self.static_yopo_v4_8_config = (
+            StaticYOPORecoveryCoverageConfigV48.from_mapping(
+                static_yopo_v4_8_config
+            )
+        )
         enabled_static_objectives = sum((
             self.simple_yopo_v4_3_config.enabled,
             self.static_yopo_v4_4_config.enabled,
@@ -230,12 +240,21 @@ class MixedSceneStaticYOPOObjectiveV1(torch.nn.Module):
             self.static_yopo_v4_5_8_config.enabled,
             self.static_yopo_v4_5_9_config.enabled,
             self.static_yopo_v4_5_10_config.enabled,
+            self.static_yopo_v4_8_config.enabled,
         ))
         if enabled_static_objectives > 1:
             raise ValueError(
-                "V4.3 through V4.5.10 objectives are mutually exclusive"
+                "V4.3 through V4.8 objectives are mutually exclusive"
             )
-        if self.static_yopo_v4_5_10_config.enabled:
+        if self.static_yopo_v4_8_config.enabled:
+            active = self.static_yopo_v4_8_config
+            print("------ Active V4.8 Objective ------")
+            print("| V4.5.10 score target is unchanged |")
+            print(f"| {'recovery mix':<16} = {20.0:6.1f}% |")
+            print(f"| {'sector weight':<16} = {active.safe_sector_weight:6.4f} |")
+            print(f"| {'target progress':<16} = {active.safe_sector_target_length_m:6.3f} m |")
+            print("-----------------------------------")
+        elif self.static_yopo_v4_5_10_config.enabled:
             active = self.static_yopo_v4_5_10_config
             print("------ Active V4.5.10 Objective ------")
             print("| legacy DEPLoss weights above are bypassed |")
@@ -301,6 +320,7 @@ class MixedSceneStaticYOPOObjectiveV1(torch.nn.Module):
             ("static_yopo_v4_5_8_config", StaticYOPOParityConfigV458),
             ("static_yopo_v4_5_9_config", StaticYOPOParityConfigV459),
             ("static_yopo_v4_5_10_config", StaticYOPOParityConfigV4510),
+            ("static_yopo_v4_8_config", StaticYOPORecoveryCoverageConfigV48),
         )
         for name, config_type in defaults:
             if not hasattr(self, name):
@@ -346,6 +366,27 @@ class MixedSceneStaticYOPOObjectiveV1(torch.nn.Module):
                 pos, rot, flat[:, :3], flat[:, 3:6], flat[:, 6:9]
             )
             end = torch.stack([end_pos, end_vel, end_acc], dim=1)
+            if self.static_yopo_v4_8_config.enabled:
+                if "recovery_state" not in batch:
+                    raise KeyError(
+                        "V4.8 objective requires recovery_state from its "
+                        "versioned observation dataset"
+                    )
+                return static_yopo_recovery_coverage_objective_v4_8(
+                    sampler=self.dep_loss.safety_loss.trajectory_sampler,
+                    safety_loss=self.dep_loss.safety_loss,
+                    fixed=start.repeat_interleave(count, 0).permute(0, 2, 1),
+                    predicted=end.permute(0, 2, 1),
+                    predicted_scores=score.reshape(batch_size, count),
+                    goal_world=goal_world.repeat_interleave(count, 0),
+                    map_id=map_id,
+                    batch_size=batch_size,
+                    candidate_count=count,
+                    route_goal_distance=physical_observation[:, 6:9].norm(dim=1),
+                    recovery_state=batch["recovery_state"],
+                    rotation_world_from_body=rotation,
+                    config=self.static_yopo_v4_8_config,
+                )
             if self.static_yopo_v4_5_10_config.enabled:
                 return static_yopo_parity_objective_v4_5_10(
                     sampler=self.dep_loss.safety_loss.trajectory_sampler,
