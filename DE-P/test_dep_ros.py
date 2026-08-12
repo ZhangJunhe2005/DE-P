@@ -25,8 +25,13 @@ from config.config import cfg
 from data.static_yopo_preprocessing_v1 import StaticYOPODepthPreprocessorV1
 from control_msg import PositionCommand
 from policy.dep_network import DepNetwork
+from policy.models.head import DepHead
 from policy.backbone_variant import BACKBONE_VARIANTS, resolve_backbone_variant
 from policy.checkpoint_utils import load_dep_checkpoint, validate_dep_checkpoint_variant
+from policy.interactive_goal_contract_v1 import (
+    GOAL_POLICIES_V1,
+    InteractiveGoalContractV1,
+)
 from policy.poly_solver import *
 from policy.runtime_safety_v1 import (
     RuntimeSafetyConfigV1,
@@ -34,9 +39,45 @@ from policy.runtime_safety_v1 import (
     clamp_vector_norm_v1,
     depth_to_body_points_v1,
 )
-from policy.deadlock_recovery_v1 import (
-    DeadlockRecoveryConfigV1,
-    DeadlockRecoveryV1,
+from policy.deadlock_recovery_v2 import (
+    DeadlockRecoveryConfigV2,
+    DeadlockRecoveryV2,
+)
+from policy.deadlock_recovery_v3 import (
+    DeadlockRecoveryConfigV3,
+    DeadlockRecoveryV3,
+    deadlock_recovery_mapping_v4_7_pillar,
+)
+from policy.runtime_profile_v4_4 import (
+    PROFILE_NAME as V44_RUNTIME_PROFILE,
+    RUNTIME_BEHAVIOR_VERSION as V44_RUNTIME_BEHAVIOR_VERSION,
+    calculate_original_yopo_yaw_v4_4,
+    deadlock_recovery_mapping_v4_4,
+    runtime_safety_mapping_v4_4,
+)
+from policy.runtime_profile_v4_5 import (
+    PROFILE_NAME as V45_RUNTIME_PROFILE,
+    RUNTIME_BEHAVIOR_VERSION as V45_RUNTIME_BEHAVIOR_VERSION,
+    calculate_original_yopo_yaw_v4_5,
+    deadlock_recovery_mapping_v4_5,
+    runtime_safety_mapping_v4_5,
+)
+from policy.runtime_profile_v4_5_7 import (
+    PROFILE_NAME as V457_RUNTIME_PROFILE,
+    RUNTIME_BEHAVIOR_VERSION as V457_RUNTIME_BEHAVIOR_VERSION,
+    calculate_original_yopo_yaw_v4_5_7,
+    runtime_safety_mapping_v4_5_7,
+)
+from policy.runtime_profile_v4_5_10 import (
+    PROFILE_NAME as V4510_RUNTIME_PROFILE,
+    RUNTIME_BEHAVIOR_VERSION as V4510_RUNTIME_BEHAVIOR_VERSION,
+    calculate_original_yopo_yaw_v4_5_10,
+    runtime_safety_mapping_v4_5_10,
+)
+from policy.runtime_profile_v4_7 import (
+    PROFILE_NAME as V47_RUNTIME_PROFILE,
+    RUNTIME_BEHAVIOR_VERSION as V47_RUNTIME_BEHAVIOR_VERSION,
+    runtime_safety_mapping_v4_7,
 )
 from policy.state_transform import *
 from policy.dynamic.context import DynamicContext
@@ -66,6 +107,7 @@ class DepNet:
         self.dynamic_config.validate()
         print("Dynamic perception config:", json.dumps(asdict(self.dynamic_config), indent=2))
         self.backbone_variant = resolve_backbone_variant(config.get("backbone_variant"))
+        self.head_variant = str(config.get("head_variant", "unified"))
         print(f"Backbone variant: {self.backbone_variant}")
         weight = os.path.abspath(os.path.expanduser(weight))
         if not os.path.isfile(weight):
@@ -91,6 +133,22 @@ class DepNet:
         self.wait_for_goal = bool(self.config.get("wait_for_goal", False))
         self.hold_on_arrival = bool(self.config.get("hold_on_arrival", False))
         self.goal_received = not self.wait_for_goal
+        self.accepted_goal_count = int(self.goal_received)
+        self.goal_policy = str(self.config.get("goal_policy", "interactive"))
+        self.align_goal_before_planning = bool(
+            self.config.get("align_goal_before_planning", True)
+        )
+        self.goal_alignment_tolerance = np.deg2rad(float(
+            self.config.get("goal_alignment_tolerance_deg", 20.0)
+        ))
+        self.goal_alignment_rate = np.deg2rad(float(
+            self.config.get("goal_alignment_rate_deg_s", 90.0)
+        ))
+        if not 0.0 < self.goal_alignment_tolerance <= np.pi:
+            raise ValueError("goal alignment tolerance must be within (0, 180] deg")
+        if self.goal_alignment_rate <= 0.0:
+            raise ValueError("goal alignment rate must be positive")
+        self.goal_alignment_pending = False
         self.plan_from_reference = self.config['plan_from_reference']
         self.use_trt = self.config['use_tensorrt']
         if self.use_trt and self.dynamic_config.enabled:
@@ -133,9 +191,14 @@ class DepNet:
         self.optimal_poly_z = None
         self.lock = Lock()
         self.dynamic_lock = Lock()
+        # DynamicPerception owns temporal state and must consume exactly one
+        # ordered stream.  rospy/message_filters callbacks may otherwise run
+        # concurrently and turn a valid context into an out-of-order failure.
+        self.dynamic_update_lock = Lock()
         self.latest_dynamic_context = DynamicContext.invalid(
             self.dynamic_config.source, reason="no_sensor_update"
         )
+        self.last_dynamic_sensor_timestamp = None
         self.last_dynamic_update_wall = None
         self.dynamic_perception = None
         self.dynamic_network_attention_enabled = bool(
@@ -149,20 +212,108 @@ class DepNet:
         safety_mapping = dict(cfg["runtime_safety"])
         if config.get("runtime_safety_enabled") is not None:
             safety_mapping["enabled"] = bool(config["runtime_safety_enabled"])
+        runtime_profile = config.get("runtime_profile", "strict")
+        self.runtime_profile = runtime_profile
+        self.runtime_behavior_version = {
+            V44_RUNTIME_PROFILE: V44_RUNTIME_BEHAVIOR_VERSION,
+            V45_RUNTIME_PROFILE: V45_RUNTIME_BEHAVIOR_VERSION,
+            V457_RUNTIME_PROFILE: V457_RUNTIME_BEHAVIOR_VERSION,
+            V4510_RUNTIME_PROFILE: V4510_RUNTIME_BEHAVIOR_VERSION,
+            V47_RUNTIME_PROFILE: V47_RUNTIME_BEHAVIOR_VERSION,
+        }.get(runtime_profile, runtime_profile)
+        if runtime_profile == V44_RUNTIME_PROFILE:
+            safety_mapping = runtime_safety_mapping_v4_4(safety_mapping)
+        elif runtime_profile == V45_RUNTIME_PROFILE:
+            safety_mapping = runtime_safety_mapping_v4_5(safety_mapping)
+        elif runtime_profile == V457_RUNTIME_PROFILE:
+            safety_mapping = runtime_safety_mapping_v4_5_7(safety_mapping)
+        elif runtime_profile == V4510_RUNTIME_PROFILE:
+            safety_mapping = runtime_safety_mapping_v4_5_10(safety_mapping)
+        elif runtime_profile == V47_RUNTIME_PROFILE:
+            safety_mapping = runtime_safety_mapping_v4_7(safety_mapping)
+        elif runtime_profile == "v4_3_minimal":
+            # V4.3 keeps only physical collision/limit/boundary checks.  Camera
+            # visibility and minimum-progress heuristics remain observable in
+            # CandidateSafetyV1 but cannot reject an otherwise valid proposal.
+            safety_mapping.update({
+                "feasibility_projection_enabled": False,
+                "enforce_camera_visibility": False,
+                "enforce_minimum_progress": False,
+                "enforce_goal_progress": False,
+                "enforce_observed_tracking_clearance": False,
+                "enforce_stopping_distance": False,
+            })
+        elif runtime_profile != "strict":
+            raise ValueError(f"unsupported runtime profile: {runtime_profile}")
         self.runtime_safety_config = RuntimeSafetyConfigV1.from_mapping(safety_mapping)
         self.runtime_safety = RuntimeTrajectorySafetyV1(self.runtime_safety_config)
+        lower = config.get("flight_bounds_min")
+        upper = config.get("flight_bounds_max")
+        if (lower is None) != (upper is None):
+            raise ValueError("flight bounds require both minimum and maximum")
+        self.flight_bounds = None if lower is None else (
+            np.asarray(lower, dtype=np.float64),
+            np.asarray(upper, dtype=np.float64),
+        )
+        if self.flight_bounds is not None:
+            if any(value.shape != (3,) for value in self.flight_bounds) \
+                    or np.any(self.flight_bounds[0] >= self.flight_bounds[1]):
+                raise ValueError("invalid canonical flight bounds")
+        self.goal_contract = InteractiveGoalContractV1(
+            policy=self.goal_policy,
+            vehicle_radius_m=self.runtime_safety_config.vehicle_radius_m,
+        )
+        print("Interactive goal contract:", json.dumps(
+            self.goal_contract.contract(), sort_keys=True
+        ))
+        recovery_profile = config.get(
+            "deadlock_recovery_profile", "legacy_v2"
+        )
+        self.deadlock_recovery_profile = recovery_profile
         recovery_mapping = dict(cfg["deadlock_recovery"])
+        if runtime_profile == V44_RUNTIME_PROFILE:
+            recovery_mapping = deadlock_recovery_mapping_v4_4(
+                recovery_mapping
+            )
+        elif runtime_profile == V45_RUNTIME_PROFILE:
+            recovery_mapping = deadlock_recovery_mapping_v4_5(
+                recovery_mapping
+            )
+        elif runtime_profile == V457_RUNTIME_PROFILE:
+            recovery_mapping = deadlock_recovery_mapping_v4_5(
+                recovery_mapping
+            )
+        elif runtime_profile == V4510_RUNTIME_PROFILE:
+            recovery_mapping = deadlock_recovery_mapping_v4_5(
+                recovery_mapping
+            )
+        if recovery_profile == "bounded_scan_v3":
+            recovery_mapping = deadlock_recovery_mapping_v4_7_pillar(
+                recovery_mapping
+            )
+        elif recovery_profile != "legacy_v2":
+            raise ValueError(
+                f"unsupported deadlock recovery profile: {recovery_profile}"
+            )
         if config.get("deadlock_recovery_enabled") is not None:
             recovery_mapping["enabled"] = bool(
                 config["deadlock_recovery_enabled"]
             )
-        self.deadlock_recovery_config = (
-            DeadlockRecoveryConfigV1.from_mapping(recovery_mapping)
-        )
-        self.deadlock_recovery = DeadlockRecoveryV1(
-            self.deadlock_recovery_config
-        )
-        self.recovery_retreat_installed = False
+        if recovery_profile == "bounded_scan_v3":
+            self.deadlock_recovery_config = (
+                DeadlockRecoveryConfigV3.from_mapping(recovery_mapping)
+            )
+            self.deadlock_recovery = DeadlockRecoveryV3(
+                self.deadlock_recovery_config
+            )
+        else:
+            self.deadlock_recovery_config = (
+                DeadlockRecoveryConfigV2.from_mapping(recovery_mapping)
+            )
+            self.deadlock_recovery = DeadlockRecoveryV2(
+                self.deadlock_recovery_config
+            )
+        self.recovery_trajectory_installed = False
         self.active_traj_duration = self.traj_time
         telemetry_value = config.get("safety_telemetry")
         self.safety_telemetry_path = (
@@ -174,6 +325,7 @@ class DepNet:
         print("Runtime safety contract:", json.dumps(
             self.runtime_safety_config.contract(), sort_keys=True
         ))
+        print("Runtime behavior version:", self.runtime_behavior_version)
         print("Deadlock recovery contract:", json.dumps(
             self.deadlock_recovery_config.contract(), sort_keys=True
         ))
@@ -191,9 +343,14 @@ class DepNet:
             self.policy = TRTModule()
             self.policy.load_state_dict(torch.load(weight))
         else:
+            network_dynamic_config = replace(
+                self.dynamic_config,
+                use_attention=self.dynamic_network_attention_enabled,
+            )
             self.policy = DepNetwork(
                 backbone_variant=self.backbone_variant,
-                dynamic_config=self.dynamic_config,
+                dynamic_config=network_dynamic_config,
+                head_variant=self.head_variant,
             )
             load_dep_checkpoint(self.policy, weight, self.backbone_variant)
             self.policy = self.policy.to(self.device)
@@ -204,6 +361,9 @@ class DepNet:
         self.lattice_traj_pub = rospy.Publisher("/dep_net/lattice_trajs_visual", PointCloud2, queue_size=1)
         self.best_traj_pub = rospy.Publisher("/dep_net/best_traj_visual", PointCloud2, queue_size=1)
         self.all_trajs_pub = rospy.Publisher("/dep_net/trajs_visual", PointCloud2, queue_size=1)
+        self.feasible_trajs_pub = rospy.Publisher(
+            "/dep_net/feasible_trajs_visual", PointCloud2, queue_size=1
+        )
         self.ctrl_pub = rospy.Publisher(self.config["ctrl_topic"], PositionCommand, queue_size=1)
         self.safety_decision_pub = rospy.Publisher(
             "/dep_net/safety_decision", String, queue_size=10
@@ -265,11 +425,17 @@ class DepNet:
                 cache_time=rospy.Duration(10.0)
             )
             self.dynamic_tf_listener = tf2_ros.TransformListener(self.dynamic_tf_buffer)
-        # Planning always remains depth-driven. This independent subscriber is
-        # also the static fallback when synchronization or CameraInfo is absent.
-        self.depth_sub = rospy.Subscriber(
-            self.dynamic_config.depth_topic, Image, self.callback_depth, queue_size=1
-        )
+        # Depth dynamic mode uses one synchronized callback which first updates
+        # temporal perception and then plans from that exact same image.  Two
+        # subscribers to /depth_image created a race in which planning usually
+        # consumed the previous/invalid context.  Point-cloud mode still needs
+        # the independent depth subscriber because its planning and perception
+        # sensors are intentionally different streams.
+        if self.dynamic_config.source != "depth":
+            self.depth_sub = rospy.Subscriber(
+                self.dynamic_config.depth_topic, Image, self.callback_depth,
+                queue_size=1,
+            )
         if self.dynamic_config.publish_debug:
             self.dynamic_track_pub = rospy.Publisher(
                 "/dep_net/dynamic_tracks", MarkerArray, queue_size=1
@@ -412,19 +578,42 @@ class DepNet:
 
     def callback_dynamic_depth(self, depth_message, odometry, camera_info=None):
         timestamp = message_timestamp(depth_message)
-        try:
-            depth = self._decode_depth_message(depth_message)
-            camera_model = self._camera_model(camera_info)
-            if depth.shape != (camera_model.height, camera_model.width):
-                raise ValueError(
-                    f"depth shape {depth.shape} does not match intrinsics "
-                    f"{(camera_model.height, camera_model.width)}"
+        with self.dynamic_update_lock:
+            if (self.last_dynamic_sensor_timestamp is not None
+                    and timestamp <= self.last_dynamic_sensor_timestamp):
+                # ApproximateTimeSynchronizer can emit an older queued tuple
+                # after a newer one.  Dropping it preserves the causal stream;
+                # invalidating the latest context here would be incorrect.
+                rospy.logwarn_throttle(
+                    2.0,
+                    "DEP dynamic perception dropped a duplicate/out-of-order "
+                    "synchronized depth frame",
                 )
-            self._update_dynamic(
-                depth, depth_message, odometry, camera_info, input_kind="depth"
-            )
-        except Exception as exc:
-            self._invalidate_dynamic("depth", timestamp, "depth_dynamic_update_failed", exc)
+                return
+            try:
+                depth = self._decode_depth_message(depth_message)
+                camera_model = self._camera_model(camera_info)
+                if depth.shape != (camera_model.height, camera_model.width):
+                    raise ValueError(
+                        f"depth shape {depth.shape} does not match intrinsics "
+                        f"{(camera_model.height, camera_model.width)}"
+                    )
+                context = self._update_dynamic(
+                    depth, depth_message, odometry, camera_info,
+                    input_kind="depth",
+                )
+                self.last_dynamic_sensor_timestamp = timestamp
+            except Exception as exc:
+                self._invalidate_dynamic(
+                    "depth", timestamp, "depth_dynamic_update_failed", exc
+                )
+                context = self._context_for_depth(depth_message)
+            # The synchronized odometry is also the authority for the planning
+            # state of this depth frame.  callback_odometry still owns command
+            # feedback; assigning the synchronized sample here removes a
+            # same-frame pose/context mismatch without changing that contract.
+            self.odom = odometry
+            self.callback_depth(depth_message, dynamic_context=context)
 
     def callback_dynamic_pointcloud(self, cloud_message, odometry, camera_info=None):
         timestamp = message_timestamp(cloud_message)
@@ -489,16 +678,28 @@ class DepNet:
         self.dynamic_track_pub.publish(markers)
 
     def callback_set_goal(self, data):
-        self.goal = np.asarray(
+        candidate_goal = np.asarray(
             [data.pose.position.x, data.pose.position.y, self.goal_z],
             dtype=np.float64,
         )
+        accepted, reason = self.goal_contract.assess(
+            candidate_goal, self.flight_bounds, self.accepted_goal_count
+        )
+        if not accepted:
+            rospy.logwarn(f"Rejected 2D Nav Goal: {reason}")
+            return
+        self.goal = candidate_goal
+        self.accepted_goal_count += 1
         self.goal_received = True
         self.arrive = False
         self.ctrl_time = None
+        self.goal_alignment_pending = bool(
+            self.align_goal_before_planning and self.odom_init
+        )
         print(
             f"New Goal: ({self.goal[0]:.1f}, {self.goal[1]:.1f}, {self.goal[2]:.1f}); "
-            f"arrival radius={self.arrival_radius:.1f} m"
+            f"arrival radius={self.arrival_radius:.1f} m; "
+            f"policy={self.goal_policy}; align={self.goal_alignment_pending}"
         )
 
         # 可选：重置坐标系轨迹（到达新目标时清空历史坐标系）
@@ -511,7 +712,7 @@ class DepNet:
                     self.odom.pose.pose.position.z,
                 ], dtype=np.float64)
             self.deadlock_recovery.reset(position)
-            self.recovery_retreat_installed = False
+            self.recovery_trajectory_installed = False
             self.frame_list.clear()
             self.next_frame_id = 0
 
@@ -550,7 +751,7 @@ class DepNet:
         orientation.w = self.odom.pose.pose.orientation.w
 
         with self.lock:
-            if self.deadlock_recovery.mode == DeadlockRecoveryV1.NORMAL:
+            if self.deadlock_recovery.mode == DeadlockRecoveryV2.NORMAL:
                 self.deadlock_recovery.record_position(pos)
             # 添加当前坐标系到缓存
             self.frame_list.append((
@@ -674,6 +875,7 @@ class DepNet:
     def _write_safety_telemetry(self, payload):
         payload = {
             "contract_version": "runtime_trajectory_safety_v1",
+            "runtime_behavior_version": self.runtime_behavior_version,
             "timestamp": time.time(),
             **payload,
         }
@@ -705,7 +907,8 @@ class DepNet:
     @torch.inference_mode()
     def callback_depth(self, data, dynamic_context=None):
         if not self.odom_init: return
-        if not self.goal_received or self.arrive:
+        if (not self.goal_received or self.arrive
+                or self.goal_alignment_pending):
             return
 
         # 1. Depth Image Process
@@ -772,6 +975,9 @@ class DepNet:
         endstate_w = np.matmul(self.Rotation_wc, endstate_c)
 
         raw_scores = np.asarray(score_pred).reshape(-1)
+        visualization_candidates = None
+        visualization_evaluations = None
+        visualization_durations = None
         with self.lock:  # Python3.8: threads are scheduled using time slices, add the lock to ensure safety
             start_pos = self.desire_pos if self.plan_from_reference else np.array((self.odom.pose.pose.position.x, self.odom.pose.pose.position.y, self.odom.pose.pose.position.z))
             start_vel = self.desire_vel if self.plan_from_reference else np.array((self.odom.twist.twist.linear.x, self.odom.twist.twist.linear.y, self.odom.twist.twist.linear.z))
@@ -787,6 +993,10 @@ class DepNet:
                             self.traj_time,
                         )
                     )
+                    (candidates, candidate_durations, retiming_scales,
+                     retiming_succeeded) = self.runtime_safety.retime_candidates(
+                        candidates, self.traj_time
+                    )
                     camera_model = self.dynamic_camera_model
                     if depth_raw.shape != (camera_model.height, camera_model.width):
                         raise ValueError(
@@ -799,7 +1009,7 @@ class DepNet:
                         stride=self.runtime_safety_config.depth_stride,
                     )
                     evaluations = self.runtime_safety.evaluate(
-                        candidates, self.traj_time, obstacle_points,
+                        candidates, candidate_durations, obstacle_points,
                         start_pos, self.Rotation_wc,
                         dynamic_tracks=(
                             runtime_dynamic_context.dynamic_tracks
@@ -807,10 +1017,26 @@ class DepNet:
                             and runtime_dynamic_context.valid else ()
                         ),
                         query_timestamp=message_timestamp(data),
+                        goal_world=self.goal,
+                        flight_bounds=self.flight_bounds,
                     )
                     selection = self.runtime_safety.select(raw_scores, evaluations)
+                    visualization_candidates = candidates
+                    visualization_evaluations = evaluations
+                    visualization_durations = candidate_durations
                     feasible_candidate_count = int(sum(
                         item.feasible for item in evaluations
+                    ))
+                    boundary_escape_candidate_count = int(sum(
+                        item.feasible and item.flight_volume_escape
+                        for item in evaluations
+                    ))
+                    goal_feasible_candidate_count = int(sum(
+                        item.feasible
+                        and item.endpoint_goal_progress_m is not None
+                        and item.endpoint_goal_progress_m
+                        >= self.runtime_safety_config.recovery_release_goal_progress_m
+                        for item in evaluations
                     ))
                     current_observed_clearance = (
                         float(np.min(np.linalg.norm(obstacle_points, axis=1)))
@@ -818,18 +1044,40 @@ class DepNet:
                     )
                     collision_floor_present = (
                         current_observed_clearance is not None
-                        and current_observed_clearance < max(
-                            0.0,
-                            self.runtime_safety_config.vehicle_radius_m
-                            - self.runtime_safety_config.clearance_sensor_tolerance_m,
-                        )
+                        and current_observed_clearance
+                        < self.runtime_safety_config.collision_floor_m
                     )
-                    recovery = self.deadlock_recovery.observe(
+                    recovery_kwargs = dict(
                         feasible_candidate_count=feasible_candidate_count,
                         collision_floor_present=collision_floor_present,
                         speed_mps=float(np.linalg.norm(start_vel)),
                         position_world=start_pos,
                         depth=depth_raw,
+                        rotation_world_from_body=self.Rotation_wc,
+                        goal_world=self.goal,
+                        goal_feasible_candidate_count=goal_feasible_candidate_count,
+                        recovery_feasible_candidate_count=(
+                            goal_feasible_candidate_count
+                            + boundary_escape_candidate_count
+                        ),
+                    )
+                    if self.deadlock_recovery_profile == "bounded_scan_v3":
+                        selected_evaluation = (
+                            None if selection.action_id is None
+                            else evaluations[selection.action_id]
+                        )
+                        recovery_kwargs.update({
+                            "selected_candidate_feasible": bool(
+                                selected_evaluation is not None
+                                and selected_evaluation.feasible
+                            ),
+                            "selected_candidate_goal_progress_m": (
+                                None if selected_evaluation is None
+                                else selected_evaluation.endpoint_goal_progress_m
+                            ),
+                        })
+                    recovery = self.deadlock_recovery.observe(
+                        **recovery_kwargs
                     )
                     if recovery.transition is not None:
                         rospy.logwarn(
@@ -837,40 +1085,97 @@ class DepNet:
                         )
                     action_id = (
                         selection.action_id
-                        if recovery.mode == DeadlockRecoveryV1.NORMAL
+                        if recovery.mode == DeadlockRecoveryV2.NORMAL
                         else None
                     )
                     braking_compliant = None
                     retreat_compliant = None
-                    if recovery.mode == DeadlockRecoveryV1.RETREAT:
+                    escape_compliant = None
+                    recovery_evaluation = None
+                    if recovery.mode in (
+                        DeadlockRecoveryV2.RETREAT,
+                        DeadlockRecoveryV2.OBSERVED_ESCAPE,
+                    ):
                         needs_install = (
-                            recovery.transition
-                            == "braking_to_breadcrumb_retreat"
-                            or not self.recovery_retreat_installed
+                            recovery.transition in {
+                                "braking_to_breadcrumb_retreat",
+                                "yaw_scan_to_breadcrumb_retreat",
+                                "yaw_scan_to_observed_escape",
+                            }
+                            or not self.recovery_trajectory_installed
                             or self.ctrl_time is None
                             or self.ctrl_time >= self.active_traj_duration
                         )
                         if needs_install:
-                            retreat, duration, retreat_compliant = (
+                            is_escape = (
+                                recovery.mode
+                                == DeadlockRecoveryV2.OBSERVED_ESCAPE
+                            )
+                            target = (
+                                recovery.escape_target_world if is_escape
+                                else recovery.retreat_target_world
+                            )
+                            recovery_trajectory, duration, limit_compliant = (
                                 self.runtime_safety.recovery_trajectory(
                                     start_pos, start_vel, start_acc,
-                                    recovery.retreat_target_world,
+                                    target,
                                 )
                             )
-                            if retreat is None or not retreat_compliant:
-                                self.deadlock_recovery.mode = (
-                                    DeadlockRecoveryV1.YAW_SCAN
-                                )
-                                self.recovery_retreat_installed = False
-                                rospy.logerr(
-                                    "DE-P breadcrumb retreat was not limit-compliant; "
-                                    "falling back to stationary yaw scan"
-                                )
+                            if is_escape:
+                                escape_compliant = limit_compliant
+                                if recovery_trajectory is not None and limit_compliant:
+                                    recovery_evaluation = self.runtime_safety.evaluate(
+                                        (recovery_trajectory,), duration,
+                                        obstacle_points, start_pos,
+                                        self.Rotation_wc,
+                                        dynamic_tracks=(
+                                            runtime_dynamic_context.dynamic_tracks
+                                            if runtime_dynamic_context is not None
+                                            and runtime_dynamic_context.valid else ()
+                                        ),
+                                        query_timestamp=message_timestamp(data),
+                                        goal_world=self.goal,
+                                    )[0]
+                                    escape_compliant = bool(
+                                        recovery_evaluation.feasible
+                                    )
                             else:
-                                self._install_trajectory(retreat, duration)
-                                self.recovery_retreat_installed = True
+                                retreat_compliant = limit_compliant
+                            certified = (
+                                escape_compliant if is_escape
+                                else retreat_compliant
+                            )
+                            if recovery_trajectory is None or not certified:
+                                recovery = (
+                                    self.deadlock_recovery.reject_observed_escape()
+                                    if is_escape else
+                                    self.deadlock_recovery.reject_breadcrumb_retreat(
+                                        depth_raw
+                                    )
+                                )
+                                self.recovery_trajectory_installed = False
+                                rospy.logwarn(
+                                    "DE-P recovery translation rejected: %s",
+                                    recovery.transition,
+                                )
+                                braking, duration, braking_compliant = (
+                                    self.runtime_safety.braking_trajectory(
+                                        start_pos, start_vel, start_acc
+                                    )
+                                )
+                                if braking is None:
+                                    self._enter_safe_state(
+                                        "unable to brake after recovery rejection"
+                                    )
+                                    return
+                                self._install_trajectory(braking, duration)
+                            else:
+                                self._install_trajectory(
+                                    recovery_trajectory, duration
+                                )
+                                self.recovery_trajectory_installed = True
                     elif action_id is None:
-                        self.recovery_retreat_installed = False
+                        self.recovery_trajectory_installed = False
                         braking, duration, braking_compliant = (
                             self.runtime_safety.braking_trajectory(
                                 start_pos, start_vel, start_acc
@@ -881,8 +1186,10 @@ class DepNet:
                             return
                         self._install_trajectory(braking, duration)
                     else:
-                        self.recovery_retreat_installed = False
-                        self._install_trajectory(candidates[action_id], self.traj_time)
+                        self.recovery_trajectory_installed = False
+                        self._install_trajectory(
+                            candidates[action_id], candidate_durations[action_id]
+                        )
                     self._write_safety_telemetry({
                         "mode": recovery.mode,
                         "network_selection_mode": selection.mode,
@@ -890,12 +1197,61 @@ class DepNet:
                         "recovery_retreat_target_world": (
                             recovery.retreat_target_world
                         ),
+                        "recovery_escape_target_world": (
+                            recovery.escape_target_world
+                        ),
+                        "recovery_scan_offset_deg": recovery.scan_offset_deg,
+                        "recovery_scan_legs_completed": (
+                            recovery.scan_legs_completed
+                        ),
+                        "recovery_scan_attempt": getattr(
+                            recovery, "scan_attempt", None
+                        ),
+                        "recovery_current_scan_limit_deg": getattr(
+                            recovery, "current_scan_limit_deg", None
+                        ),
+                        "recovery_scan_direction": getattr(
+                            recovery, "scan_direction", None
+                        ),
+                        "recovery_selected_candidate_eligible": getattr(
+                            recovery, "selected_candidate_eligible", None
+                        ),
+                        "recovery_selected_candidate_goal_progress_m": getattr(
+                            recovery,
+                            "selected_candidate_goal_progress_m", None,
+                        ),
+                        "recovery_escape_goal_alignment": (
+                            recovery.escape_goal_alignment
+                        ),
+                        "deadlock_recovery_profile": (
+                            self.deadlock_recovery_profile
+                        ),
+                        "recovery_selected_release_replans": getattr(
+                            recovery, "selected_release_replans", None
+                        ),
+                        "recovery_cooldown_remaining_s": getattr(
+                            recovery, "cooldown_remaining_s", None
+                        ),
                         "action_id": action_id,
                         "network_best_action_id": int(np.argmin(raw_scores)),
                         "network_best_rejected": (
                             not evaluations[int(np.argmin(raw_scores))].feasible
                         ),
                         "feasible_candidate_count": feasible_candidate_count,
+                        "goal_feasible_candidate_count": (
+                            goal_feasible_candidate_count
+                        ),
+                        "boundary_escape_candidate_count": (
+                            boundary_escape_candidate_count
+                        ),
+                        "current_position_world": [
+                            float(value) for value in start_pos
+                        ],
+                        "flight_volume_state": (
+                            self.runtime_safety.flight_volume_state(
+                                start_pos, self.flight_bounds
+                            )
+                        ),
                         "collision_floor_present": collision_floor_present,
                         "current_observed_clearance_m": (
                             current_observed_clearance
@@ -906,12 +1262,86 @@ class DepNet:
                             if runtime_dynamic_context is not None
                             and runtime_dynamic_context.valid else 0
                         ),
+                        "dynamic_context_valid": bool(
+                            runtime_dynamic_context is not None
+                            and runtime_dynamic_context.valid
+                        ),
+                        "dynamic_context_fallback_reason": (
+                            None if runtime_dynamic_context is None
+                            or runtime_dynamic_context.valid else
+                            runtime_dynamic_context.diagnostics.get(
+                                "fallback_reason"
+                            )
+                        ),
+                        "dynamic_foreground_mode": (
+                            self.dynamic_config.foreground_mode
+                        ),
+                        "dynamic_perception_counts": {
+                            key: runtime_dynamic_context.diagnostics.get(key)
+                            for key in (
+                                "foreground_point_count", "cluster_count",
+                                "all_track_count", "confirmed_track_count",
+                                "confirmed_dynamic_track_count",
+                                "attention_authorized_dynamic_track_count",
+                            )
+                        } if (
+                            runtime_dynamic_context is not None
+                            and runtime_dynamic_context.valid
+                        ) else None,
+                        "dynamic_track_summaries": [
+                            {
+                                "track_id": int(track.track_id),
+                                "is_dynamic": bool(track.is_dynamic),
+                                "prediction_only_age": int(
+                                    track.prediction_only_age
+                                ),
+                                "confidence": float(track.confidence),
+                                "last_direct_observation_timestamp": (
+                                    track.last_direct_observation_timestamp
+                                ),
+                                "measurement_age_s": (
+                                    None if track.last_direct_observation_timestamp
+                                    is None else
+                                    message_timestamp(data)
+                                    - track.last_direct_observation_timestamp
+                                ),
+                                "observed_extent": list(
+                                    track.observed_extent
+                                ),
+                                "position_covariance_diagonal": (
+                                    np.diag(np.asarray(
+                                        track.state_covariance,
+                                        dtype=np.float64,
+                                    ))[:3].tolist()
+                                    if np.asarray(
+                                        track.state_covariance
+                                    ).shape == (6, 6) else None
+                                ),
+                            }
+                            for track in (
+                                runtime_dynamic_context.dynamic_tracks
+                                if runtime_dynamic_context is not None
+                                and runtime_dynamic_context.valid else ()
+                            )
+                        ],
                         "braking_limit_compliant": braking_compliant,
                         "retreat_limit_compliant": retreat_compliant,
+                        "escape_safety_compliant": escape_compliant,
+                        "escape_evaluation": (
+                            None if recovery_evaluation is None
+                            else recovery_evaluation.as_dict()
+                        ),
                         "projection_scales": projection_scales,
                         "projection_succeeded": projection_succeeded,
                         "projected_candidate_count": int(sum(
                             projection_succeeded
+                        )),
+                        "candidate_durations_s": candidate_durations,
+                        "candidate_retiming_scales": retiming_scales,
+                        "candidate_retiming_succeeded": retiming_succeeded,
+                        "retimed_candidate_count": int(sum(
+                            scale > 1.0 + 1.0e-9
+                            for scale in retiming_scales
                         )),
                         "evaluations": [item.as_dict() for item in evaluations],
                     })
@@ -922,7 +1352,12 @@ class DepNet:
                 action_id = int(np.argmin(raw_scores)) if return_all else 0
                 self._install_trajectory(candidates[action_id], self.traj_time)
         time4 = time.time()
-        self.visualize_trajectory(score_pred, endstate_w)
+        self.visualize_trajectory(
+            score_pred, endstate_w,
+            candidates=visualization_candidates,
+            evaluations=visualization_evaluations,
+            candidate_durations=visualization_durations,
+        )
         time5 = time.time()
 
         if self.verbose:
@@ -940,7 +1375,11 @@ class DepNet:
                   f"visualize-trajectory: {1000 * self.time_visualize / self.count:.2f}ms")
 
     def control_pub(self, _timer):
-        if self.odom_init and (not self.goal_received or (self.arrive and self.hold_on_arrival)):
+        if self.odom_init and (
+            not self.goal_received
+            or self.goal_alignment_pending
+            or (self.arrive and self.hold_on_arrival)
+        ):
             self._publish_hold()
             return
         if self.ctrl_time is None or self.ctrl_time > self.active_traj_duration:
@@ -984,14 +1423,41 @@ class DepNet:
             self.desire_vel = np.array([control_msg.velocity.x, control_msg.velocity.y, control_msg.velocity.z])
             self.desire_acc = np.array([control_msg.acceleration.x, control_msg.acceleration.y, control_msg.acceleration.z])
             goal_dir = self.goal - self.desire_pos
-            if self.deadlock_recovery.mode == DeadlockRecoveryV1.YAW_SCAN:
+            if self.deadlock_recovery.mode == DeadlockRecoveryV2.YAW_SCAN:
                 yaw, yaw_dot = self.deadlock_recovery.yaw_command(
                     self.last_yaw, self.ctrl_dt
                 )
-            elif self.deadlock_recovery.mode == DeadlockRecoveryV1.RETREAT:
+            elif (
+                self.deadlock_recovery_profile == "bounded_scan_v3"
+                and self.deadlock_recovery.heading_commitment_active()
+            ):
+                # Retain the newly observed opening briefly while the normal
+                # network-selected trajectory starts.  Recovery still owns no
+                # translational command and runtime safety remains authoritative.
                 yaw, yaw_dot = self.last_yaw, 0.0
+            elif self.deadlock_recovery.mode in (
+                DeadlockRecoveryV2.RETREAT,
+                DeadlockRecoveryV2.OBSERVED_ESCAPE,
+            ):
+                yaw, yaw_dot = self.last_yaw, 0.0
+            elif self.runtime_profile == V44_RUNTIME_PROFILE:
+                yaw, yaw_dot = calculate_original_yopo_yaw_v4_4(
+                    self.desire_vel, goal_dir, self.last_yaw, self.ctrl_dt
+                )
+            elif self.runtime_profile == V45_RUNTIME_PROFILE:
+                yaw, yaw_dot = calculate_original_yopo_yaw_v4_5(
+                    self.desire_vel, goal_dir, self.last_yaw, self.ctrl_dt
+                )
+            elif self.runtime_profile == V457_RUNTIME_PROFILE:
+                yaw, yaw_dot = calculate_original_yopo_yaw_v4_5_7(
+                    self.desire_vel, goal_dir, self.last_yaw, self.ctrl_dt
+                )
+            elif self.runtime_profile == V4510_RUNTIME_PROFILE:
+                yaw, yaw_dot = calculate_original_yopo_yaw_v4_5_10(
+                    self.desire_vel, goal_dir, self.last_yaw, self.ctrl_dt
+                )
             else:
-                yaw, yaw_dot = calculate_yaw(
+                yaw, yaw_dot = calculate_path_tangent_yaw_v1(
                     self.desire_vel, goal_dir, self.last_yaw, self.ctrl_dt
                 )
             self.last_yaw = yaw
@@ -1002,12 +1468,40 @@ class DepNet:
             self.ctrl_pub.publish(control_msg)
 
     def _publish_hold(self):
-        """Keep the position controller active while waiting or after arrival."""
+        """Hold position and, for a new goal, causally align the camera yaw."""
         position = np.array((
             self.odom.pose.pose.position.x,
             self.odom.pose.pose.position.y,
             self.odom.pose.pose.position.z,
         ))
+        yaw_dot = 0.0
+        if self.goal_alignment_pending:
+            horizontal = self.goal[:2] - position[:2]
+            if np.linalg.norm(horizontal) <= 1.0e-6:
+                self.goal_alignment_pending = False
+            else:
+                desired_yaw = float(np.arctan2(horizontal[1], horizontal[0]))
+                yaw_error = float(
+                    (desired_yaw - self.last_yaw + np.pi) % (2.0 * np.pi)
+                    - np.pi
+                )
+                if abs(yaw_error) <= self.goal_alignment_tolerance:
+                    self.last_yaw = desired_yaw
+                    self.goal_alignment_pending = False
+                    rospy.loginfo(
+                        "Goal yaw alignment complete; neural planner resumed"
+                    )
+                else:
+                    yaw_step = float(np.clip(
+                        yaw_error,
+                        -self.goal_alignment_rate * self.ctrl_dt,
+                        self.goal_alignment_rate * self.ctrl_dt,
+                    ))
+                    self.last_yaw = float(
+                        (self.last_yaw + yaw_step + np.pi) % (2.0 * np.pi)
+                        - np.pi
+                    )
+                    yaw_dot = yaw_step / self.ctrl_dt
         control_msg = PositionCommand()
         control_msg.header.stamp = rospy.Time.now()
         control_msg.trajectory_flag = control_msg.TRAJECTORY_STATUS_READY
@@ -1017,7 +1511,7 @@ class DepNet:
         control_msg.velocity.x = control_msg.velocity.y = control_msg.velocity.z = 0.0
         control_msg.acceleration.x = control_msg.acceleration.y = control_msg.acceleration.z = 0.0
         control_msg.yaw = float(self.last_yaw)
-        control_msg.yaw_dot = 0.0
+        control_msg.yaw_dot = float(yaw_dot)
         self.desire_pos = position
         self.desire_vel = np.zeros(3, dtype=np.float64)
         self.desire_acc = np.zeros(3, dtype=np.float64)
@@ -1039,13 +1533,17 @@ class DepNet:
 
         return endstate, score
 
-    def visualize_trajectory(self, pred_score, pred_endstate):
+    def visualize_trajectory(self, pred_score, pred_endstate,
+                             candidates=None, evaluations=None,
+                             candidate_durations=None):
         dt = self.traj_time / 20.0
         start_pos = self.desire_pos if self.plan_from_reference else np.array((self.odom.pose.pose.position.x, self.odom.pose.pose.position.y, self.odom.pose.pose.position.z))
         start_vel = self.desire_vel if self.plan_from_reference else np.array((self.odom.twist.twist.linear.x, self.odom.twist.twist.linear.y, self.odom.twist.twist.linear.z))
         # best predicted trajectory
         if self.best_traj_pub.get_num_connections() > 0:
-            t_values = np.arange(0, self.traj_time, dt)
+            t_values = np.linspace(
+                0.0, self.active_traj_duration, 20, endpoint=False
+            )
             points_array = np.stack((
                 self.optimal_poly_x.get_position(t_values),
                 self.optimal_poly_y.get_position(t_values),
@@ -1144,6 +1642,44 @@ class DepNet:
             point_cloud_msg = point_cloud2.create_cloud(header, fields, points_array)
             self.all_trajs_pub.publish(point_cloud_msg)
 
+        # Runtime-authorized candidates are published separately from raw
+        # network proposals.  The red selected/executed trajectory above may
+        # be a braking or hold command when this green set is empty.
+        if (
+            self.visualize
+            and candidates is not None
+            and evaluations is not None
+            and self.feasible_trajs_pub.get_num_connections() > 0
+        ):
+            feasible_points = []
+            durations = (
+                tuple(self.traj_time for _ in candidates)
+                if candidate_durations is None else candidate_durations
+            )
+            for candidate, evaluation, duration in zip(
+                candidates, evaluations, durations
+            ):
+                if not evaluation.feasible:
+                    continue
+                t_values = np.linspace(
+                    0.0, float(duration), 20, endpoint=False
+                )
+                feasible_points.append(np.stack((
+                    candidate[0].get_position(t_values),
+                    candidate[1].get_position(t_values),
+                    candidate[2].get_position(t_values),
+                ), axis=-1))
+            header = std_msgs.msg.Header()
+            header.stamp = rospy.Time.now()
+            header.frame_id = 'world'
+            if feasible_points:
+                points_array = np.concatenate(feasible_points, axis=0)
+            else:
+                points_array = np.empty((0, 3), dtype=np.float32)
+            self.feasible_trajs_pub.publish(
+                point_cloud2.create_cloud_xyz32(header, points_array)
+            )
+
     def warm_up(self):
         depth = torch.zeros((1, 1, self.height, self.width), dtype=torch.float32, device=self.device)
         obs = torch.zeros((1, 9), dtype=torch.float32, device=self.device)
@@ -1159,12 +1695,20 @@ def parser():
     parser.add_argument("--epoch", type=int, default=10, help="epoch number")
     parser.add_argument("--backbone-variant", choices=BACKBONE_VARIANTS, default=None,
                         help="override config/traj_opt.yaml backbone_variant")
+    parser.add_argument("--head-variant", choices=DepHead.VARIANTS,
+                        default="unified")
     parser.add_argument("--checkpoint", type=Path, default=None,
                         help="explicit PyTorch or TensorRT checkpoint path")
     parser.add_argument("--dynamic-enabled", type=int, choices=(0, 1), default=None,
                         help="override dynamic_perception.enabled")
     parser.add_argument("--dynamic-source", choices=("depth", "pointcloud"), default=None,
                         help="override dynamic_perception.source")
+    parser.add_argument(
+        "--dynamic-foreground-mode",
+        choices=("temporal_voxel", "range_image_hybrid"),
+        default=None,
+        help="override causal foreground extraction for the ROS sensor stream",
+    )
     parser.add_argument(
         "--dynamic-network-attention-enabled", type=int, choices=(0, 1),
         default=1,
@@ -1178,12 +1722,56 @@ def parser():
                         help="hold position until an RViz 2D Nav Goal is received")
     parser.add_argument("--hold-on-arrival", type=int, choices=(0, 1), default=0,
                         help="publish a zero-velocity position hold after arrival")
+    parser.add_argument(
+        "--goal-policy", choices=GOAL_POLICIES_V1, default="interactive",
+        help=(
+            "interactive permits mid-flight goal replacement; fixed_ab accepts "
+            "one reproducible goal only"
+        ),
+    )
+    parser.add_argument(
+        "--align-goal-before-planning", type=int, choices=(0, 1), default=1,
+        help="hold position and align camera yaw whenever a new goal is accepted",
+    )
+    parser.add_argument(
+        "--goal-alignment-tolerance-deg", type=float, default=20.0,
+    )
+    parser.add_argument(
+        "--goal-alignment-rate-deg-s", type=float, default=90.0,
+    )
     parser.add_argument("--runtime-safety-enabled", type=int, choices=(0, 1), default=None,
                         help="override the versioned runtime trajectory safety shield")
+    parser.add_argument(
+        "--runtime-profile", choices=(
+            "strict", "v4_3_minimal", V44_RUNTIME_PROFILE,
+            V45_RUNTIME_PROFILE, V457_RUNTIME_PROFILE,
+            V4510_RUNTIME_PROFILE, V47_RUNTIME_PROFILE,
+        ),
+        default="strict",
+        help=(
+            "V4.3/V4.4/V4.5 remove projection/FOV/progress filters; "
+            "V4.5.7 retimes collision-free hardware-limit excess; "
+            "V4.5.10 adds a 5 cm representation margin"
+        ),
+    )
+    parser.add_argument(
+        "--planning-speed", type=float, default=None,
+        help="YOPO lattice speed in m/s; V4.3 demo recommends 4.0",
+    )
     parser.add_argument("--deadlock-recovery-enabled", type=int, choices=(0, 1), default=None,
                         help="override deterministic brake/scan/breadcrumb recovery")
+    parser.add_argument(
+        "--deadlock-recovery-profile",
+        choices=("legacy_v2", "bounded_scan_v3"),
+        default="legacy_v2",
+        help="select legacy recovery or bounded scan-only Pillar recovery",
+    )
     parser.add_argument("--safety-telemetry", type=Path, default=None,
                         help="optional JSONL path for per-replan safety decisions")
+    parser.add_argument("--flight-bounds-min", type=float, nargs=3, default=None,
+                        help="canonical XYZ minimum; requires --flight-bounds-max")
+    parser.add_argument("--flight-bounds-max", type=float, nargs=3, default=None,
+                        help="canonical XYZ maximum; requires --flight-bounds-min")
     # --------------- 新增：坐标系相关命令行参数 ---------------
     parser.add_argument("--frame_decay_time", type=float, default=3.0, help="frame trajectory decay time (seconds)")
     parser.add_argument("--frame_size", type=float, default=0.5, help="frame axis length (meters)")
@@ -1225,12 +1813,20 @@ def resolve_weight_path(use_tensorrt, trial, epoch, base_dir, backbone_variant=N
 
 if __name__ == "__main__":
     args = parser().parse_args()
+    if args.planning_speed is not None:
+        if not 0.5 <= args.planning_speed <= cfg["vel_max_train"]:
+            raise ValueError(
+                f"--planning-speed must be within [0.5,{cfg['vel_max_train']}] m/s"
+            )
+        cfg["velocity"] = float(args.planning_speed)
     dynamic_config = DynamicPerceptionConfig.from_global_config()
     dynamic_overrides = {}
     if args.dynamic_enabled is not None:
         dynamic_overrides["enabled"] = bool(args.dynamic_enabled)
     if args.dynamic_source is not None:
         dynamic_overrides["source"] = args.dynamic_source
+    if args.dynamic_foreground_mode is not None:
+        dynamic_overrides["foreground_mode"] = args.dynamic_foreground_mode
     if dynamic_overrides:
         dynamic_config = replace(dynamic_config, **dynamic_overrides)
         dynamic_config.validate()
@@ -1265,17 +1861,30 @@ if __name__ == "__main__":
 
     settings = {'use_tensorrt': args.use_tensorrt,
                 'backbone_variant': backbone_variant,
+                'head_variant': args.head_variant,
                 'goal': [50, 0, 2],      # 目标点位置
                 'goal_z': args.goal_z,
                 'arrival_radius': args.arrival_radius,
                 'wait_for_goal': bool(args.wait_for_goal),
                 'hold_on_arrival': bool(args.hold_on_arrival),
+                'goal_policy': args.goal_policy,
+                'align_goal_before_planning': bool(
+                    args.align_goal_before_planning
+                ),
+                'goal_alignment_tolerance_deg': (
+                    args.goal_alignment_tolerance_deg
+                ),
+                'goal_alignment_rate_deg_s': args.goal_alignment_rate_deg_s,
                 'runtime_safety_enabled': args.runtime_safety_enabled,
+                'runtime_profile': args.runtime_profile,
                 'deadlock_recovery_enabled': args.deadlock_recovery_enabled,
+                'deadlock_recovery_profile': args.deadlock_recovery_profile,
                 'dynamic_network_attention_enabled': bool(
                     args.dynamic_network_attention_enabled
                 ),
                 'safety_telemetry': args.safety_telemetry,
+                'flight_bounds_min': args.flight_bounds_min,
+                'flight_bounds_max': args.flight_bounds_max,
                 'frame_decay_time': args.frame_decay_time,
                 'frame_size': args.frame_size,
                 'env': 'simulation',     # 深度图来源 ('435' or 'simulation', 和深度单位有关)

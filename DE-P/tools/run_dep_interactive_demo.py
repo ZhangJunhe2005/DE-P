@@ -21,6 +21,26 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+from policy.runtime_profile_v4_4 import (
+    PROFILE_NAME as V44_RUNTIME_PROFILE,
+    RUNTIME_BEHAVIOR_VERSION as V44_RUNTIME_BEHAVIOR_VERSION,
+)
+from policy.runtime_profile_v4_5 import (
+    PROFILE_NAME as V45_RUNTIME_PROFILE,
+    RUNTIME_BEHAVIOR_VERSION as V45_RUNTIME_BEHAVIOR_VERSION,
+)
+from policy.runtime_profile_v4_5_7 import (
+    PROFILE_NAME as V457_RUNTIME_PROFILE,
+    RUNTIME_BEHAVIOR_VERSION as V457_RUNTIME_BEHAVIOR_VERSION,
+)
+from policy.runtime_profile_v4_5_10 import (
+    PROFILE_NAME as V4510_RUNTIME_PROFILE,
+    RUNTIME_BEHAVIOR_VERSION as V4510_RUNTIME_BEHAVIOR_VERSION,
+)
+from policy.runtime_profile_v4_7 import (
+    PROFILE_NAME as V47_RUNTIME_PROFILE,
+    RUNTIME_BEHAVIOR_VERSION as V47_RUNTIME_BEHAVIOR_VERSION,
+)
 DEFAULT_SCENES = ROOT / "configs" / "dep_interactive_demo_scenes_v4.json"
 DEFAULT_RUN = (
     ROOT / "runs" / "phase8_mixed_static_yopo_v3_2_low_lr_adamw"
@@ -29,6 +49,26 @@ DEFAULT_RUN = (
 CONTROLLER = ROOT.parent / "Controller"
 SIMULATOR = ROOT.parent / "Simulator"
 YOPO_PYTHON = Path("/home/zjh/miniconda3/envs/yopo/bin/python")
+UNGATED_STATIC_TRAINING_CONTRACTS = {
+    "route_a_static_yopo_training_v4_3_single_cost_v1",
+    "route_a_static_yopo_training_v4_4_static_parity_v1",
+    "route_a_static_yopo_training_v4_5_bounded_danger_v1",
+    "route_a_static_yopo_training_v4_5_1_relative_kinematic_v1",
+    "route_a_static_yopo_training_v4_5_1_mixed_shakedown_v1",
+    "route_a_static_yopo_training_v4_5_2_calibrated_v1",
+    "route_a_static_yopo_training_v4_5_2_mixed_shakedown_v1",
+    "route_a_static_yopo_training_v4_5_3_two_stage_shakedown_v1",
+    "route_a_static_yopo_training_v4_5_4_independent_score_shakedown_v1",
+    "route_a_static_yopo_training_v4_5_5_dense_static_esdf_shakedown_v1",
+    "route_a_static_yopo_training_v4_5_6_continuous_score_safety_v1",
+    "route_a_static_yopo_training_v4_5_7_high_safety_retimed_v1",
+    "route_a_static_yopo_training_v4_5_8_localized_safety_retimed_v1",
+    "route_a_static_yopo_training_v4_5_9_time_mean_localized_safety_v1",
+    "route_a_static_yopo_training_v4_5_10_tail_aware_safety_v1",
+    "route_a_static_yopo_training_v4_5_10_controlled_continuation_v1",
+    "route_a_static_yopo_training_v4_6_four_scene_finetune_v1",
+    "route_a_static_yopo_training_v4_7_original_density_finetune_v1",
+}
 
 
 def parse_args():
@@ -77,12 +117,55 @@ def parse_args():
     )
     parser.add_argument("--arrival-radius", type=float, default=5.0)
     parser.add_argument(
+        "--goal-mode", choices=("interactive", "fixed-ab"),
+        default="interactive",
+        help=(
+            "interactive permits changing 2D Nav Goal during flight; "
+            "fixed-ab automatically publishes the scene suggested goal once"
+        ),
+    )
+    parser.add_argument(
+        "--align-goal-before-planning", type=int, choices=(0, 1), default=1,
+        help="align camera yaw before handing each newly accepted goal to YOPO",
+    )
+    parser.add_argument(
         "--runtime-safety", type=int, choices=(0, 1), default=1,
         help="enable the hard trajectory safety shield (default: 1)",
     )
     parser.add_argument(
+        "--runtime-profile", choices=(
+            "strict", "v4_3_minimal", V44_RUNTIME_PROFILE,
+            V45_RUNTIME_PROFILE, V457_RUNTIME_PROFILE,
+            V4510_RUNTIME_PROFILE, V47_RUNTIME_PROFILE,
+        ),
+        default="strict",
+        help=(
+            "V4.3/V4.4/V4.5 keep only the minimal physical and dynamic "
+            "candidate filters"
+        ),
+    )
+    parser.add_argument(
+        "--planning-speed", type=float, default=None,
+        help="YOPO lattice speed in m/s (V4.3 default wrapper uses 4.0)",
+    )
+    parser.add_argument(
+        "--dynamic-foreground-mode",
+        choices=("temporal_voxel", "range_image_hybrid"),
+        default="range_image_hybrid",
+        help=(
+            "causal foreground extractor; range_image_hybrid is the frozen "
+            "Phase-8H validated runtime default"
+        ),
+    )
+    parser.add_argument(
         "--deadlock-recovery", type=int, choices=(0, 1), default=1,
         help="enable deterministic brake/scan/breadcrumb recovery (default: 1)",
+    )
+    parser.add_argument(
+        "--deadlock-recovery-profile",
+        choices=("legacy_v2", "bounded_scan_v3"),
+        default="legacy_v2",
+        help="legacy recovery or translation-free bounded observation scan",
     )
     parser.add_argument("--ros-master-port", type=int, default=11311)
     parser.add_argument("--scenes-config", type=Path, default=DEFAULT_SCENES)
@@ -134,6 +217,13 @@ def load_scene(config_path, name):
             raise FileNotFoundError(
                 f"Scene authority does not exist: {scene['authority_root']}"
             )
+        metadata = json.loads(
+            (scene["authority_root"] / "occupancy_metadata.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        scene["flight_bounds_min"] = metadata["bounds_min"]
+        scene["flight_bounds_max"] = metadata["bounds_max"]
     return scene
 
 
@@ -581,22 +671,36 @@ def checkpoint_preflight(checkpoint):
     payload = load_checkpoint_payload(checkpoint)
     state, metadata = unpack_checkpoint(payload)
     backbone_variant = detect_checkpoint_variant(payload)
-    model = DepNetwork(backbone_variant=backbone_variant)
+    head_variant = detect_head_variant(payload)
+    model = DepNetwork(
+        backbone_variant=backbone_variant, head_variant=head_variant
+    )
     load_result = load_dep_checkpoint(model, checkpoint, backbone_variant)
     result = {
         "checkpoint": str(checkpoint),
         "backbone_variant": backbone_variant,
-        "head_variant": detect_head_variant(payload),
+        "head_variant": head_variant,
         "state_tensors": len(state),
         "metadata": metadata,
         "strict_load": load_result["strict"],
     }
     validation_metric = metadata.get("validation_metric")
-    result["training_gate_qualified"] = not (
-        validation_metric is not None and float(validation_metric) >= 1_000_000.0
-    )
-    if result["head_variant"] != "unified":
-        raise ValueError("Interactive ROS node currently requires the unified DEP head")
+    identities = metadata.get("identities") or {}
+    training_contract = identities.get("training_contract_version")
+    if training_contract in UNGATED_STATIC_TRAINING_CONTRACTS:
+        result["training_gate_qualified"] = None
+        result["checkpoint_readiness"] = (
+            "validation_loss_selected_pending_closed_loop"
+        )
+    else:
+        result["training_gate_qualified"] = not (
+            validation_metric is not None
+            and float(validation_metric) >= 1_000_000.0
+        )
+        result["checkpoint_readiness"] = (
+            "legacy_training_gate_passed"
+            if result["training_gate_qualified"] else "legacy_training_gate_failed"
+        )
     return result
 
 
@@ -644,6 +748,35 @@ def wait_for_topics(environment, processes, timeout=60.0):
         time.sleep(0.25)
     missing = sorted(required - observed)
     raise TimeoutError(f"ROS runtime readiness timed out; missing topics: {missing}")
+
+
+def publish_fixed_ab_goal(environment, goal):
+    """Publish the one versioned suggested goal used by an A/B rollout."""
+    x, y, z = (float(value) for value in goal)
+    message = json.dumps({
+        "header": {"frame_id": "world"},
+        "pose": {
+            "position": {"x": x, "y": y, "z": z},
+            "orientation": {"w": 1.0},
+        },
+    })
+    result = subprocess.run(
+        [
+            "/opt/ros/noetic/bin/rostopic", "pub", "-1",
+            "/move_base_simple/goal", "geometry_msgs/PoseStamped", message,
+        ],
+        env=environment,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=15.0,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            "failed to publish fixed A/B goal: "
+            + (result.stderr.strip() or result.stdout.strip())
+        )
 
 
 def shell_command(command):
@@ -698,8 +831,13 @@ def main():
         "pointcloud": str(scene["pointcloud"]),
         "start": scene["start"],
         "suggested_goal": scene["suggested_goal"],
+        "flight_bounds_min": scene.get("flight_bounds_min"),
+        "flight_bounds_max": scene.get("flight_bounds_max"),
         "goal_z": scene["suggested_goal"][2],
         "arrival_radius": args.arrival_radius,
+        "goal_mode": args.goal_mode,
+        "midflight_goal_replacement": args.goal_mode == "interactive",
+        "align_goal_before_planning": bool(args.align_goal_before_planning),
         "actors": args.actors,
         "actor_count": actor_count,
         "actor_vertical_span": args.actor_vertical_span,
@@ -712,11 +850,22 @@ def main():
         "relocated_actor_count": actor_contract["relocated_actor_count"],
         "dynamic_mode": args.dynamic_mode,
         "runtime_safety_enabled": bool(args.runtime_safety),
+        "runtime_profile": args.runtime_profile,
+        "runtime_behavior_version": {
+            V44_RUNTIME_PROFILE: V44_RUNTIME_BEHAVIOR_VERSION,
+            V45_RUNTIME_PROFILE: V45_RUNTIME_BEHAVIOR_VERSION,
+            V457_RUNTIME_PROFILE: V457_RUNTIME_BEHAVIOR_VERSION,
+            V4510_RUNTIME_PROFILE: V4510_RUNTIME_BEHAVIOR_VERSION,
+            V47_RUNTIME_PROFILE: V47_RUNTIME_BEHAVIOR_VERSION,
+        }.get(args.runtime_profile, args.runtime_profile),
+        "dynamic_foreground_mode": args.dynamic_foreground_mode,
+        "planning_speed_mps": args.planning_speed,
         "deadlock_recovery_enabled": bool(args.deadlock_recovery),
+        "deadlock_recovery_profile": args.deadlock_recovery_profile,
         **preflight,
     }
     print(json.dumps(summary, indent=2, default=str))
-    if not preflight["training_gate_qualified"]:
+    if preflight["training_gate_qualified"] is False:
         print(
             "WARNING: checkpoint never passed its training selection Gate; "
             "runtime safety projection remains mandatory and this checkpoint "
@@ -821,7 +970,9 @@ def main():
                 f"{quoted(ROOT / 'tools' / 'monitor_dep_interactive_collisions.py')} "
                 f"--authority-root {quoted(scene['authority_root'])} "
                 f"--map-uuid {quoted(scene['map_uuid'])} "
-                f"--report {quoted(runtime / 'collision_report.json')}"
+                f"--report {quoted(runtime / 'collision_report.json')} "
+                f"--goal-z {scene['suggested_goal'][2]} "
+                f"--arrival-radius {args.arrival_radius}"
             ),
             visible=True,
         )
@@ -831,20 +982,45 @@ def main():
         dynamic_network_attention = int(
             args.dynamic_mode == "dynamic_attention"
         )
+        flight_bounds_args = ""
+        if "flight_bounds_min" in scene:
+            flight_bounds_args = (
+                "--flight-bounds-min "
+                + " ".join(map(str, scene["flight_bounds_min"]))
+                + " --flight-bounds-max "
+                + " ".join(map(str, scene["flight_bounds_max"]))
+                + " "
+            )
         start(
             "planner",
             shell_command(
                 f"{quoted(YOPO_PYTHON)} {quoted(ROOT / 'test_dep_ros.py')} "
                 f"--checkpoint {quoted(checkpoint)} "
                 f"--backbone-variant {preflight['backbone_variant']} "
+                f"--head-variant {preflight['head_variant']} "
                 f"--goal-z {scene['suggested_goal'][2]} "
                 f"--arrival-radius {args.arrival_radius} "
                 "--wait-for-goal 1 --hold-on-arrival 1 "
+                f"--goal-policy {args.goal_mode.replace('-', '_')} "
+                f"--align-goal-before-planning "
+                f"{args.align_goal_before_planning} "
                 f"--dynamic-enabled {dynamic_enabled} "
+                f"--dynamic-foreground-mode "
+                f"{args.dynamic_foreground_mode} "
                 f"--dynamic-network-attention-enabled "
                 f"{dynamic_network_attention} "
                 f"--runtime-safety-enabled {args.runtime_safety} "
+                f"--runtime-profile {args.runtime_profile} "
+                + (
+                    "" if args.planning_speed is None
+                    else f"--planning-speed {args.planning_speed} "
+                )
+                +
                 f"--deadlock-recovery-enabled {args.deadlock_recovery} "
+                f"--deadlock-recovery-profile "
+                f"{args.deadlock_recovery_profile} "
+                + flight_bounds_args
+                +
                 f"--safety-telemetry {quoted(runtime / 'safety_decisions.jsonl')}"
             ),
             visible=True,
@@ -855,16 +1031,33 @@ def main():
             "topics": ready_topics,
             "ros_master_uri": ros_uri,
         }, indent=2))
+        if args.goal_mode == "fixed-ab":
+            publish_fixed_ab_goal(environment, scene["suggested_goal"])
+            print(json.dumps({
+                "status": "FIXED_AB_GOAL_PUBLISHED",
+                "goal": scene["suggested_goal"],
+                "additional_goals_allowed": False,
+            }, indent=2))
         if not args.no_rviz:
             start(
                 "rviz",
                 shell_command(f"rviz -d {quoted(ROOT / 'dep_interactive_demo.rviz')}"),
                 visible=True,
             )
+        if args.goal_mode == "interactive":
+            goal_instructions = (
+                "In RViz choose '2D Nav Goal'; you may replace the goal at "
+                "any time during flight.\n"
+            )
+        else:
+            goal_instructions = (
+                "Fixed A/B mode published the suggested goal automatically; "
+                "later RViz goals are intentionally rejected.\n"
+            )
         print(
             "\nInteractive demo is running.\n"
-            "In RViz choose '2D Nav Goal', then click the map and drag for heading.\n"
-            f"Suggested XY goal: ({scene['suggested_goal'][0]:.2f}, "
+            + goal_instructions
+            + f"Suggested XY goal: ({scene['suggested_goal'][0]:.2f}, "
             f"{scene['suggested_goal'][1]:.2f}); fixed Z={scene['suggested_goal'][2]:.2f} m.\n"
             f"Logs and manifest: {runtime}\n"
             "Press Ctrl-C to stop every process cleanly."

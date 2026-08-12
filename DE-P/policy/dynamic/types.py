@@ -227,6 +227,9 @@ class DynamicTrack:
     last_pixel_mask_signature: str = ""
     attention_authorized: bool = False
     visibility_state: str = "unknown"
+    ever_confirmed_dynamic: bool = False
+    last_direct_observation_timestamp: float | None = None
+    last_observed_extent: Tuple[float, float, float] = (0.0, 0.0, 0.0)
 
     def __post_init__(self):
         object.__setattr__(self, "position_world", _finite_array(
@@ -256,6 +259,16 @@ class DynamicTrack:
             raise ValueError("last_pixel_bbox must contain four integers")
         object.__setattr__(self, "last_pixel_bbox",
                            tuple(int(x) for x in self.last_pixel_bbox))
+        if (self.last_direct_observation_timestamp is not None
+                and not np.isfinite(self.last_direct_observation_timestamp)):
+            raise ValueError(
+                "last_direct_observation_timestamp must be finite or None"
+            )
+        extent = tuple(float(value) for value in self.last_observed_extent)
+        if len(extent) != 3 or not np.isfinite(extent).all() \
+                or min(extent) < 0.0:
+            raise ValueError("last_observed_extent must be finite non-negative XYZ")
+        object.__setattr__(self, "last_observed_extent", extent)
 
 
 @dataclass(frozen=True)

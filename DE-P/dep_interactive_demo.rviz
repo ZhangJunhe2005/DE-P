@@ -98,7 +98,7 @@ Visualization Manager:
           Color Transformer: FlatColor
           Decay Time: 0.4
           Enabled: true
-          Name: Selected Trajectory
+          Name: Executed Trajectory
           Position Transformer: XYZ
           Queue Size: 3
           Selectable: true
@@ -119,7 +119,7 @@ Visualization Manager:
           Color Transformer: Intensity
           Decay Time: 0.4
           Enabled: true
-          Name: Network Candidates
+          Name: Raw Network Candidates
           Position Transformer: XYZ
           Queue Size: 3
           Selectable: true
@@ -127,6 +127,28 @@ Visualization Manager:
           Size (m): 0.08
           Style: Flat Squares
           Topic: /dep_net/trajs_visual
+          Unreliable: false
+          Use Fixed Frame: true
+          Value: true
+        - Class: rviz/PointCloud2
+          Alpha: 0.9
+          Autocompute Intensity Bounds: true
+          Autocompute Value Bounds:
+            Value: true
+          Axis: Z
+          Channel Name: intensity
+          Color: 35; 210; 80
+          Color Transformer: FlatColor
+          Decay Time: 0.4
+          Enabled: true
+          Name: Safety-Feasible Candidates
+          Position Transformer: XYZ
+          Queue Size: 3
+          Selectable: true
+          Size (Pixels): 5
+          Size (m): 0.12
+          Style: Points
+          Topic: /dep_net/feasible_trajs_visual
           Unreliable: false
           Use Fixed Frame: true
           Value: true

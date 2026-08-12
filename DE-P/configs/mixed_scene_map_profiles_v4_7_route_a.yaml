@@ -1,0 +1,127 @@
+profiles_version: mixed_scene_map_profiles_v4_7_route_a
+supported_map_types: [cave, pillar, forest, wall]
+room_policy: excluded_from_route_a_v4_7_training_and_validation
+common:
+  resolution: 0.1
+  complexity: 0.025
+  fill: 0.06
+  fractal: 1
+  attenuation: 0.1
+  width_min: 0.6
+  width_max: 1.5
+  obstacle_number: 100
+  road_width: 3.0
+  add_wall_x: 1
+  add_wall_y: 1
+  tree_file: /home/zjh/YOPO/Simulator/src/pointcloud/tree.ply
+  tree_dist: 9.0
+  room_number: 4
+  max_windows: 2
+  window_size_min: 2.0
+  window_size_max: 2.8
+  add_ceiling: 0
+  wall_width_min: 0.5
+  wall_width_max: 6.0
+  wall_thick: 0.5
+  wall_number: 100
+  wall_ceiling: 1
+  occlusion_annex: false
+  occlusion_annex_length_m: 20.0
+  occlusion_panel_width_m: 0.2
+
+profiles:
+  cave_large_v4_7:
+    maze_type: 1
+    semantic_name: cave_perlin
+    map_type: cave
+    size_class: large
+    x_length: 60
+    y_length: 60
+    z_length: 15
+    fill: 0.055
+    post_translate: [0.0, 0.0, 0.0]
+  pillar_large_v4_7:
+    maze_type: 2
+    semantic_name: pillar_random_solid
+    map_type: pillar
+    size_class: large
+    x_length: 60
+    y_length: 60
+    z_length: 15
+    # Official YOPO-Simple 60 x 60 pillar profile.
+    obstacle_number: 100
+    width_min: 0.6
+    width_max: 1.5
+    post_translate: [0.0, 0.0, 0.0]
+  forest_large_v4_7:
+    maze_type: 5
+    semantic_name: forest_tree_asset
+    map_type: forest
+    size_class: large
+    x_length: 60
+    y_length: 60
+    z_length: 15
+    tree_dist: 9.0
+    post_translate: [0.0, 0.0, 0.0]
+  wall_large_v4_7:
+    maze_type: 7
+    semantic_name: random_wall_field
+    map_type: wall
+    size_class: large
+    x_length: 60
+    y_length: 60
+    z_length: 15
+    wall_number: 100
+    wall_width_min: 0.5
+    wall_width_max: 6.0
+    wall_thick: 0.5
+    wall_ceiling: 1
+    post_translate: [0.0, 0.0, 0.0]
+
+  cave_narrow_v4_7:
+    maze_type: 1
+    semantic_name: cave_perlin
+    map_type: cave
+    size_class: narrow
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    fill: 0.055
+    post_translate: [0.0, 0.0, 0.0]
+  pillar_narrow_v4_7:
+    maze_type: 2
+    semantic_name: pillar_random_solid
+    map_type: pillar
+    size_class: narrow
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    # Preserve the official large-map pillar density after scaling area by 1/4.
+    obstacle_number: 25
+    width_min: 0.6
+    width_max: 1.5
+    post_translate: [0.0, 0.0, 0.0]
+  forest_narrow_v4_7:
+    maze_type: 5
+    semantic_name: forest_tree_asset
+    map_type: forest
+    size_class: narrow
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    tree_dist: 9.0
+    post_translate: [0.0, 0.0, 0.0]
+  wall_narrow_v4_7:
+    maze_type: 7
+    semantic_name: random_wall_field
+    map_type: wall
+    size_class: narrow
+    x_length: 30
+    y_length: 30
+    z_length: 10
+    wall_number: 25
+    wall_width_min: 0.5
+    wall_width_max: 6.0
+    wall_thick: 0.5
+    wall_ceiling: 1
+    post_translate: [0.0, 0.0, 0.0]

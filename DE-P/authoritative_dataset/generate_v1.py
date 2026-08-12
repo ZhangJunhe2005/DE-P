@@ -72,6 +72,8 @@ SCHEMA_VERSION = "authoritative_dataset_schema_v1"
 GENERATOR_VERSION = "authoritative_dataset_generator_v1"
 ROUTE_A_V4_STATIC_DATASET_VERSION = "route_a_v4_raw_static_v1"
 ROUTE_A_V4_2_STATIC_DATASET_VERSION = "route_a_v4_2_raw_static_v1"
+ROUTE_A_V4_6_STATIC_DATASET_VERSION = "route_a_v4_6_raw_static_v1"
+ROUTE_A_V4_7_STATIC_DATASET_VERSION = "route_a_v4_7_raw_static_v1"
 ACTOR_SAMPLING_HOTFIX = {
     "id": "phase8jqv2_4_actor_sampling_fallback_v1",
     "scope": "deterministic fallback after legacy 1000-attempt exhaustion",
@@ -145,6 +147,8 @@ def load_config(path):
         FORMAL_DATASET_VERSION_V3, FORMAL_DATASET_VERSION_V3_MIXED,
         ROUTE_A_V4_STATIC_DATASET_VERSION,
         ROUTE_A_V4_2_STATIC_DATASET_VERSION,
+        ROUTE_A_V4_6_STATIC_DATASET_VERSION,
+        ROUTE_A_V4_7_STATIC_DATASET_VERSION,
     }:
         raise RuntimeError("dataset version mismatch")
     if not value["test_disabled"] or not value["blind_disabled"]:
@@ -161,9 +165,16 @@ def load_config(path):
         actual_hash = hashlib.sha256(canonical(payload)).hexdigest()
         if declared_hash != actual_hash:
             raise RuntimeError("scene spatial sampling contract hash mismatch")
-        required_types = {"cave", "pillar", "forest", "room", "wall"}
+        supported_types = {"cave", "pillar", "forest", "room", "wall"}
+        required_types = set(spatial.get(
+            "required_map_types", supported_types
+        ))
+        if not required_types or not required_types <= supported_types:
+            raise RuntimeError("scene spatial contract has unsupported map types")
         if set(spatial.get("map_types", {})) != required_types:
-            raise RuntimeError("scene spatial contract must cover five map types")
+            raise RuntimeError(
+                "scene spatial contract map_types do not match required_map_types"
+            )
     contract_path = value.get("dynamic_motion_contract_path")
     if value["dataset_version"] in {
         FORMAL_DATASET_VERSION_V3, FORMAL_DATASET_VERSION_V3_MIXED,
@@ -428,9 +439,31 @@ def scene_spatial_policy(config, map_root):
 
 def validate_scene_observability(depths, sensor, map_type, spatial_policy):
     maximum = float(sensor["max_depth_m"])
-    return_fraction = float(np.mean(depths < maximum - 1e-4))
-    near_fraction = float(np.mean(
-        depths < float(spatial_policy["near_depth_m"])
+    depths = np.asarray(depths)
+    if depths.ndim == 2:
+        depths = depths[None, ...]
+    if depths.ndim != 3:
+        raise ValueError("scene observability expects F x H x W depth")
+    returned = depths < maximum - 1e-4
+    near = depths < float(spatial_policy["near_depth_m"])
+    return_fraction = float(np.mean(returned))
+    near_fraction = float(np.mean(near))
+    frame_near_fraction = np.mean(near, axis=(1, 2))
+    maximum_near = float(spatial_policy.get(
+        "maximum_near_obstacle_fraction", 1.0
+    ))
+    maximum_frame_near = float(spatial_policy.get(
+        "maximum_frame_near_obstacle_fraction", 1.0
+    ))
+    far_depth = float(spatial_policy.get(
+        "far_depth_m", spatial_policy["near_depth_m"]
+    ))
+    far = depths >= far_depth
+    far_fraction = float(np.mean(far))
+    frame_far_fraction = np.mean(far, axis=(1, 2))
+    minimum_far = float(spatial_policy.get("minimum_far_fraction", 0.0))
+    minimum_frame_far = float(spatial_policy.get(
+        "minimum_frame_far_fraction", 0.0
     ))
     result = {
         "map_type": map_type,
@@ -443,11 +476,29 @@ def validate_scene_observability(depths, sensor, map_type, spatial_policy):
         "minimum_near_obstacle_fraction": float(
             spatial_policy["minimum_near_obstacle_fraction"]
         ),
+        "maximum_near_obstacle_fraction": maximum_near,
+        "maximum_frame_near_obstacle_fraction": maximum_frame_near,
+        "observed_maximum_frame_near_obstacle_fraction": float(
+            frame_near_fraction.max()
+        ),
+        "far_depth_m": far_depth,
+        "far_fraction": far_fraction,
+        "minimum_far_fraction": minimum_far,
+        "minimum_frame_far_fraction": minimum_frame_far,
+        "observed_minimum_frame_far_fraction": float(
+            frame_far_fraction.min()
+        ),
     }
     result["passed"] = bool(
         return_fraction + 1e-12 >= result["minimum_return_fraction"]
         and near_fraction + 1e-12
         >= result["minimum_near_obstacle_fraction"]
+        and near_fraction <= maximum_near + 1e-12
+        and float(frame_near_fraction.max())
+        <= maximum_frame_near + 1e-12
+        and far_fraction + 1e-12 >= minimum_far
+        and float(frame_far_fraction.min()) + 1e-12
+        >= minimum_frame_far
     )
     return result
 

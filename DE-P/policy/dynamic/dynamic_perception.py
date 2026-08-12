@@ -177,6 +177,12 @@ class DynamicPerception:
             "cluster_count": len(observations),
             "noise_point_count": int(np.sum(labels == -1)),
             "track_manager": self.track_manager.last_diagnostics,
+            "all_track_count": len(all_tracks),
+            "confirmed_track_count": len(confirmed),
+            "confirmed_dynamic_track_count": int(sum(
+                track.is_dynamic for track in confirmed
+            )),
+            "attention_authorized_dynamic_track_count": len(dynamic),
             "batch_semantics": "one DynamicPerception instance per temporal stream",
             "input_kind": input_kind,
         }

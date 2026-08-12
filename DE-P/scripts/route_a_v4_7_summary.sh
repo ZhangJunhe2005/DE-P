@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd /home/zjh/YOPO/DE-P
+conda run --no-capture-output -n yopo \
+  python tools/summarize_route_a_v4_7_training.py

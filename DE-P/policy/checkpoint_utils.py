@@ -17,6 +17,11 @@ SPLIT_TRAJECTORY_WEIGHT_KEY = "dep_head.trajectory_head.weight"
 SPLIT_TRAJECTORY_BIAS_KEY = "dep_head.trajectory_head.bias"
 SPLIT_SCORE_WEIGHT_KEY = "dep_head.score_head.weight"
 SPLIT_SCORE_BIAS_KEY = "dep_head.score_head.bias"
+SPLIT_FEATURE_WEIGHT_KEY = "dep_head.model.0.weight"
+INDEPENDENT_TRAJECTORY_FEATURE_WEIGHT_KEY = (
+    "dep_head.trajectory_model.0.weight"
+)
+INDEPENDENT_SCORE_FEATURE_WEIGHT_KEY = "dep_head.score_model.0.weight"
 FORMAL_STATIC_CHECKPOINT_VERSION = "mixed_scene_static_yopo_checkpoint_v1"
 
 
@@ -104,13 +109,26 @@ def detect_checkpoint_variant(checkpoint: Mapping[str, Any]) -> str:
 def detect_head_variant(checkpoint: Mapping[str, Any]) -> str:
     state_dict, metadata = unpack_checkpoint(checkpoint)
     unified = UNIFIED_HEAD_WEIGHT_KEY in state_dict and UNIFIED_HEAD_BIAS_KEY in state_dict
-    split = all(key in state_dict for key in (
+    split = SPLIT_FEATURE_WEIGHT_KEY in state_dict and all(
+        key in state_dict for key in (
         SPLIT_TRAJECTORY_WEIGHT_KEY, SPLIT_TRAJECTORY_BIAS_KEY,
         SPLIT_SCORE_WEIGHT_KEY, SPLIT_SCORE_BIAS_KEY,
     ))
-    if unified == split:
+    independent = all(key in state_dict for key in (
+        INDEPENDENT_TRAJECTORY_FEATURE_WEIGHT_KEY,
+        INDEPENDENT_SCORE_FEATURE_WEIGHT_KEY,
+        SPLIT_TRAJECTORY_WEIGHT_KEY, SPLIT_TRAJECTORY_BIAS_KEY,
+        SPLIT_SCORE_WEIGHT_KEY, SPLIT_SCORE_BIAS_KEY,
+    ))
+    detected_variants = [
+        name for name, present in (
+            ("unified", unified), ("split", split),
+            ("independent", independent),
+        ) if present
+    ]
+    if len(detected_variants) != 1:
         raise ValueError("Unable to identify DEP head variant")
-    detected = "unified" if unified else "split"
+    detected = detected_variants[0]
     declared = metadata.get("head_variant")
     if declared is not None and declared != detected:
         raise ValueError(
@@ -120,7 +138,7 @@ def detect_head_variant(checkpoint: Mapping[str, Any]) -> str:
     return detected
 
 
-def convert_unified_head_state_dict(state_dict):
+def convert_unified_head_state_dict(state_dict, target_variant="split"):
     """Exactly split the legacy 10-channel output convolution.
 
     This is an explicit, shape-checked migration. It does not use ``strict=False``.
@@ -131,9 +149,26 @@ def convert_unified_head_state_dict(state_dict):
     bias = state_dict[UNIFIED_HEAD_BIAS_KEY]
     if tuple(weight.shape[:1]) != (10,) or tuple(bias.shape) != (10,):
         raise ValueError("unified head must contain exactly 10 output channels")
+    if target_variant not in {"split", "independent"}:
+        raise ValueError("unified head migration target must be split or independent")
     converted = dict(state_dict)
     del converted[UNIFIED_HEAD_WEIGHT_KEY]
     del converted[UNIFIED_HEAD_BIAS_KEY]
+    if target_variant == "independent":
+        for index in (0, 2):
+            for suffix in ("weight", "bias"):
+                source = f"dep_head.model.{index}.{suffix}"
+                if source not in converted:
+                    raise ValueError(
+                        f"unified feature tower tensor is missing: {source}"
+                    )
+                value = converted.pop(source)
+                converted[
+                    f"dep_head.trajectory_model.{index}.{suffix}"
+                ] = value.clone()
+                converted[
+                    f"dep_head.score_model.{index}.{suffix}"
+                ] = value.clone()
     converted[SPLIT_TRAJECTORY_WEIGHT_KEY] = weight[:9].clone()
     converted[SPLIT_TRAJECTORY_BIAS_KEY] = bias[:9].clone()
     converted[SPLIT_SCORE_WEIGHT_KEY] = weight[9:].clone()
@@ -173,13 +208,17 @@ def load_dep_checkpoint(model, checkpoint_path, expected_variant=None,
     requested_head = getattr(model, "head_variant", "unified")
     migrated = False
     if detected_head != requested_head:
-        if detected_head == "unified" and requested_head == "split" and allow_unified_to_split:
-            state_dict = convert_unified_head_state_dict(state_dict)
+        if detected_head == "unified" \
+                and requested_head in {"split", "independent"} \
+                and allow_unified_to_split:
+            state_dict = convert_unified_head_state_dict(
+                state_dict, target_variant=requested_head
+            )
             migrated = True
         else:
             raise ValueError(
                 f"Checkpoint head variant mismatch: checkpoint={detected_head}, "
-                f"model={requested_head}. Use explicit unified-to-split migration."
+                f"model={requested_head}. Use an explicit unified-head migration."
             )
     incompatible = model.load_state_dict(state_dict, strict=True)
     print(f"missing keys: {incompatible.missing_keys}")

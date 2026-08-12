@@ -1,0 +1,229 @@
+contract_version: route_a_static_yopo_training_v4_5_8_localized_safety_retimed_v1
+training_implementation_hash: e7136f78c5b08a8d9d8fbcae72c0dcfc34d2de88e1d23cd8e9352e837e2c1be7
+route: A
+source_dataset_root: /home/zjh/YOPO/DE-P/data/route_a_v4_2_raw_static
+derived_dataset_root: /home/zjh/YOPO/DE-P/data/route_a_v4_2_static_yopo
+source_dataset_manifest_hash: f94c5f25fd12fffea9ec4099521a80701668f2a9b177f9c3553e6d0813230774
+derived_dataset_manifest_hash: 611572fabc498299fa46349c7b1c98a7b77fc8f1eb6510adf8b5c2e6160bc75a
+normalization_contract_hash: 17d0ef25b1c828f66e8e414a08f517360d41048f4dc9b6068ce5891bf99837ef
+model_contract_hash: 55d20eab01f0561eb6a3fa6b794ea21304ff4ef17b9cf68582ded13811984a89
+loss_contract_hash: 368c7c89ea10d5f5d17f263d5d526a52d3ec23ae50cf52213653b71581ae8580
+model:
+  name: MixedSceneStaticYOPOV1
+  backbone_variant: legacy
+  head_variant: independent
+  initial_checkpoint: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_5_6_continuous_score_safety/20260810T164622Z-15753/checkpoints/best.pth
+  initial_checkpoint_sha256: 9324985abe8c73eb81a7cfd30ffdf480969019925364df9df9c9c6621f5de116
+  strict_load: true
+  allow_unified_to_split: false
+observation:
+  contract: route_a_original_yopo_state_v4_4
+  seed: 82501
+  velocity_distribution: original_yopo_forward_biased
+  acceleration_distribution: original_yopo_zero_centered_gaussian
+  goal_distribution: original_yopo_forward_10m_with_near_goal_tail
+optimizer:
+  name: AdamW
+  learning_rate: 3e-05
+  backbone_learning_rate: 2e-07
+  candidate_head_learning_rate: 3e-06
+  score_head_learning_rate: 3e-05
+  score_only_learning_rate: 3e-05
+  weight_decay: 1e-05
+scheduler:
+  name: ReduceLROnPlateau
+  factor: 0.5
+  patience: 2
+  threshold: 0.0001
+  minimum_learning_rate:
+    backbone: 5e-08
+    candidate_head: 5e-07
+    score_head: 5e-06
+training:
+  batch_size: 32
+  max_epochs: 5
+  seed: 84581
+  amp: false
+  gradient_clip_norm: 5.0
+  checkpoint_every_epochs: 1
+  validation_every_epochs: 1
+  score_only_warmup_epochs: 0
+numerics:
+  cnn_amp: false
+  trajectory_loss_precision: float32
+  nonfinite_policy: fail_fast
+  require_finite_gradient_norm: true
+  max_consecutive_amp_overflows: 8
+logging:
+  progress_every_batches: 100
+  flush_console: true
+  batch_event_log: events.jsonl
+  nonfinite_event_log: nonfinite_batches.jsonl
+loader:
+  num_workers: 8
+  prefetch_factor: 2
+  pin_memory: true
+  mmap_cache_size: 8
+  sampling_strategy: map_type_balanced
+validation:
+  contract_version: route_a_v4_5_8_localized_safety_retimed_v1
+  primary_metric: macro_map_type_total_static_loss
+  direction: minimize
+  minimum_epoch: 1
+  patience: 5
+  predefined_metrics:
+  - macro_map_type_total_static_loss
+  - per_map_type_total_static_loss
+  - clearance_barrier_loss
+  - clearance_pairwise_ranking_loss
+  - score_top1_label_agreement
+  - score_oracle_regret
+  - collision_free_candidate_count
+  - hardware_feasible_candidate_count
+  - feasible_candidate_count
+  - collision_free_candidate_available
+  - physical_feasible_candidate_available
+  - oracle_collision_unsafe
+  - conditional_collision_selection_error
+  - conditional_physical_selection_error
+  - hardware_unsafe_selection
+  - unsafe_selection
+  - selected_endpoint_distance
+  - selected_clearance
+  - coarse_false_safe_candidate_count
+  - dense_clearance_drop
+output_root: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_5_8_localized_safety_retimed
+resume:
+  automatic: false
+  strict_identity: true
+internal_test_access: false
+post_training_h5_automatic: false
+production_activation_automatic: false
+implementation_hotfixes:
+- route_a_v4_5_8_initialize_from_noncollapsed_v456_best_v1
+- route_a_v4_5_8_single_localized_static_safety_cost_v1
+- route_a_v4_5_8_restore_original_yopo_weight_ratio_v1
+- route_a_v4_5_8_runtime_collision_infinite_training_finite_v1
+- route_a_v4_5_8_keep_certified_candidate_retiming_v1
+- route_a_v4_5_8_no_new_qualification_gate_v1
+parent_v4_config_hash: bbf93d492f50bd7ec41328c40bfba21133dc72de754d98a0b47c0206161c15ca
+objective_contract_hash: 8d1167b110f5e79d4fe616f559e0bbb97d1ca0b4943dad12d5c55a7b20b06000
+objective:
+  route_goal_range_m:
+  - 10.0
+  - 40.0
+  local_goal_horizon_m: 10.0
+  score_label_goal: local_horizon_projection
+parent_v4_1_config_hash: ea8e08fdfce0ee27f003dbea280ebd346207a194428922ac9fde7c7480bc215b
+parent_v4_2_config_hash: 3fcb8cd4226b704434eadc6113513cb19767a97f3d1a56ea598280dd3abb54e9
+parent_v4_2_1_config_hash: cc070f3cec7b9d26bacf4aefcf17dc0c25e21d35d7edacdda7dff2483d7ff0ce
+safety_first:
+  enabled: false
+parent_v4_2_2_config_hash: d0ed4b8796e23041b8e1a6cb6e96119b58d70effbcfd7fcf195f08194a21cd53
+kinodynamic_v2:
+  enabled: false
+parent_v4_2_3_config_hash: 40a345372d2efa91d034780d8a17ce46b10229baac4e65966d2826b314bf12b5
+preventive_safety:
+  enabled: false
+progress_safety:
+  enabled: false
+feasibility_score:
+  enabled: false
+goal_progress_v2:
+  enabled: false
+projected_score_v3:
+  enabled: false
+simple_yopo_v4_3:
+  enabled: false
+parent_v4_3_config_hash: 5d94dc9c6800a33678938bb550c149945c05ba05bdb2e6f3eb07f3ad55cb2001
+static_yopo_v4_4:
+  enabled: false
+parent_v4_4_config_hash: 897082a3854cc9d007d2e1275c6845f9ae42cb08a2737648814473626d851d7d
+static_yopo_v4_5:
+  enabled: false
+parent_v4_5_config_hash: e3268f1877dcb397217a6ce3a70259c251445a062a2d667afa4fdc33c4f6aad7
+static_yopo_v4_5_1:
+  enabled: false
+parent_v4_5_1_config_hash: 16c00fd817d22b12dfb19cb6cb5e2e0392ccde86d35ede04b3aa3ba98e27e1ea
+static_yopo_v4_5_2:
+  enabled: false
+experiment_role: localized_safety_retiming_shakedown
+parent_v4_5_2_config_hash: 913d41e14fa5fd4b02adf997fce2e358cbdac175666b07562584acd001368ac5
+parent_v4_5_2_run: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_5_2_mixed_shakedown/20260810T044324Z-26502
+parent_v4_5_2_best_epoch: 4
+static_yopo_v4_5_3:
+  enabled: false
+static_yopo_v4_5_4:
+  enabled: false
+static_yopo_v4_5_5:
+  enabled: false
+parent_v4_5_5_config_hash: 1277e253952516c4f06735dcad748decb066b6098d29c5803add1f53e39ceca7
+parent_v4_5_5_run: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_5_5_dense_static_esdf_shakedown/20260810T152918Z-5212
+parent_v4_5_5_best_epoch: 3
+static_yopo_v4_5_6:
+  enabled: false
+  derivative_samples: 81
+  static_safety_samples: 81
+  jerk_unit_weight: 10.0
+  acceleration_unit_weight: 1.0
+  safety_weight: 1.0
+  guidance_weight: 0.15
+  guidance_perpendicular_weight: 0.5
+  score_regression_weight: 1.0
+  relative_order_weight: 1.0
+  relative_order_temperature: 0.75
+  relative_label_min_scale: 0.001
+  training_speed_mps: 6.0
+  max_speed_mps: 6.0
+  max_acceleration_mps2: 6.0
+  kinematic_speed_weight: 1.0
+  kinematic_acceleration_weight: 1.0
+  kinematic_softness: 0.05
+  vehicle_radius_m: 0.3
+  clear_distance_m: 1.2
+  dangerous_segment_weight: 0.15
+  dangerous_segment_window: 14
+  dangerous_segment_focus: 8.0
+  large_vertical_displacement_m: 1.0
+  clearance_score_weight: 1.0
+  clearance_score_softness_m: 0.08
+  clearance_pairwise_weight: 1.0
+  clearance_pairwise_margin: 0.5
+parent_v4_5_6_config_hash: a0d26a31b2bf408fae3d9ebca12fc324c3e1562886bb85ea862021a81a159538
+parent_v4_5_6_run: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_5_6_continuous_score_safety/20260810T164622Z-15753
+parent_v4_5_6_best_epoch: 10
+static_yopo_v4_5_8:
+  enabled: true
+  derivative_samples: 81
+  static_safety_samples: 81
+  jerk_unit_weight: 10.0
+  acceleration_unit_weight: 1.0
+  safety_weight: 1.0
+  guidance_weight: 0.15
+  guidance_perpendicular_weight: 0.5
+  score_regression_weight: 1.0
+  relative_order_weight: 1.0
+  relative_order_temperature: 0.75
+  relative_label_min_scale: 0.001
+  training_speed_mps: 6.0
+  max_speed_mps: 6.0
+  max_acceleration_mps2: 6.0
+  kinematic_speed_weight: 0.1
+  kinematic_acceleration_weight: 0.1
+  kinematic_softness: 0.05
+  vehicle_radius_m: 0.3
+  clear_distance_m: 0.5
+  dangerous_segment_weight: 0.0
+  dangerous_segment_window: 14
+  dangerous_segment_focus: 8.0
+  large_vertical_displacement_m: 1.0
+  clearance_score_weight: 0.0
+  clearance_score_softness_m: 0.08
+  clearance_pairwise_weight: 0.0
+  clearance_pairwise_margin: 0.0
+  far_clearance_cost: 0.001
+  far_decay_m: 0.1
+  radius_boundary_cost: 1.0
+  collision_surrogate_cost: 3.0
+  penetration_scale_m: 0.05
+  maximum_training_cost: 6.0

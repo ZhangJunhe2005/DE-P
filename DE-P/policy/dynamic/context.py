@@ -34,15 +34,47 @@ class DynamicTrackSummary:
     velocity_world: Tuple[float, float, float]
     is_dynamic: bool
     timestamp: float
+    last_direct_observation_timestamp: float | None = None
+    prediction_only_age: int = 0
+    confidence: float = 1.0
+    state_covariance: Tuple[Tuple[float, ...], ...] = ()
+    observed_extent: Tuple[float, float, float] = (0.0, 0.0, 0.0)
 
     @classmethod
     def from_track(cls, track):
+        # ``DynamicTrackSummary`` is the collision-shield view, not the
+        # attention-authorisation view.  A confirmed moving object remains a
+        # dynamic safety risk during a bounded prediction-only occlusion even
+        # when confidence decay temporarily clears ``track.is_dynamic``.
+        safety_dynamic = bool(
+            track.is_dynamic
+            or getattr(track, "ever_confirmed_dynamic", False)
+        )
         return cls(
             track_id=int(track.track_id),
             position_world=tuple(float(x) for x in track.position_world),
             velocity_world=tuple(float(x) for x in track.velocity_world),
-            is_dynamic=bool(track.is_dynamic),
+            is_dynamic=safety_dynamic,
             timestamp=float(track.timestamp),
+            last_direct_observation_timestamp=(
+                None if getattr(
+                    track, "last_direct_observation_timestamp", None
+                ) is None else float(track.last_direct_observation_timestamp)
+            ),
+            prediction_only_age=int(
+                getattr(track, "prediction_only_age", 0)
+            ),
+            confidence=float(getattr(track, "confidence", 1.0)),
+            state_covariance=tuple(
+                tuple(float(value) for value in row)
+                for row in np.asarray(
+                    getattr(track, "state_covariance", np.empty((0, 0))),
+                    dtype=np.float64,
+                )
+            ),
+            observed_extent=tuple(float(value) for value in getattr(
+                track, "last_observed_extent", (0.0, 0.0, 0.0)
+            )),
         )
 
 
@@ -126,9 +158,30 @@ class DynamicContext:
 
     @classmethod
     def from_perception_result(cls, result, timestamp, source):
+        # Attention authorization deliberately remains stricter than the
+        # deterministic collision shield.  The attention map in ``result`` is
+        # still built only from attention-authorized tracks, while the safety
+        # consumer receives every confirmed causal dynamic track.  Reusing the
+        # attention gate here previously made the hard filter silently blind
+        # whenever an otherwise confirmed track narrowly missed the neural
+        # confidence/visibility policy.
+        safety_tracks = tuple(
+            track for track in result.confirmed_tracks
+            if bool(
+                track.is_dynamic
+                or getattr(track, "ever_confirmed_dynamic", False)
+            )
+            and bool(getattr(track, "ever_directly_observed", True))
+            and int(getattr(track, "prediction_only_age", 0)) <= 3
+            and getattr(track, "visibility_state", "unknown")
+                != "clear_missing"
+        )
         return cls(
             attention_maps_by_level={ATTENTION_BACKBONE_OUTPUT: result.attention_map},
-            dynamic_tracks=tuple(DynamicTrackSummary.from_track(track) for track in result.dynamic_tracks),
+            dynamic_tracks=tuple(
+                DynamicTrackSummary.from_track(track)
+                for track in safety_tracks
+            ),
             timestamp=float(timestamp),
             source=source,
             valid=True,

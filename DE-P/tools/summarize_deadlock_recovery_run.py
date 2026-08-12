@@ -28,6 +28,17 @@ def main():
         if row.get("recovery_transition")
     )
     replans = [row for row in rows if "feasible_candidate_count" in row]
+    selection_modes = Counter(
+        row.get("network_selection_mode", "missing") for row in replans
+    )
+    boundary_regions = Counter(
+        row["flight_volume_state"]["region"] for row in replans
+        if row.get("flight_volume_state") is not None
+    )
+    boundary_clearances = [
+        float(row["flight_volume_state"]["minimum_signed_clearance_m"])
+        for row in replans if row.get("flight_volume_state") is not None
+    ]
     collision_report = root / "collision_report.json"
     collision = (
         json.loads(collision_report.read_text())
@@ -41,6 +52,15 @@ def main():
         "replans": len(replans),
         "mode_counts": dict(modes),
         "transition_counts": dict(transitions),
+        "network_selection_counts": dict(selection_modes),
+        "flight_volume_region_counts": dict(boundary_regions),
+        "boundary_escape_replans": sum(
+            row.get("boundary_escape_candidate_count", 0) > 0
+            for row in replans
+        ),
+        "minimum_boundary_clearance_m": (
+            min(boundary_clearances) if boundary_clearances else None
+        ),
         "zero_feasible_fraction": (
             sum(row["feasible_candidate_count"] == 0 for row in replans)
             / len(replans) if replans else None

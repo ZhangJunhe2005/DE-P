@@ -1,0 +1,626 @@
+actor_distribution:
+  maximum_actors: 0
+  policy: route_a_v4_7_static_actor_free_four_scene
+authority_settings:
+  collision_truth: canonical_occupancy_only
+  empty_minimum_gap_mask_required: true
+  resolution_m: 0.1
+authority_source_dataset: route_a_v4_7_mixed_maps
+authority_source_root: /home/zjh/YOPO/DE-P/data/route_a_v4_7_mixed_maps
+authority_source_root_manifest_hash: 887c1e373b14b9d98ce7f0707339da20d6779b65f4644eb9956951e7710a4164
+blind_disabled: true
+certificate_settings:
+  dynamic_success_min: 0.99
+  fail_fast_failure_fraction: 0.01
+  maximum_attempts_per_map: 100000
+  maximum_attempts_per_sequence: 5000
+  maximum_attempts_per_window: 1000
+  static_success_min: 0.99
+  uav_radius_m: 0.3
+  unknown_budget: 0.01
+composition_derivation: scenario_x_map_type_round_robin_v1
+dataset_protocol_version: authoritative_dataset_protocol_v1
+dataset_version: route_a_v4_7_raw_static_v1
+derived_esdf_settings:
+  authoritative: false
+  enabled: true
+  exact_verifier_required: true
+dynamic_motion_contract_hash: 5a6bc337d73617aa42b8b30d1a33386b5cfe876acb43c73667bdf32c45b8e7a4
+dynamic_motion_contract_path: configs/authoritative_dynamic_motion_contract_v2_1.yaml
+occlusion_map_eligibility_hash: 17af9fb63666d182cafb4ff8e5046eb63b0b5feed94d2588e79ca04b6695217e
+occlusion_map_eligibility_path: configs/phase8_authoritative_v3_mixed_occlusion_eligibility.yaml
+dynamic_scenarios: []
+formal_splits:
+  train:
+    frames: 300000
+    maps:
+    - map_id: train_map_0000
+      map_uuid: 8a769788-da17-5567-a90b-533211edc4cd
+      seed: 856000000
+      maze_type: 1
+      semantic_name: cave_perlin
+      profile_name: cave_large_v4_7
+      profile_hash: 9d05d6b995407a2f85c11aa79c6f3e0ed3939452f60bd0a1f42c8ad4cdc49e3f
+    - map_id: train_map_0001
+      map_uuid: 7be5492d-e63c-5aa5-88ea-692c2b30bea3
+      seed: 856000001
+      maze_type: 2
+      semantic_name: pillar_random_solid
+      profile_name: pillar_large_v4_7
+      profile_hash: 9e1e95b10ad555f3b8f998b2e36101dcebedffdfef57695ed7ec8c24d56be370
+    - map_id: train_map_0002
+      map_uuid: f9e71e8d-5609-5ffb-8a15-68e5d9b8bdb3
+      seed: 856000002
+      maze_type: 5
+      semantic_name: forest_tree_asset
+      profile_name: forest_large_v4_7
+      profile_hash: c646f34479c4877487e45cb68bc18232b549aa436a7e99c0feeac9f30a376da7
+    - map_id: train_map_0003
+      map_uuid: fce64518-5e1e-5fc9-8764-01c83c037a8a
+      seed: 856000003
+      maze_type: 7
+      semantic_name: random_wall_field
+      profile_name: wall_large_v4_7
+      profile_hash: 126710ea596bb578a75dfa25a231dc3df7d891a80fa308f8eab9efd90833e41c
+    - map_id: train_map_0004
+      map_uuid: 2d8b7a39-6ddf-5c7a-ad35-1f811e291062
+      seed: 856000004
+      maze_type: 1
+      semantic_name: cave_perlin
+      profile_name: cave_large_v4_7
+      profile_hash: 9d05d6b995407a2f85c11aa79c6f3e0ed3939452f60bd0a1f42c8ad4cdc49e3f
+    - map_id: train_map_0005
+      map_uuid: 7f7a66b1-a64c-530b-8681-32142bcbd55d
+      seed: 856000005
+      maze_type: 2
+      semantic_name: pillar_random_solid
+      profile_name: pillar_large_v4_7
+      profile_hash: 9e1e95b10ad555f3b8f998b2e36101dcebedffdfef57695ed7ec8c24d56be370
+    - map_id: train_map_0006
+      map_uuid: 1f89e9b0-0fae-5a4d-b6f0-86f3167eaede
+      seed: 856000006
+      maze_type: 5
+      semantic_name: forest_tree_asset
+      profile_name: forest_large_v4_7
+      profile_hash: c646f34479c4877487e45cb68bc18232b549aa436a7e99c0feeac9f30a376da7
+    - map_id: train_map_0007
+      map_uuid: af671db6-e3e2-556d-a086-4ff393ca2830
+      seed: 856000007
+      maze_type: 7
+      semantic_name: random_wall_field
+      profile_name: wall_large_v4_7
+      profile_hash: 126710ea596bb578a75dfa25a231dc3df7d891a80fa308f8eab9efd90833e41c
+    - map_id: train_map_0008
+      map_uuid: 3d36cacf-5610-5fed-be7c-0cc67f47560c
+      seed: 856000008
+      maze_type: 1
+      semantic_name: cave_perlin
+      profile_name: cave_large_v4_7
+      profile_hash: 9d05d6b995407a2f85c11aa79c6f3e0ed3939452f60bd0a1f42c8ad4cdc49e3f
+    - map_id: train_map_0009
+      map_uuid: 9beaa79c-17cc-55b4-bdf8-44787a81626c
+      seed: 856000009
+      maze_type: 2
+      semantic_name: pillar_random_solid
+      profile_name: pillar_large_v4_7
+      profile_hash: 9e1e95b10ad555f3b8f998b2e36101dcebedffdfef57695ed7ec8c24d56be370
+    - map_id: train_map_0010
+      map_uuid: dc72be76-0ae9-5345-8edd-4c267da81bc5
+      seed: 856000010
+      maze_type: 5
+      semantic_name: forest_tree_asset
+      profile_name: forest_large_v4_7
+      profile_hash: c646f34479c4877487e45cb68bc18232b549aa436a7e99c0feeac9f30a376da7
+    - map_id: train_map_0011
+      map_uuid: 9d891c96-e796-58d4-8ad0-fa929e208935
+      seed: 856000011
+      maze_type: 7
+      semantic_name: random_wall_field
+      profile_name: wall_large_v4_7
+      profile_hash: 126710ea596bb578a75dfa25a231dc3df7d891a80fa308f8eab9efd90833e41c
+    - map_id: train_map_0012
+      map_uuid: 51b27829-79fb-50c2-af0e-7ce6b6e47524
+      seed: 856000012
+      maze_type: 1
+      semantic_name: cave_perlin
+      profile_name: cave_large_v4_7
+      profile_hash: 9d05d6b995407a2f85c11aa79c6f3e0ed3939452f60bd0a1f42c8ad4cdc49e3f
+    - map_id: train_map_0013
+      map_uuid: 32b870a8-bb5e-5f9c-bd05-79686850a37c
+      seed: 856000013
+      maze_type: 2
+      semantic_name: pillar_random_solid
+      profile_name: pillar_large_v4_7
+      profile_hash: 9e1e95b10ad555f3b8f998b2e36101dcebedffdfef57695ed7ec8c24d56be370
+    - map_id: train_map_0014
+      map_uuid: 976a45a3-4e47-502e-bf5f-97284f6751ab
+      seed: 856000014
+      maze_type: 5
+      semantic_name: forest_tree_asset
+      profile_name: forest_large_v4_7
+      profile_hash: c646f34479c4877487e45cb68bc18232b549aa436a7e99c0feeac9f30a376da7
+    - map_id: train_map_0015
+      map_uuid: 5e043625-3fd0-508f-b038-a81a3ca89336
+      seed: 856000015
+      maze_type: 7
+      semantic_name: random_wall_field
+      profile_name: wall_large_v4_7
+      profile_hash: 126710ea596bb578a75dfa25a231dc3df7d891a80fa308f8eab9efd90833e41c
+    - map_id: train_map_0016
+      map_uuid: 0ae26290-87bb-50ac-a6d7-8b78d2efd823
+      seed: 856000016
+      maze_type: 1
+      semantic_name: cave_perlin
+      profile_name: cave_large_v4_7
+      profile_hash: 9d05d6b995407a2f85c11aa79c6f3e0ed3939452f60bd0a1f42c8ad4cdc49e3f
+    - map_id: train_map_0017
+      map_uuid: 576d63fc-fdf7-5d33-ae0d-99eda1d037ef
+      seed: 856000017
+      maze_type: 2
+      semantic_name: pillar_random_solid
+      profile_name: pillar_large_v4_7
+      profile_hash: 9e1e95b10ad555f3b8f998b2e36101dcebedffdfef57695ed7ec8c24d56be370
+    - map_id: train_map_0018
+      map_uuid: 7b342500-1fac-5ca4-ae80-f0336ddcfd40
+      seed: 856000018
+      maze_type: 5
+      semantic_name: forest_tree_asset
+      profile_name: forest_large_v4_7
+      profile_hash: c646f34479c4877487e45cb68bc18232b549aa436a7e99c0feeac9f30a376da7
+    - map_id: train_map_0019
+      map_uuid: 384b0622-8103-5d07-a3b0-756170c25e2c
+      seed: 856000019
+      maze_type: 7
+      semantic_name: random_wall_field
+      profile_name: wall_large_v4_7
+      profile_hash: 126710ea596bb578a75dfa25a231dc3df7d891a80fa308f8eab9efd90833e41c
+    - map_id: train_map_0020
+      map_uuid: 408c26e3-4eea-5a29-9b44-3e0cdb8e2f63
+      seed: 856000020
+      maze_type: 1
+      semantic_name: cave_perlin
+      profile_name: cave_large_v4_7
+      profile_hash: 9d05d6b995407a2f85c11aa79c6f3e0ed3939452f60bd0a1f42c8ad4cdc49e3f
+    - map_id: train_map_0021
+      map_uuid: d6ff7f49-b2a9-5879-b96c-5655ee6b22c8
+      seed: 856010021
+      maze_type: 2
+      semantic_name: pillar_random_solid
+      profile_name: pillar_large_v4_7
+      profile_hash: 9e1e95b10ad555f3b8f998b2e36101dcebedffdfef57695ed7ec8c24d56be370
+    - map_id: train_map_0022
+      map_uuid: b3ace4e5-9028-5a6c-811c-57db93406219
+      seed: 856000022
+      maze_type: 5
+      semantic_name: forest_tree_asset
+      profile_name: forest_large_v4_7
+      profile_hash: c646f34479c4877487e45cb68bc18232b549aa436a7e99c0feeac9f30a376da7
+    - map_id: train_map_0023
+      map_uuid: 592dd649-3b12-59e7-85da-57361c0f5ad8
+      seed: 856000023
+      maze_type: 7
+      semantic_name: random_wall_field
+      profile_name: wall_large_v4_7
+      profile_hash: 126710ea596bb578a75dfa25a231dc3df7d891a80fa308f8eab9efd90833e41c
+    - map_id: train_map_0024
+      map_uuid: 8cafa6d1-c1f5-51f3-a0c0-14a61c48d393
+      seed: 856000024
+      maze_type: 1
+      semantic_name: cave_perlin
+      profile_name: cave_large_v4_7
+      profile_hash: 9d05d6b995407a2f85c11aa79c6f3e0ed3939452f60bd0a1f42c8ad4cdc49e3f
+    - map_id: train_map_0025
+      map_uuid: 764bed09-dabc-5c05-886b-ad6d121e4ca1
+      seed: 856010025
+      maze_type: 2
+      semantic_name: pillar_random_solid
+      profile_name: pillar_large_v4_7
+      profile_hash: 9e1e95b10ad555f3b8f998b2e36101dcebedffdfef57695ed7ec8c24d56be370
+    - map_id: train_map_0026
+      map_uuid: 46cc3f0c-2933-5280-9571-cc072aec7a4b
+      seed: 856000026
+      maze_type: 5
+      semantic_name: forest_tree_asset
+      profile_name: forest_large_v4_7
+      profile_hash: c646f34479c4877487e45cb68bc18232b549aa436a7e99c0feeac9f30a376da7
+    - map_id: train_map_0027
+      map_uuid: 81f92376-c330-5b49-97e4-d564f1813943
+      seed: 856000027
+      maze_type: 7
+      semantic_name: random_wall_field
+      profile_name: wall_large_v4_7
+      profile_hash: 126710ea596bb578a75dfa25a231dc3df7d891a80fa308f8eab9efd90833e41c
+    - map_id: train_map_0028
+      map_uuid: b7d9d55d-58f6-58f3-8784-8037550b2510
+      seed: 856000028
+      maze_type: 1
+      semantic_name: cave_perlin
+      profile_name: cave_large_v4_7
+      profile_hash: 9d05d6b995407a2f85c11aa79c6f3e0ed3939452f60bd0a1f42c8ad4cdc49e3f
+    - map_id: train_map_0029
+      map_uuid: c2332216-8706-59d0-bf91-ef6eae23f1fd
+      seed: 856000029
+      maze_type: 2
+      semantic_name: pillar_random_solid
+      profile_name: pillar_large_v4_7
+      profile_hash: 9e1e95b10ad555f3b8f998b2e36101dcebedffdfef57695ed7ec8c24d56be370
+    - map_id: train_map_0030
+      map_uuid: 98cf8000-b15b-5239-9f37-06686675c89b
+      seed: 856000030
+      maze_type: 5
+      semantic_name: forest_tree_asset
+      profile_name: forest_large_v4_7
+      profile_hash: c646f34479c4877487e45cb68bc18232b549aa436a7e99c0feeac9f30a376da7
+    - map_id: train_map_0031
+      map_uuid: f9a6265f-73c6-5dcd-93b5-7062a0dfcf19
+      seed: 856000031
+      maze_type: 7
+      semantic_name: random_wall_field
+      profile_name: wall_large_v4_7
+      profile_hash: 126710ea596bb578a75dfa25a231dc3df7d891a80fa308f8eab9efd90833e41c
+    - map_id: train_map_0032
+      map_uuid: 87a13ac0-8424-590d-bc40-71ae56e7afd5
+      seed: 856000032
+      maze_type: 1
+      semantic_name: cave_perlin
+      profile_name: cave_large_v4_7
+      profile_hash: 9d05d6b995407a2f85c11aa79c6f3e0ed3939452f60bd0a1f42c8ad4cdc49e3f
+    - map_id: train_map_0033
+      map_uuid: 16d8781d-353d-5be9-a745-c5ae62ca7a6e
+      seed: 856000033
+      maze_type: 2
+      semantic_name: pillar_random_solid
+      profile_name: pillar_large_v4_7
+      profile_hash: 9e1e95b10ad555f3b8f998b2e36101dcebedffdfef57695ed7ec8c24d56be370
+    - map_id: train_map_0034
+      map_uuid: dd0700f1-0bc0-578c-944c-4d64695edeed
+      seed: 856000034
+      maze_type: 5
+      semantic_name: forest_tree_asset
+      profile_name: forest_large_v4_7
+      profile_hash: c646f34479c4877487e45cb68bc18232b549aa436a7e99c0feeac9f30a376da7
+    - map_id: train_map_0035
+      map_uuid: b6cebfff-d6ed-5da5-a6d5-b6bb8dfa2e30
+      seed: 856000035
+      maze_type: 7
+      semantic_name: random_wall_field
+      profile_name: wall_large_v4_7
+      profile_hash: 126710ea596bb578a75dfa25a231dc3df7d891a80fa308f8eab9efd90833e41c
+    - map_id: train_map_0036
+      map_uuid: 4b572e4e-514f-5e97-b8f6-7f416bbfec10
+      seed: 856000036
+      maze_type: 1
+      semantic_name: cave_perlin
+      profile_name: cave_large_v4_7
+      profile_hash: 9d05d6b995407a2f85c11aa79c6f3e0ed3939452f60bd0a1f42c8ad4cdc49e3f
+    - map_id: train_map_0037
+      map_uuid: 55cfbb5d-6606-577b-97a3-714e270cc7f8
+      seed: 856000037
+      maze_type: 2
+      semantic_name: pillar_random_solid
+      profile_name: pillar_large_v4_7
+      profile_hash: 9e1e95b10ad555f3b8f998b2e36101dcebedffdfef57695ed7ec8c24d56be370
+    - map_id: train_map_0038
+      map_uuid: bfb5df3a-2f78-5f80-9d04-46c77e4f8e7c
+      seed: 856000038
+      maze_type: 5
+      semantic_name: forest_tree_asset
+      profile_name: forest_large_v4_7
+      profile_hash: c646f34479c4877487e45cb68bc18232b549aa436a7e99c0feeac9f30a376da7
+    - map_id: train_map_0039
+      map_uuid: fadedc1f-fe79-54a6-8ca3-bc929b74fc5a
+      seed: 856000039
+      maze_type: 7
+      semantic_name: random_wall_field
+      profile_name: wall_large_v4_7
+      profile_hash: 126710ea596bb578a75dfa25a231dc3df7d891a80fa308f8eab9efd90833e41c
+    - map_id: train_map_0040
+      map_uuid: 789deef7-d5eb-5314-a2af-077bb45e4e91
+      seed: 856000040
+      maze_type: 1
+      semantic_name: cave_perlin
+      profile_name: cave_narrow_v4_7
+      profile_hash: 534610d9df5749cbcccf201b79753fc2c6612496ae999aa9c7581c04d3335338
+    - map_id: train_map_0041
+      map_uuid: 247bc182-03a9-548a-85e3-fec26ae457dd
+      seed: 856000041
+      maze_type: 2
+      semantic_name: pillar_random_solid
+      profile_name: pillar_narrow_v4_7
+      profile_hash: f455a42cf73bd0b00ec7174db97a9024a71a98037e04e5456da9f5d859c5f51f
+    - map_id: train_map_0042
+      map_uuid: bf1ac1e1-a56c-57a9-b2a7-785a61b27a6d
+      seed: 856000042
+      maze_type: 5
+      semantic_name: forest_tree_asset
+      profile_name: forest_narrow_v4_7
+      profile_hash: b165a803829f7ed6c5afc57ae644194d2c1092a96724944448b04341b26d03fc
+    - map_id: train_map_0043
+      map_uuid: 4c9fdc78-9ef5-5383-b261-260e3dfd3ffe
+      seed: 856000043
+      maze_type: 7
+      semantic_name: random_wall_field
+      profile_name: wall_narrow_v4_7
+      profile_hash: fa64a738096ef8d7a411789ef2bffafd6427f9000e4a4ac733079182238855de
+    - map_id: train_map_0044
+      map_uuid: 6803f5e1-42f2-5a14-a64f-e1c134017fe0
+      seed: 856000044
+      maze_type: 1
+      semantic_name: cave_perlin
+      profile_name: cave_narrow_v4_7
+      profile_hash: 534610d9df5749cbcccf201b79753fc2c6612496ae999aa9c7581c04d3335338
+    - map_id: train_map_0045
+      map_uuid: 0684e560-1936-5c57-b821-79d2cc1251a2
+      seed: 856000045
+      maze_type: 2
+      semantic_name: pillar_random_solid
+      profile_name: pillar_narrow_v4_7
+      profile_hash: f455a42cf73bd0b00ec7174db97a9024a71a98037e04e5456da9f5d859c5f51f
+    - map_id: train_map_0046
+      map_uuid: 562d8839-bd0a-50fc-a1f0-9c06fea9b124
+      seed: 856000046
+      maze_type: 5
+      semantic_name: forest_tree_asset
+      profile_name: forest_narrow_v4_7
+      profile_hash: b165a803829f7ed6c5afc57ae644194d2c1092a96724944448b04341b26d03fc
+    - map_id: train_map_0047
+      map_uuid: e44cc6a0-a7ee-57bd-a804-9f92edc83abe
+      seed: 856000047
+      maze_type: 7
+      semantic_name: random_wall_field
+      profile_name: wall_narrow_v4_7
+      profile_hash: fa64a738096ef8d7a411789ef2bffafd6427f9000e4a4ac733079182238855de
+  valid:
+    frames: 60000
+    maps:
+    - map_id: valid_map_0000
+      map_uuid: 54984d5e-6714-58fc-b12e-f078858cb7bb
+      seed: 857000000
+      maze_type: 1
+      semantic_name: cave_perlin
+      profile_name: cave_large_v4_7
+      profile_hash: 9d05d6b995407a2f85c11aa79c6f3e0ed3939452f60bd0a1f42c8ad4cdc49e3f
+    - map_id: valid_map_0001
+      map_uuid: 0364d0ce-f940-52bc-a423-7b70c4156ff6
+      seed: 857000001
+      maze_type: 2
+      semantic_name: pillar_random_solid
+      profile_name: pillar_large_v4_7
+      profile_hash: 9e1e95b10ad555f3b8f998b2e36101dcebedffdfef57695ed7ec8c24d56be370
+    - map_id: valid_map_0002
+      map_uuid: 43fbaee6-f090-5080-84e6-eeadafeff63c
+      seed: 857000002
+      maze_type: 5
+      semantic_name: forest_tree_asset
+      profile_name: forest_large_v4_7
+      profile_hash: c646f34479c4877487e45cb68bc18232b549aa436a7e99c0feeac9f30a376da7
+    - map_id: valid_map_0003
+      map_uuid: 4463f46f-6cdd-56be-a29e-9037dec9a2bb
+      seed: 857000003
+      maze_type: 7
+      semantic_name: random_wall_field
+      profile_name: wall_large_v4_7
+      profile_hash: 126710ea596bb578a75dfa25a231dc3df7d891a80fa308f8eab9efd90833e41c
+    - map_id: valid_map_0004
+      map_uuid: 36729bbd-5b93-52d1-a1b5-b6a9bc3f1dda
+      seed: 857000004
+      maze_type: 1
+      semantic_name: cave_perlin
+      profile_name: cave_large_v4_7
+      profile_hash: 9d05d6b995407a2f85c11aa79c6f3e0ed3939452f60bd0a1f42c8ad4cdc49e3f
+    - map_id: valid_map_0005
+      map_uuid: 6ec49f16-9880-5398-9911-e9b2e530e7a0
+      seed: 857000005
+      maze_type: 2
+      semantic_name: pillar_random_solid
+      profile_name: pillar_large_v4_7
+      profile_hash: 9e1e95b10ad555f3b8f998b2e36101dcebedffdfef57695ed7ec8c24d56be370
+    - map_id: valid_map_0006
+      map_uuid: 2bf5e140-3450-5544-9a68-4d8eaa0b04f3
+      seed: 857000006
+      maze_type: 5
+      semantic_name: forest_tree_asset
+      profile_name: forest_large_v4_7
+      profile_hash: c646f34479c4877487e45cb68bc18232b549aa436a7e99c0feeac9f30a376da7
+    - map_id: valid_map_0007
+      map_uuid: 4d058d90-496d-5eea-bb01-7dfd0d0e4aa8
+      seed: 857000007
+      maze_type: 7
+      semantic_name: random_wall_field
+      profile_name: wall_large_v4_7
+      profile_hash: 126710ea596bb578a75dfa25a231dc3df7d891a80fa308f8eab9efd90833e41c
+    - map_id: valid_map_0008
+      map_uuid: 1166e9e0-e79a-5279-ae51-e17bcb85f8ca
+      seed: 857000008
+      maze_type: 1
+      semantic_name: cave_perlin
+      profile_name: cave_narrow_v4_7
+      profile_hash: 534610d9df5749cbcccf201b79753fc2c6612496ae999aa9c7581c04d3335338
+    - map_id: valid_map_0009
+      map_uuid: d43d4347-fbc3-5bbd-bbe3-8d82eb0dea69
+      seed: 857000009
+      maze_type: 2
+      semantic_name: pillar_random_solid
+      profile_name: pillar_narrow_v4_7
+      profile_hash: f455a42cf73bd0b00ec7174db97a9024a71a98037e04e5456da9f5d859c5f51f
+    - map_id: valid_map_0010
+      map_uuid: d252df40-90af-515a-baf3-2ef5f9fae9e5
+      seed: 857000010
+      maze_type: 5
+      semantic_name: forest_tree_asset
+      profile_name: forest_narrow_v4_7
+      profile_hash: b165a803829f7ed6c5afc57ae644194d2c1092a96724944448b04341b26d03fc
+    - map_id: valid_map_0011
+      map_uuid: 42e72328-02f0-5e22-a829-bc4662497743
+      seed: 857000011
+      maze_type: 7
+      semantic_name: random_wall_field
+      profile_name: wall_narrow_v4_7
+      profile_hash: fa64a738096ef8d7a411789ef2bffafd6427f9000e4a4ac733079182238855de
+frames_per_sequence: 60
+frozen_hashes:
+  authority_source_root_manifest_hash: a81319d734871c48d49058e22a36a733baead3d85db2ec39206221d3b154f723
+  source_hash: 8b99a12c8805db36e95894809ba465e32a9d164ee07a499fde7292bc381fbd01
+  split_manifest_hash: d7dd28f9f4e57d310b389ff5c98d453955e69599994f5ebc7dee880fd5047654
+goal_distribution:
+  body_transform: R_body_from_world@(goal_world-position_world)
+  distance_max_m: 8.0
+  distance_min_m: 2.0
+  policy: safe_local_reference_goal_persisted
+gpu_settings:
+  cpu_fallback_allowed_for_formal: false
+  device: 0
+  renderer_required: canonical_occupancy_cuda_raycast_v1
+  simulator_processes: 1
+output_root: /home/zjh/YOPO/DE-P/data/route_a_v4_7_raw_static
+parent_dataset_root_manifest_hash: 56d7118862afc22d8df8672d747c930bc4fdcfcb1fe0795c19e5ceef47989461
+parent_dataset_version: phase8_authoritative_v2
+parent_git_commit: 17831c38b083cf104379030c18df701353893533
+random_seeds:
+  sequence_base: 858000000
+schema_version: authoritative_dataset_schema_v1
+sensor_settings:
+  backend: canonical_occupancy_cuda_raycast_v1
+  dynamic_actor_compositing: analytic_ray_sphere_nearest_v1
+  frame_period_ns: 100000000
+  height: 96
+  intrinsics:
+  - 80.0
+  - 80.0
+  - 80.0
+  - 45.0
+  max_depth_m: 20.0
+  ray_step_m: 0.1
+  width: 160
+smoke_settings:
+  frames_per_sequence: 20
+  frames_per_split: 800
+  map_count: 4
+state_sampling_contract:
+  acceleration_source: velocity_finite_difference
+  command_latency_s: 0.04
+  demonstrated_acceleration_mps2: 2.0
+  demonstrated_speed_mps: 2.0
+  frame_state_source: continuous_reference_trajectory
+  network_acceleration_limit_mps2: 6.0
+  network_speed_limit_mps: 6.0
+  runtime_random_sampling: false
+  semantics_version: route_a_v4_7_four_scene_camera_pose_sampling_v1
+  source: phase8jqv2_3_state_sampling_contract.json
+  velocity_source: position_finite_difference
+  network_observation_source: derived_route_a_wide_state_v1
+  goal_distance_m:
+  - 10.0
+  - 40.0
+  raw_observation_is_training_authority: false
+static_geometry_authority_version: static_geometry_authority_v1
+static_scenarios:
+- normal_progress
+- hold
+- brake
+- lateral_reposition
+- vertical_reposition
+- corner
+- corridor
+- near_boundary_recovery_stress
+test_disabled: true
+worker_settings:
+  memory_limit_gib: 48
+  progress_interval_seconds: 30
+  recommended_workers: 8
+  single_gpu_simulator: true
+mixed_map_protocol_version: mixed_scene_authority_map_protocol_v1
+scene_spatial_sampling_contract:
+  version: route_a_scene_spatial_sampling_v1
+  altitude_reference: normalized_within_authority_bounds_after_0.4m_center_margin
+  collision_radius_m: 0.3
+  maximum_sequence_resamples: 32
+  map_types:
+    cave:
+      interpretation: enclosed_volume_full_height_coverage
+      altitude_bands:
+      - name: low
+        relative_min: 0.05
+        relative_max: 0.33
+        weight: 0.34
+      - name: middle
+        relative_min: 0.33
+        relative_max: 0.67
+        weight: 0.33
+      - name: high
+        relative_min: 0.67
+        relative_max: 0.95
+        weight: 0.33
+      near_depth_m: 10.0
+      minimum_return_fraction: 0.35
+      minimum_near_obstacle_fraction: 0.2
+    pillar:
+      interpretation: lower_and_middle_obstacle_field_primary
+      altitude_bands:
+      - name: low
+        relative_min: 0.06
+        relative_max: 0.38
+        weight: 0.58
+      - name: middle
+        relative_min: 0.38
+        relative_max: 0.66
+        weight: 0.32
+      - name: high_observable
+        relative_min: 0.66
+        relative_max: 0.8
+        weight: 0.1
+      near_depth_m: 10.0
+      minimum_return_fraction: 0.34
+      minimum_near_obstacle_fraction: 0.18
+      maximum_near_obstacle_fraction: 0.75
+      maximum_frame_near_obstacle_fraction: 0.9
+      far_depth_m: 6.0
+      minimum_far_fraction: 0.2
+      minimum_frame_far_fraction: 0.05
+    forest:
+      interpretation: trunk_layer_primary_canopy_secondary
+      altitude_bands:
+      - name: trunk
+        relative_min: 0.06
+        relative_max: 0.38
+        weight: 0.62
+      - name: lower_canopy
+        relative_min: 0.38
+        relative_max: 0.66
+        weight: 0.3
+      - name: upper_observable
+        relative_min: 0.66
+        relative_max: 0.78
+        weight: 0.08
+      near_depth_m: 10.0
+      minimum_return_fraction: 0.28
+      minimum_near_obstacle_fraction: 0.14
+    wall:
+      interpretation: lower_and_middle_wall_field_primary
+      altitude_bands:
+      - name: low
+        relative_min: 0.06
+        relative_max: 0.4
+        weight: 0.54
+      - name: middle
+        relative_min: 0.4
+        relative_max: 0.68
+        weight: 0.36
+      - name: high_observable
+        relative_min: 0.68
+        relative_max: 0.82
+        weight: 0.1
+      near_depth_m: 10.0
+      minimum_return_fraction: 0.3
+      minimum_near_obstacle_fraction: 0.14
+      maximum_near_obstacle_fraction: 0.8
+      maximum_frame_near_obstacle_fraction: 0.92
+      far_depth_m: 6.0
+      minimum_far_fraction: 0.15
+      minimum_frame_far_fraction: 0.05
+  required_map_types:
+  - cave
+  - forest
+  - pillar
+  - wall
+  contract_hash: 4e75cb15c34bd95000b1dfd794eb082fea01950c6a380f23a1b1083ea10a9c16

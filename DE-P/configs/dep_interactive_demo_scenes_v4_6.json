@@ -1,0 +1,120 @@
+{
+  "contract_version": "dep_interactive_demo_scenes_v3",
+  "fixed_frame": "world",
+  "source": "route_a_v4_6_large_validation_maps_and_open_launch_paths",
+  "launch_fixture_contract": {
+    "contract_version": "route_a_launch_fixture_v1",
+    "official_yopo_sample_domain": {
+      "x_m": [-20.0, 20.0],
+      "y_m": [-20.0, 20.0],
+      "z_m": [0.5, 4.0]
+    },
+    "uav_radius_m": 0.3,
+    "minimum_center_clearance_m": 1.5,
+    "minimum_uav_surface_gap_m": 1.0,
+    "horizontal_fov_deg": 90.0,
+    "fov_ray_count": 19,
+    "fov_range_m": 6.0,
+    "ray_step_m": 0.1,
+    "minimum_fov_p10_open_range_m": 3.0,
+    "minimum_open_first_segment_m": 3.0
+  },
+  "scenes": {
+    "cave": {
+      "display_name": "Cave V4.6 Large Fixed-A/B",
+      "map_uuid": "24d30362-82e6-5e86-8213-43e67b3673ea",
+      "pointcloud": "data/route_a_v4_6_static_yopo/maps/pointcloud-20.ply",
+      "authority_root": "data/route_a_v4_6_raw_static/geometry_authority/valid/24d30362-82e6-5e86-8213-43e67b3673ea",
+      "actor_xy_bounds": [[-27.0, 26.9], [-27.0, 26.9]],
+      "actor_z_bounds": [0.8, 12.0],
+      "start": [13.3, 13.5, 2.5],
+      "suggested_goal": [0.7, -17.5, 2.5],
+      "reference_path_length_m": 37.0190908859,
+      "reference_euclidean_distance_m": 33.4628151834,
+      "launch_certificate": {
+        "contract_version": "route_a_launch_fixture_v1",
+        "authority_manifest_hash": "84288b0b10582ffeb2a621b16ab428cf12e8251d080d32ca86ad7df048aff607",
+        "start_center_clearance_m": 1.615549442,
+        "goal_center_clearance_m": 1.71464282,
+        "start_uav_surface_gap_m": 1.315549442,
+        "goal_uav_surface_gap_m": 1.41464282,
+        "fov_p10_open_range_m": 3.0,
+        "first_segment_open_range_m": 6.0,
+        "reference_euclidean_distance_m": 33.4628151834,
+        "reference_path_length_m": 37.0190908859
+      }
+    },
+    "forest": {
+      "display_name": "Forest V4.6 Large Trunk-Layer Fixed-A/B",
+      "map_uuid": "07a2795b-edec-565c-b78f-f2cd6fbc8d0c",
+      "pointcloud": "data/route_a_v4_6_static_yopo/maps/pointcloud-3.ply",
+      "authority_root": "data/route_a_v4_6_raw_static/geometry_authority/valid/07a2795b-edec-565c-b78f-f2cd6fbc8d0c",
+      "actor_xy_bounds": [[-29.7, 21.4], [-28.8, 21.5]],
+      "actor_z_bounds": [1.0, 4.2],
+      "start": [-13.8916259766, -9.9895378113, 2.5],
+      "suggested_goal": [14.9083740234, 7.4104621887, 2.5],
+      "reference_path_length_m": 36.0073159853,
+      "reference_euclidean_distance_m": 33.6481797427,
+      "launch_certificate": {
+        "contract_version": "route_a_launch_fixture_v1",
+        "authority_manifest_hash": "4b9aab102a6b0ba8eb9e2463bf986e208e3ed9ad8c7fd2c7caeebcc1e448db44",
+        "start_center_clearance_m": 2.460891345,
+        "goal_center_clearance_m": 2.460891345,
+        "start_uav_surface_gap_m": 2.160891345,
+        "goal_uav_surface_gap_m": 2.160891345,
+        "fov_p10_open_range_m": 5.08,
+        "first_segment_open_range_m": 6.0,
+        "reference_euclidean_distance_m": 33.6481797427,
+        "reference_path_length_m": 36.0073159853
+      }
+    },
+    "pillar": {
+      "display_name": "Pillar V4.6 Large Fixed-A/B",
+      "map_uuid": "5e23d115-e34d-519e-aaa9-eee72d5b54eb",
+      "pointcloud": "data/route_a_v4_6_static_yopo/maps/pointcloud-38.ply",
+      "authority_root": "data/route_a_v4_6_raw_static/geometry_authority/valid/5e23d115-e34d-519e-aaa9-eee72d5b54eb",
+      "actor_xy_bounds": [[-27.5, 27.7], [-27.5, 27.3]],
+      "actor_z_bounds": [1.0, 9.0],
+      "start": [-14.9075653076, -13.7548282623, 2.5],
+      "suggested_goal": [16.0924346924, 7.0451717377, 2.5],
+      "reference_path_length_m": 41.1387,
+      "reference_euclidean_distance_m": 37.3314880496,
+      "launch_certificate": {
+        "contract_version": "route_a_launch_fixture_v1",
+        "authority_manifest_hash": "cf293d157295e2a18a7dbc72041b5625cd50e270705fc183aa388926600694f1",
+        "start_center_clearance_m": 2.4,
+        "goal_center_clearance_m": 2.1,
+        "start_uav_surface_gap_m": 2.1,
+        "goal_uav_surface_gap_m": 1.8,
+        "fov_p10_open_range_m": 4.56,
+        "first_segment_open_range_m": 6.0,
+        "reference_euclidean_distance_m": 37.3314880496,
+        "reference_path_length_m": 41.1387
+      }
+    },
+    "wall": {
+      "display_name": "Sparse Wall V4.6 Large Fixed-A/B",
+      "map_uuid": "2e0577c1-b352-5487-bc93-a9956ad703d1",
+      "pointcloud": "data/route_a_v4_6_static_yopo/maps/pointcloud-24.ply",
+      "authority_root": "data/route_a_v4_6_raw_static/geometry_authority/valid/2e0577c1-b352-5487-bc93-a9956ad703d1",
+      "actor_xy_bounds": [[-28.3, 27.3], [-30.0, 28.5]],
+      "actor_z_bounds": [1.0, 9.0],
+      "start": [-5.6833408356, -12.5124740601, 2.5],
+      "suggested_goal": [4.5166591644, 18.6875259399, 2.5],
+      "reference_path_length_m": 38.2534,
+      "reference_euclidean_distance_m": 32.8249904798,
+      "launch_certificate": {
+        "contract_version": "route_a_launch_fixture_v1",
+        "authority_manifest_hash": "332bfa889dee5e6360798c01ad570fff5c525ee9ec9cbb21d6d9007dc4dfc109",
+        "start_center_clearance_m": 2.405648279,
+        "goal_center_clearance_m": 2.405648279,
+        "start_uav_surface_gap_m": 2.105648279,
+        "goal_uav_surface_gap_m": 2.105648279,
+        "fov_p10_open_range_m": 4.26,
+        "first_segment_open_range_m": 6.0,
+        "reference_euclidean_distance_m": 32.8249904798,
+        "reference_path_length_m": 38.2534
+      }
+    }
+  }
+}

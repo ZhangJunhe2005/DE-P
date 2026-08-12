@@ -148,6 +148,22 @@ def test_run_directory_epoch_selection():
     assert epoch.name == "epoch_014.pth"
 
 
+def test_v454_checkpoint_is_pending_closed_loop_not_gate_qualified():
+    checkpoint = (
+        ROOT / "runs/route_a_static_yopo_v4_5_4_independent_score_shakedown"
+        / "20260810T090950Z-41634" / "checkpoints" / "best.pth"
+    )
+    if not checkpoint.is_file():
+        pytest.skip("local V4.5.4 checkpoint is not present")
+    result = DEMO.checkpoint_preflight(checkpoint)
+    assert result["head_variant"] == "independent"
+    assert result["strict_load"] is True
+    assert result["training_gate_qualified"] is None
+    assert result["checkpoint_readiness"] == (
+        "validation_loss_selected_pending_closed_loop"
+    )
+
+
 def test_swept_sphere_detects_thin_obstacle_between_clear_samples():
     authority = DEMO.CanonicalOccupancy.__new__(DEMO.CanonicalOccupancy)
     authority.origin = np.zeros(3, dtype=np.float64)

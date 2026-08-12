@@ -26,7 +26,12 @@ if str(ROOT) not in sys.path:
 
 from data.static_yopo_dataset_v1 import StaticYOPODatasetV1
 from data.static_yopo_loader_v1 import make_static_yopo_loader_v1
+from data.static_yopo_subset_v1 import StaticYOPOMapTypeSubsetV1
 from policy.static_yopo_wide_state_v1 import StaticYOPOWideStateDatasetV1
+from policy.static_yopo_recovery_state_v2 import StaticYOPORecoveryStateDatasetV2
+from policy.static_yopo_original_state_v4_4 import (
+    StaticYOPOOriginalStateDatasetV44,
+)
 from data.static_yopo_manifest_v1 import (
     INITIAL_CHECKPOINT_SHA256, SOURCE_V3_MANIFEST_SHA256, sha256_file,
 )
@@ -47,12 +52,33 @@ TRAINING_IMPLEMENTATION_FILES = (
     ROOT / "tools/train_mixed_static_yopo_v1.py",
     ROOT / "policy/static_yopo_training_v1.py",
     ROOT / "policy/static_yopo_checkpoint_v1.py",
+    ROOT / "policy/checkpoint_utils.py",
+    ROOT / "policy/models/head.py",
     ROOT / "data/static_yopo_loader_v1.py",
     ROOT / "policy/static_yopo_wide_state_v1.py",
+    ROOT / "policy/static_yopo_recovery_state_v2.py",
     ROOT / "policy/state_transform.py",
     ROOT / "policy/static_yopo_safety_first_v1.py",
     ROOT / "policy/static_yopo_kinodynamic_v2.py",
     ROOT / "policy/static_yopo_preventive_safety_v1.py",
+    ROOT / "policy/static_yopo_progress_safety_v1.py",
+    ROOT / "policy/static_yopo_goal_progress_v2.py",
+    ROOT / "policy/static_yopo_feasibility_score_v1.py",
+    ROOT / "policy/static_yopo_projected_score_v3.py",
+    ROOT / "policy/static_yopo_simple_v4_3.py",
+    ROOT / "policy/static_yopo_original_state_v4_4.py",
+    ROOT / "policy/static_yopo_parity_v4_4.py",
+    ROOT / "policy/static_yopo_parity_v4_5.py",
+    ROOT / "policy/static_yopo_parity_v4_5_1.py",
+    ROOT / "policy/static_yopo_parity_v4_5_2.py",
+    ROOT / "policy/static_yopo_parity_v4_5_3.py",
+    ROOT / "policy/static_yopo_parity_v4_5_4.py",
+    ROOT / "policy/static_yopo_parity_v4_5_5.py",
+    ROOT / "policy/static_yopo_parity_v4_5_6.py",
+    ROOT / "policy/static_yopo_parity_v4_5_8.py",
+    ROOT / "policy/static_yopo_parity_v4_5_9.py",
+    ROOT / "policy/static_yopo_parity_v4_5_10.py",
+    ROOT / "data/static_yopo_subset_v1.py",
     ROOT / "loss/loss_function.py",
     ROOT / "loss/safety_loss.py",
 )
@@ -76,6 +102,42 @@ def source_identity_fields(source_manifest_hash):
         # as an alias so old checkpoints remain readable without weakening
         # the identity value.
         "source_v3_manifest_hash": source_manifest_hash,
+    }
+
+
+def training_contract_classification(config):
+    """Classify qualification semantics without interpreting loss as a Gate."""
+    validation_contract = config.get("validation", {}).get("contract_version")
+    return {
+        "three_layer": validation_contract == "route_a_v4_2_9_three_layer_v1",
+        "ungated_static": validation_contract in {
+            "route_a_v4_3_single_loss_v1",
+            "route_a_v4_4_static_parity_v1",
+            "route_a_v4_5_bounded_danger_v1",
+            "route_a_v4_5_1_relative_kinematic_v1",
+            "route_a_v4_5_2_calibrated_relative_kinematic_v1",
+            "route_a_v4_5_3_continuous_clearance_two_stage_v1",
+            "route_a_v4_5_4_independent_score_only_v1",
+            "route_a_v4_5_5_dense_static_esdf_v1",
+            "route_a_v4_5_6_continuous_score_safety_v1",
+            "route_a_v4_5_7_high_safety_retimed_v1",
+            "route_a_v4_5_8_localized_safety_retimed_v1",
+            "route_a_v4_5_9_time_mean_localized_safety_v1",
+            "route_a_v4_5_10_tail_aware_safety_v1",
+        },
+        "diagnostic": config.get("experiment_role") in {
+            "map_type_convergence_probe",
+            "mixed_five_epoch_shakedown",
+            "mixed_two_stage_eight_epoch_shakedown",
+            "independent_score_five_epoch_shakedown",
+            "dense_static_esdf_five_epoch_shakedown",
+            "continuous_safety_score_calibration",
+            "high_safety_joint_retiming_shakedown",
+            "localized_safety_retiming_shakedown",
+            "time_mean_localized_safety_shakedown",
+            "tail_aware_safety_shakedown",
+            "tail_aware_controlled_continuation",
+        },
     }
 
 
@@ -163,6 +225,7 @@ def load_contract(config_path):
         "loss_contract_hash": manifest["loss_contract_hash"],
         "training_config_hash": sha256_file(config_path),
         "training_implementation_hash": training_implementation_hash(),
+        "training_contract_version": str(config["contract_version"]),
         **source_identity_fields(expected_source),
     }
     if config.get("objective_contract_hash") is not None:
@@ -174,14 +237,36 @@ def load_contract(config_path):
 
 def verify(config_path):
     config_path, config, derived, manifest, identities = load_contract(config_path)
+    train_samples = int(manifest["split_counts"]["train"])
+    validation_samples = int(manifest["split_counts"]["validation"])
+    map_type_filter = config.get("loader", {}).get("map_type_filter")
+    if map_type_filter is not None:
+        authority = json.load(open(
+            derived / "manifests" / "map_authority.json", encoding="utf-8"
+        ))["maps"]
+        by_map_id = {
+            int(row["map_id"]): str(row["map_type"]) for row in authority
+        }
+        filtered_counts = {}
+        for split in ("train", "validation"):
+            map_ids = np.load(
+                derived / "indices" / split / "map_id.npy", mmap_mode="r"
+            )
+            filtered_counts[split] = sum(
+                by_map_id[int(map_id)] == map_type_filter
+                for map_id in map_ids
+            )
+        train_samples = int(filtered_counts["train"])
+        validation_samples = int(filtered_counts["validation"])
     result = {
         "status": "PASS", "mode": "VERIFY_ONLY",
         "config": str(config_path), "identities": identities,
         "cuda_available": torch.cuda.is_available(),
         "cuda_device": torch.cuda.get_device_name(0) if torch.cuda.is_available() else None,
         "derived_status": manifest["status"],
-        "train_samples": manifest["split_counts"]["train"],
-        "validation_samples": manifest["split_counts"]["validation"],
+        "train_samples": train_samples,
+        "validation_samples": validation_samples,
+        "map_type_filter": map_type_filter,
         "internal_test_accessed": False, "long_training_started": False,
     }
     if manifest["status"] != "COMPLETE_FROZEN":
@@ -205,15 +290,30 @@ def append_jsonl(path, value):
 
 
 def finite_details(details):
-    names = (
+    names = [
         "total_loss", "trajectory_loss", "score_loss", "smoothness_loss",
         "static_safety_loss", "guidance_loss", "dynamic_safety_loss",
         "ranking_loss", "safety_cvar_loss", "kinematic_loss",
         "preventive_safety_loss", "preventive_ranking_loss",
+        "progress_safety_loss", "progress_ranking_loss",
+        "stopping_distance_loss",
         "candidate_smooth_cost", "candidate_static_cost",
         "candidate_guidance_cost", "candidate_kinodynamic_cost",
-        "candidate_preventive_cost", "score_label",
-    )
+        "candidate_preventive_cost", "candidate_progress_cost", "score_label",
+        "candidate_stopping_distance_cost",
+    ]
+    if "dangerous_segment_loss" in details:
+        names.extend((
+            "dangerous_segment_loss", "candidate_dangerous_segment_cost",
+        ))
+    if "clearance_barrier_loss" in details:
+        names.extend((
+            "clearance_barrier_loss", "candidate_clearance_barrier_cost",
+        ))
+    if "candidate_score_target_cost" in details:
+        names.extend((
+            "candidate_proposal_total_cost", "candidate_score_target_cost",
+        ))
     return {
         name: bool(torch.isfinite(details[name]).all())
         for name in names
@@ -249,6 +349,44 @@ def build_optimizer(model, config):
     default_lr = float(optimizer_config["learning_rate"])
     backbone_lr = optimizer_config.get("backbone_learning_rate")
     head_lr = optimizer_config.get("head_learning_rate")
+    candidate_head_lr = optimizer_config.get("candidate_head_learning_rate")
+    score_head_lr = optimizer_config.get("score_head_learning_rate")
+    if (candidate_head_lr is None) != (score_head_lr is None):
+        raise ValueError(
+            "candidate_head_learning_rate and score_head_learning_rate "
+            "must be specified together"
+        )
+    if candidate_head_lr is not None:
+        if backbone_lr is None:
+            raise ValueError("split-head optimizer requires backbone_learning_rate")
+        if model.network.head_variant not in {"split", "independent"}:
+            raise ValueError(
+                "independent candidate/score LR requires a branched head"
+            )
+        backbone, candidate, score = [], [], []
+        score_ids = {
+            id(value) for value in model.network.dep_head.score_parameters()
+        }
+        for name, parameter in model.named_parameters():
+            if name.startswith("network.image_backbone."):
+                backbone.append(parameter)
+            elif id(parameter) in score_ids:
+                score.append(parameter)
+            else:
+                candidate.append(parameter)
+        if not backbone or not candidate or not score:
+            raise RuntimeError("split-head optimizer partition is empty")
+        values = backbone + candidate + score
+        if len({id(value) for value in values}) != len(values):
+            raise RuntimeError("split-head optimizer partition has duplicates")
+        return optimizer_class([
+            {"params": backbone, "lr": float(backbone_lr),
+             "group_name": "backbone"},
+            {"params": candidate, "lr": float(candidate_head_lr),
+             "group_name": "candidate_head"},
+            {"params": score, "lr": float(score_head_lr),
+             "group_name": "score_head"},
+        ], lr=default_lr, weight_decay=float(optimizer_config["weight_decay"]))
     if (backbone_lr is None) != (head_lr is None):
         raise ValueError(
             "backbone_learning_rate and head_learning_rate must be specified together"
@@ -281,6 +419,60 @@ def optimizer_learning_rates(optimizer):
         str(group.get("group_name", f"group_{index}")): float(group["lr"])
         for index, group in enumerate(optimizer.param_groups)
     }
+
+
+def apply_score_only_warmup(optimizer, config, epoch, start_epoch, model=None):
+    """Freeze proposal generation briefly without resetting scheduler state.
+
+    This transition is applied exactly once on a fresh run (epoch zero) and
+    once at the configured unfreeze boundary. Resume checkpoints retain their
+    saved group rates everywhere else.
+    """
+    warmup_epochs = int(config["training"].get("score_only_warmup_epochs", 0))
+    if warmup_epochs < 0:
+        raise ValueError("score_only_warmup_epochs must be non-negative")
+    groups = {str(group.get("group_name")): group for group in optimizer.param_groups}
+    if warmup_epochs and not {"backbone", "candidate_head", "score_head"} <= set(groups):
+        raise ValueError("score-only warmup requires split-head optimizer groups")
+    transition = None
+    if warmup_epochs and epoch < warmup_epochs:
+        for name in ("backbone", "candidate_head"):
+            groups[name]["lr"] = 0.0
+            for parameter in groups[name]["params"]:
+                parameter.requires_grad_(False)
+        for parameter in groups["score_head"]["params"]:
+            parameter.requires_grad_(True)
+        groups["score_head"]["lr"] = float(
+            config["optimizer"].get(
+                "score_only_learning_rate",
+                config["optimizer"]["score_head_learning_rate"],
+            )
+        )
+        if model is not None:
+            # ``model.train()`` runs before this function. Frozen BatchNorm
+            # buffers must not drift, otherwise proposal outputs are not
+            # actually fixed even though their parameters require no gradient.
+            model.network.image_backbone.eval()
+        if epoch == start_epoch:
+            transition = (
+                "score_only_warmup_start" if start_epoch == 0
+                else "score_only_warmup_resume"
+            )
+    elif warmup_epochs and epoch == warmup_epochs:
+        for name in ("backbone", "candidate_head", "score_head"):
+            for parameter in groups[name]["params"]:
+                parameter.requires_grad_(True)
+        groups["backbone"]["lr"] = float(
+            config["optimizer"]["backbone_learning_rate"]
+        )
+        groups["candidate_head"]["lr"] = float(
+            config["optimizer"]["candidate_head_learning_rate"]
+        )
+        groups["score_head"]["lr"] = float(
+            config["optimizer"]["score_head_learning_rate"]
+        )
+        transition = "joint_finetune_start"
+    return transition
 
 
 def build_scheduler(optimizer, config):
@@ -322,6 +514,46 @@ def map_type_contract(derived, dataset):
     return by_map_id
 
 
+def projected_validation_contract_v3(validation_means, validation_config):
+    """Return the deliberately small V4.2.9 offline readiness contract.
+
+    Candidate availability answers whether the projected generator can offer
+    at least one visible and physically stoppable action. Conditional score
+    error is evaluated only on those frames. Closed-loop arrival, collision,
+    and path efficiency remain external evidence and are never disguised as
+    additional offline booleans here.
+    """
+    gate = validation_config["offline_gate"]
+    availability = float(validation_means["projected_candidate_availability"])
+    numerator = float(
+        validation_means["projected_conditional_selection_error_numerator"]
+    )
+    conditional_error = numerator / max(availability, 1.0e-12)
+    layers = {
+        "candidate_capability": {
+            "value": availability,
+            "minimum": float(gate["candidate_availability_rate_min"]),
+            "passed": availability >= float(
+                gate["candidate_availability_rate_min"]
+            ),
+        },
+        "score_selection": {
+            "value": conditional_error,
+            "maximum": float(gate["conditional_selection_error_rate_max"]),
+            "passed": conditional_error <= float(
+                gate["conditional_selection_error_rate_max"]
+            ),
+        },
+    }
+    # This assertion is intentional: V4.2.9 must not silently grow another
+    # collection of overlapping readiness gates.
+    if tuple(layers) != ("candidate_capability", "score_selection"):
+        raise AssertionError("V4.2.9 offline Gate proliferation detected")
+    return layers, conditional_error, all(
+        value["passed"] for value in layers.values()
+    )
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default=ROOT / "configs/phase8jqv2_5_mixed_static_yopo_training_v1.yaml")
@@ -347,12 +579,29 @@ def main():
     valid_data = StaticYOPODatasetV1(
         derived, "validation", mmap_cache_size=config["loader"]["mmap_cache_size"]
     )
+    type_by_map_id = map_type_contract(derived, train_data)
+    map_type_filter = config["loader"].get("map_type_filter")
+    if map_type_filter is not None:
+        train_data = StaticYOPOMapTypeSubsetV1(
+            train_data, type_by_map_id, map_type_filter
+        )
+        valid_data = StaticYOPOMapTypeSubsetV1(
+            valid_data, type_by_map_id, map_type_filter
+        )
     observation_contract = config.get("observation", {}).get(
         "contract", "frozen_dataset_observation"
     )
     if observation_contract == "route_a_wide_state_v1":
         train_data = StaticYOPOWideStateDatasetV1(train_data, seed=seed)
         valid_data = StaticYOPOWideStateDatasetV1(valid_data, seed=seed + 1)
+    elif observation_contract == "route_a_original_yopo_state_v4_4":
+        train_data = StaticYOPOOriginalStateDatasetV44(train_data, seed=seed)
+        valid_data = StaticYOPOOriginalStateDatasetV44(
+            valid_data, seed=seed + 1
+        )
+    elif observation_contract == "route_a_recovery_state_v2":
+        train_data = StaticYOPORecoveryStateDatasetV2(train_data, seed=seed)
+        valid_data = StaticYOPORecoveryStateDatasetV2(valid_data, seed=seed + 1)
     elif observation_contract != "frozen_dataset_observation":
         raise ValueError(
             f"unsupported observation contract: {observation_contract}"
@@ -378,7 +627,13 @@ def main():
         config["loader"]["num_workers"], False, config["loader"]["prefetch_factor"],
         config["loader"]["pin_memory"], False,
     )
-    model = MixedSceneStaticYOPOV1(config["model"]["initial_checkpoint"]).to(device)
+    model = MixedSceneStaticYOPOV1(
+        config["model"]["initial_checkpoint"],
+        head_variant=config["model"].get("head_variant", "unified"),
+        allow_unified_to_split=bool(
+            config["model"].get("allow_unified_to_split", False)
+        ),
+    ).to(device)
     objective = MixedSceneStaticYOPOObjectiveV1(
         derived / "map_catalog.yaml",
         local_goal_horizon_m=config.get("objective", {}).get(
@@ -387,6 +642,22 @@ def main():
         safety_first_config=config.get("safety_first"),
         kinodynamic_config=config.get("kinodynamic_v2"),
         preventive_safety_config=config.get("preventive_safety"),
+        progress_safety_config=config.get("progress_safety"),
+        feasibility_score_config=config.get("feasibility_score"),
+        goal_progress_config=config.get("goal_progress_v2"),
+        projected_score_config=config.get("projected_score_v3"),
+        simple_yopo_v4_3_config=config.get("simple_yopo_v4_3"),
+        static_yopo_v4_4_config=config.get("static_yopo_v4_4"),
+        static_yopo_v4_5_config=config.get("static_yopo_v4_5"),
+        static_yopo_v4_5_1_config=config.get("static_yopo_v4_5_1"),
+        static_yopo_v4_5_2_config=config.get("static_yopo_v4_5_2"),
+        static_yopo_v4_5_3_config=config.get("static_yopo_v4_5_3"),
+        static_yopo_v4_5_4_config=config.get("static_yopo_v4_5_4"),
+        static_yopo_v4_5_5_config=config.get("static_yopo_v4_5_5"),
+        static_yopo_v4_5_6_config=config.get("static_yopo_v4_5_6"),
+        static_yopo_v4_5_8_config=config.get("static_yopo_v4_5_8"),
+        static_yopo_v4_5_9_config=config.get("static_yopo_v4_5_9"),
+        static_yopo_v4_5_10_config=config.get("static_yopo_v4_5_10"),
     ).to(device)
     optimizer = build_optimizer(model, config)
     scheduler = build_scheduler(optimizer, config)
@@ -430,6 +701,21 @@ def main():
     maximum_train_batches = 8 if args.dry_run else None
     maximum_valid_batches = 1 if args.dry_run else None
     amp = bool(config["numerics"]["cnn_amp"])
+    v45_enabled = bool(config.get("static_yopo_v4_5", {}).get("enabled"))
+    v451_enabled = bool(config.get("static_yopo_v4_5_1", {}).get("enabled"))
+    v452_enabled = bool(config.get("static_yopo_v4_5_2", {}).get("enabled"))
+    v453_enabled = bool(config.get("static_yopo_v4_5_3", {}).get("enabled"))
+    v454_enabled = bool(config.get("static_yopo_v4_5_4", {}).get("enabled"))
+    v455_enabled = bool(config.get("static_yopo_v4_5_5", {}).get("enabled"))
+    v456_enabled = bool(config.get("static_yopo_v4_5_6", {}).get("enabled"))
+    v458_enabled = bool(config.get("static_yopo_v4_5_8", {}).get("enabled"))
+    v459_enabled = bool(config.get("static_yopo_v4_5_9", {}).get("enabled"))
+    v4510_enabled = bool(config.get("static_yopo_v4_5_10", {}).get("enabled"))
+    v45_family_enabled = (
+        v45_enabled or v451_enabled or v452_enabled or v453_enabled
+        or v454_enabled or v455_enabled or v456_enabled or v458_enabled
+        or v459_enabled or v4510_enabled
+    )
     progress_every = int(config["logging"]["progress_every_batches"])
     minimum_epoch = int(config["validation"]["minimum_epoch"])
     patience = int(config["validation"]["patience"])
@@ -463,6 +749,18 @@ def main():
             epoch_started = time.perf_counter()
             train_sampler.set_epoch(epoch)
             model.train()
+            stage_transition = apply_score_only_warmup(
+                optimizer, config, epoch, start_epoch, model=model
+            )
+            if stage_transition is not None:
+                event = {
+                    "event": "optimizer_stage_transition",
+                    "epoch": epoch,
+                    "stage": stage_transition,
+                    "learning_rates": optimizer_learning_rates(optimizer),
+                }
+                append_jsonl(events_path, event)
+                print(json.dumps(event, sort_keys=True), flush=True)
             train_sums = {
                 "total_loss": 0.0, "trajectory_loss": 0.0, "score_loss": 0.0,
                 "smoothness_loss": 0.0, "static_safety_loss": 0.0,
@@ -470,7 +768,19 @@ def main():
                 "safety_cvar_loss": 0.0, "kinematic_loss": 0.0,
                 "preventive_safety_loss": 0.0,
                 "preventive_ranking_loss": 0.0,
+                "progress_safety_loss": 0.0,
+                "progress_ranking_loss": 0.0,
+                "stopping_distance_loss": 0.0,
             }
+            if v45_family_enabled:
+                train_sums["dangerous_segment_loss"] = 0.0
+            if v4510_enabled:
+                train_sums["static_time_mean_cost"] = 0.0
+                train_sums["static_worst_five_cost"] = 0.0
+            if v453_enabled or v454_enabled or v456_enabled:
+                train_sums["clearance_barrier_loss"] = 0.0
+            if v456_enabled:
+                train_sums["clearance_pairwise_ranking_loss"] = 0.0
             print(json.dumps({
                 "event": "epoch_start", "epoch": epoch,
                 "epochs_total": maximum_epochs, "train_batches": len(train_loader),
@@ -606,11 +916,20 @@ def main():
                 "kinematic_loss": 0.0,
                 "preventive_safety_loss": 0.0,
                 "preventive_ranking_loss": 0.0,
+                "progress_safety_loss": 0.0,
+                "progress_ranking_loss": 0.0,
+                "stopping_distance_loss": 0.0,
                 "preventive_required_clearance": 0.0,
                 "preventive_sample_weight": 0.0,
                 "clear_candidate_count": 0.0,
                 "selected_clearance": 0.0,
                 "anticipatory_unsafe_selection": 0.0,
+                "safe_progress_candidate_count": 0.0,
+                "preferred_progress_candidate_count": 0.0,
+                "insufficient_progress_selection": 0.0,
+                "selected_goal_progress": 0.0,
+                "selected_goal_alignment": 0.0,
+                "reverse_selection": 0.0,
                 "unsafe_selection": 0.0,
                 "hardware_unsafe_selection": 0.0,
                 "selected_trajectory_max_speed": 0.0,
@@ -624,7 +943,75 @@ def main():
                 "hover_selection": 0.0,
                 "route_goal_distance": 0.0,
                 "objective_goal_distance": 0.0,
+                "projected_candidate_availability": 0.0,
+                "projected_safe_candidate_count": 0.0,
+                "projected_conditional_selection_error_numerator": 0.0,
+                "projected_selected_stopping_reserve": 0.0,
+                "projected_selected_visible": 0.0,
+                "projected_selection_regret": 0.0,
+                "score_oracle_regret": 0.0,
+                "stoppable_candidate_count": 0.0,
             }
+            if v45_family_enabled:
+                validation_sums.update({
+                    "dangerous_segment_loss": 0.0,
+                    "selected_vertical_displacement": 0.0,
+                    "oracle_vertical_displacement": 0.0,
+                    "selected_primitive_row": 0.0,
+                    "oracle_primitive_row": 0.0,
+                    "selected_vertical_primitive": 0.0,
+                    "oracle_vertical_primitive": 0.0,
+                    "selected_upward_primitive": 0.0,
+                    "selected_level_primitive": 0.0,
+                    "selected_downward_primitive": 0.0,
+                    "oracle_upward_primitive": 0.0,
+                    "oracle_level_primitive": 0.0,
+                    "oracle_downward_primitive": 0.0,
+                })
+            if v4510_enabled:
+                validation_sums.update({
+                    "static_time_mean_cost": 0.0,
+                    "static_worst_five_cost": 0.0,
+                })
+            if (v453_enabled or v454_enabled or v456_enabled
+                    or v458_enabled or v459_enabled or v4510_enabled):
+                validation_sums["clearance_barrier_loss"] = 0.0
+            if v456_enabled or v458_enabled or v459_enabled or v4510_enabled:
+                validation_sums["clearance_pairwise_ranking_loss"] = 0.0
+            if (v451_enabled or v452_enabled or v453_enabled or v454_enabled
+                    or v455_enabled or v456_enabled or v458_enabled
+                    or v459_enabled or v4510_enabled):
+                validation_sums.update({
+                    "score_label_scale": 0.0,
+                    "selected_absolute_vertical_displacement": 0.0,
+                    "oracle_absolute_vertical_displacement": 0.0,
+                    "selected_large_vertical_maneuver": 0.0,
+                    "oracle_large_vertical_maneuver": 0.0,
+                })
+            if (v452_enabled or v453_enabled or v454_enabled or v455_enabled
+                    or v456_enabled or v458_enabled or v459_enabled
+                    or v4510_enabled):
+                validation_sums.update({
+                    "speed_unsafe_selection": 0.0,
+                    "acceleration_unsafe_selection": 0.0,
+                    "collision_free_candidate_count": 0.0,
+                    "hardware_feasible_candidate_count": 0.0,
+                    "collision_free_candidate_available": 0.0,
+                    "physical_feasible_candidate_available": 0.0,
+                    "conditional_collision_selection_error": 0.0,
+                    "conditional_physical_selection_error": 0.0,
+                    "oracle_collision_unsafe": 0.0,
+                    "oracle_speed_unsafe": 0.0,
+                    "oracle_acceleration_unsafe": 0.0,
+                    "oracle_hardware_unsafe": 0.0,
+                    "oracle_physical_unsafe": 0.0,
+                })
+            if (v455_enabled or v456_enabled or v458_enabled
+                    or v459_enabled or v4510_enabled):
+                validation_sums.update({
+                    "coarse_false_safe_candidate_count": 0.0,
+                    "dense_clearance_drop": 0.0,
+                })
             validation_count = 0
             validation_by_type = {}
             with torch.inference_mode():
@@ -647,10 +1034,19 @@ def main():
                         )
                     batch_size = int(batch["depth"].shape[0])
                     validation_count += batch_size
-                    per_sample = {
-                        name: details[f"per_sample_{name}"].detach()
-                        for name in validation_sums
-                    }
+                    per_sample = {}
+                    for name in validation_sums:
+                        key = f"per_sample_{name}"
+                        if key in details:
+                            per_sample[name] = details[key].detach()
+                        elif name == "score_oracle_regret":
+                            per_sample[name] = details[
+                                "per_sample_projected_selection_regret"
+                            ].detach()
+                        else:
+                            raise KeyError(
+                                f"objective omitted validation metric: {key}"
+                            )
                     for name, values in per_sample.items():
                         validation_sums[name] += float(values.sum())
                     for map_type in sorted(set(
@@ -706,14 +1102,59 @@ def main():
                 }
                 for map_type, values in sorted(validation_by_type.items())
             }
+            for values in validation_map_type_metrics.values():
+                values["projected_conditional_selection_error_rate"] = (
+                    values[
+                        "projected_conditional_selection_error_numerator"
+                    ] / max(
+                        values["projected_candidate_availability"], 1.0e-12
+                    )
+                )
             macro_map_type_total = float(np.mean([
                 values["total_loss"]
                 for values in validation_map_type_metrics.values()
             ]))
-            selection_gate_config = config["validation"].get(
-                "selection_gate", {}
+            validation_contract = config["validation"].get(
+                "contract_version", "legacy_selection_gate"
             )
-            selection_gate = {
+            if validation_contract in {
+                "route_a_v4_3_single_loss_v1",
+                "route_a_v4_4_static_parity_v1",
+                "route_a_v4_5_bounded_danger_v1",
+                "route_a_v4_5_1_relative_kinematic_v1",
+                "route_a_v4_5_2_calibrated_relative_kinematic_v1",
+                "route_a_v4_5_3_continuous_clearance_two_stage_v1",
+                "route_a_v4_5_4_independent_score_only_v1",
+                "route_a_v4_5_5_dense_static_esdf_v1",
+                "route_a_v4_5_6_continuous_score_safety_v1",
+                "route_a_v4_5_7_high_safety_retimed_v1",
+                "route_a_v4_5_8_localized_safety_retimed_v1",
+                "route_a_v4_5_9_time_mean_localized_safety_v1",
+                "route_a_v4_5_10_tail_aware_safety_v1",
+            }:
+                # These contracts deliberately have no qualification lattice. The
+                # scalar held-out loss selects best.pth; physical deployment
+                # is evaluated later by closed-loop collision/arrival tests.
+                conditional_selection_error = None
+                validation_layers = None
+                selection_gate = {"single_validation_loss": True}
+                selection_gate_pass = True
+            elif validation_contract == "route_a_v4_2_9_three_layer_v1":
+                validation_layers, conditional_selection_error, \
+                    selection_gate_pass = projected_validation_contract_v3(
+                        validation_means, config["validation"]
+                    )
+                selection_gate = {
+                    name: value["passed"]
+                    for name, value in validation_layers.items()
+                }
+            else:
+                conditional_selection_error = None
+                validation_layers = None
+                selection_gate_config = config["validation"].get(
+                    "selection_gate", {}
+                )
+                selection_gate = {
                 "selected_endpoint_distance_mean": (
                     validation_means["selected_endpoint_distance"]
                     >= float(selection_gate_config.get(
@@ -774,8 +1215,44 @@ def main():
                         "clear_candidate_count_mean_min", 0.0
                     ))
                 ),
-            }
-            selection_gate_pass = all(selection_gate.values())
+                "safe_progress_candidate_count_mean": (
+                    validation_means["safe_progress_candidate_count"]
+                    >= float(selection_gate_config.get(
+                        "safe_progress_candidate_count_mean_min", 0.0
+                    ))
+                ),
+                "preferred_progress_candidate_count_mean": (
+                    validation_means["preferred_progress_candidate_count"]
+                    >= float(selection_gate_config.get(
+                        "preferred_progress_candidate_count_mean_min", 0.0
+                    ))
+                ),
+                "insufficient_progress_selection_rate": (
+                    validation_means["insufficient_progress_selection"]
+                    <= float(selection_gate_config.get(
+                        "insufficient_progress_selection_rate_max", 1.0
+                    ))
+                ),
+                "selected_goal_progress_mean": (
+                    validation_means["selected_goal_progress"]
+                    >= float(selection_gate_config.get(
+                        "selected_goal_progress_mean_min", float("-inf")
+                    ))
+                ),
+                "selected_goal_alignment_mean": (
+                    validation_means["selected_goal_alignment"]
+                    >= float(selection_gate_config.get(
+                        "selected_goal_alignment_mean_min", float("-inf")
+                    ))
+                ),
+                "reverse_selection_rate": (
+                    validation_means["reverse_selection"]
+                    <= float(selection_gate_config.get(
+                        "reverse_selection_rate_max", 1.0
+                    ))
+                ),
+                }
+                selection_gate_pass = all(selection_gate.values())
             primary_metric = config["validation"]["primary_metric"]
             if primary_metric == "total_static_loss":
                 metric = validation_means["total_loss"]
@@ -786,6 +1263,42 @@ def main():
                 # gate-passing epoch outranks every collapsed/hovering epoch.
                 metric = macro_map_type_total + (
                     0.0 if selection_gate_pass else 1_000_000.0
+                )
+            elif primary_metric == "hard_safety_weighted_macro_loss":
+                weights = config["validation"].get(
+                    "hard_safety_metric_weights", {}
+                )
+                safety_weighted_metric = (
+                    macro_map_type_total
+                    + float(weights.get("unsafe_selection", 20.0))
+                    * validation_means["unsafe_selection"]
+                    + float(weights.get("hardware_unsafe_selection", 10.0))
+                    * validation_means["hardware_unsafe_selection"]
+                    + float(weights.get("hover_selection", 2.0))
+                    * validation_means["hover_selection"]
+                    + float(weights.get("reverse_selection", 0.0))
+                    * validation_means["reverse_selection"]
+                    + float(weights.get("insufficient_progress_selection", 0.0))
+                    * validation_means["insufficient_progress_selection"]
+                )
+                metric = safety_weighted_metric + (
+                    0.0 if selection_gate_pass else 1_000_000.0
+                )
+            elif primary_metric == "projected_contract_macro_loss":
+                if validation_layers is None:
+                    raise RuntimeError(
+                        "projected metric requires the V4.2.9 validation contract"
+                    )
+                weights = config["validation"].get("metric_weights", {})
+                metric = (
+                    macro_map_type_total
+                    + float(weights.get("candidate_unavailability", 10.0))
+                    * (1.0 - validation_means[
+                        "projected_candidate_availability"
+                    ])
+                    + float(weights.get("conditional_selection_error", 20.0))
+                    * conditional_selection_error
+                    + (0.0 if selection_gate_pass else 1_000_000.0)
                 )
             else:
                 raise ValueError(
@@ -798,7 +1311,12 @@ def main():
                 epochs_without_improvement = 0
             else:
                 epochs_without_improvement += 1
-            if isinstance(
+            warmup_epochs = int(config["training"].get(
+                "score_only_warmup_epochs", 0
+            ))
+            if epoch < warmup_epochs:
+                pass
+            elif isinstance(
                 scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
             ):
                 scheduler.step(metric)
@@ -816,6 +1334,10 @@ def main():
                 "selection_metric": metric,
                 "selection_gate_pass": selection_gate_pass,
                 "selection_gate": selection_gate,
+                "validation_layers": validation_layers,
+                "projected_conditional_selection_error_rate": (
+                    conditional_selection_error
+                ),
                 "learning_rate": max(optimizer_learning_rates(optimizer).values()),
                 "learning_rates": optimizer_learning_rates(optimizer),
                 "best_validation_metric": best, "best_epoch": best_epoch,
@@ -864,17 +1386,48 @@ def main():
                     "patience": patience,
                 }), flush=True)
                 break
-        training_gate_passed = bool(best < 1_000_000.0)
-        completion_status = (
-            "DRY_RUN_PASS" if args.dry_run
-            else ("TRAINING_COMPLETE" if training_gate_passed
-                  else "TRAINING_COMPLETE_UNQUALIFIED")
+        metric_eligible = bool(best < 1_000_000.0)
+        completion_contract = training_contract_classification(config)
+        three_layer_contract = completion_contract["three_layer"]
+        ungated_static_contract = completion_contract["ungated_static"]
+        diagnostic_run = completion_contract["diagnostic"]
+        # Ungated objectives and bounded diagnostics never become production
+        # qualified from a scalar validation loss alone.
+        training_gate_passed = (
+            None if (ungated_static_contract or diagnostic_run)
+            else metric_eligible
         )
+        closed_loop_pending = three_layer_contract or ungated_static_contract
+        if args.dry_run:
+            completion_status = "DRY_RUN_PASS"
+        elif diagnostic_run:
+            completion_status = "DIAGNOSTIC_COMPLETE_NOT_PRODUCTION"
+        elif three_layer_contract and training_gate_passed:
+            completion_status = (
+                "TRAINING_COMPLETE_OFFLINE_QUALIFIED_PENDING_CLOSED_LOOP"
+            )
+        elif ungated_static_contract and metric_eligible:
+            completion_status = "TRAINING_COMPLETE_PENDING_CLOSED_LOOP"
+        elif training_gate_passed:
+            completion_status = "TRAINING_COMPLETE"
+        else:
+            completion_status = "TRAINING_COMPLETE_UNQUALIFIED"
         write_json(run_root / "training_complete.json", {
             "status": completion_status,
             "global_step": global_step, "best_validation_metric": best,
             "best_epoch": best_epoch, "stop_reason": stop_reason,
             "training_gate_passed": training_gate_passed,
+            "offline_gate_passed": (
+                None if (ungated_static_contract or diagnostic_run)
+                else metric_eligible
+            ),
+            "closed_loop_gate_passed": (
+                False if closed_loop_pending and not diagnostic_run else None
+            ),
+            "production_qualified": (
+                False if (closed_loop_pending or diagnostic_run)
+                else training_gate_passed
+            ),
             "post_training_h5_started": False, "production_activated": False,
         })
         write_json(run_root / "run_state.json", {
@@ -884,6 +1437,17 @@ def main():
             "global_step": global_step, "best_epoch": best_epoch,
             "best_validation_metric": best, "stop_reason": stop_reason,
             "training_gate_passed": training_gate_passed,
+            "offline_gate_passed": (
+                None if (ungated_static_contract or diagnostic_run)
+                else metric_eligible
+            ),
+            "closed_loop_gate_passed": (
+                False if closed_loop_pending and not diagnostic_run else None
+            ),
+            "production_qualified": (
+                False if (closed_loop_pending or diagnostic_run)
+                else training_gate_passed
+            ),
             "long_training_started": not args.dry_run,
         })
     except Exception as exc:

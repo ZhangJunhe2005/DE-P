@@ -20,6 +20,7 @@ class DEPLossOutput:
     dynamic_training_objective: th.Tensor
     dynamic_diagnostics: object
     static_min_distance: th.Tensor | None = None
+    static_distance_samples: th.Tensor | None = None
 
     @property
     def trajectory_cost(self):
@@ -134,14 +135,18 @@ class DEPLoss(nn.Module):
         if self.smoothness_weight > 0:
             smoothness_cost = self.smoothness_loss(Df, Dp)
         if self.safety_weight > 0:
-            safety_cost, static_min_distance = self.safety_loss(
-                Df, Dp, map_id, return_min_distance=True
+            safety_cost, static_min_distance, static_distance_samples = (
+                self.safety_loss(
+                    Df, Dp, map_id, return_min_distance=True,
+                    return_distance_samples=True,
+                )
             )
         else:
             static_min_distance = th.full(
                 (prediction.shape[0],), float("inf"),
                 device=input_device, dtype=input_dtype,
             )
+            static_distance_samples = static_min_distance[:, None]
         if self.goal_weight > 0:
             goal_cost = self.goal_loss(Df, Dp, goal)
         weighted_smooth = self.smoothness_weight * smoothness_cost
@@ -178,6 +183,7 @@ class DEPLoss(nn.Module):
                 dynamic_training_objective=dynamic_training_objective,
                 dynamic_diagnostics=dynamic_diagnostics,
                 static_min_distance=static_min_distance,
+                static_distance_samples=static_distance_samples,
             )
         # Preserve the phase-2A positional tuple for every existing static caller.
         return weighted_smooth, weighted_static, weighted_goal

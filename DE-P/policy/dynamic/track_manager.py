@@ -40,6 +40,8 @@ class _ManagedTrack:
     last_pixel_mask_signature: str = ""
     attention_authorized: bool = False
     visibility_state: str = "unknown"
+    ever_confirmed_dynamic: bool = False
+    last_direct_observation_timestamp: float | None = None
 
 
 def _bbox_iou(left, right):
@@ -277,6 +279,10 @@ class TrackManager:
             managed.is_confirmed = managed.hit_count >= self.config.min_confirmed_hits
             self._update_confidence(managed)
             self._update_dynamic_state(managed)
+            managed.ever_confirmed_dynamic = bool(
+                managed.ever_confirmed_dynamic
+                or (managed.is_confirmed and managed.is_dynamic)
+            )
             managed.attention_authorized = bool(
                 managed.is_confirmed
                 and managed.is_dynamic
@@ -332,6 +338,9 @@ class TrackManager:
             return
         managed.hit_count += 1
         managed.last_direct_observation_frame = observation.frame_index
+        managed.last_direct_observation_timestamp = float(
+            observation.timestamp
+        )
         managed.direct_observation_count += 1
         managed.consecutive_direct_hits += 1
         managed.prediction_only_age = 0
@@ -504,5 +513,14 @@ class TrackManager:
                 last_pixel_mask_signature=managed.last_pixel_mask_signature,
                 attention_authorized=managed.attention_authorized,
                 visibility_state=managed.visibility_state,
+                ever_confirmed_dynamic=managed.ever_confirmed_dynamic,
+                last_direct_observation_timestamp=(
+                    managed.last_direct_observation_timestamp
+                ),
+                last_observed_extent=(
+                    (0.0, 0.0, 0.0)
+                    if managed.last_observation is None else
+                    tuple(float(value) for value in managed.last_observation.extent)
+                ),
             ))
         return tuple(snapshots)

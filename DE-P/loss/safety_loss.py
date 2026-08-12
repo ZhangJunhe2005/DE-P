@@ -50,7 +50,8 @@ class SafetyLoss(nn.Module):
         self.sdf_maps = self.get_sdf_from_files(self.map_files)
         print("Map built!")
 
-    def forward(self, Df, Dp, map_id, return_min_distance=False):
+    def forward(self, Df, Dp, map_id, return_min_distance=False,
+                return_distance_samples=False):
         """
         Args:
             Dp: decision parameters: (batch_size, 3, 3) → [px, vx, ax; py, vy, ay; pz, vz, az]
@@ -92,6 +93,10 @@ class SafetyLoss(nn.Module):
         cost_colli = (self.safety_full_ratio * cost_full
                       + (1.0 - self.safety_full_ratio) * cost_first_colli)
 
+        if return_distance_samples and not return_min_distance:
+            raise ValueError(
+                "distance samples require return_min_distance=True"
+            )
         if return_min_distance:
             # get_distance_cost groups the historical flattened layout as
             # [logical_batch, traj_num * eval_points].  Preserve one minimum
@@ -101,6 +106,11 @@ class SafetyLoss(nn.Module):
             ).amin(dim=2).reshape(-1)
             if candidate_min_distance.shape != cost_colli.shape:
                 raise RuntimeError("candidate clearance/cost shape mismatch")
+            if return_distance_samples:
+                return (
+                    cost_colli, candidate_min_distance,
+                    dist.reshape(-1, self.eval_points),
+                )
             return cost_colli, candidate_min_distance
         return cost_colli
 

@@ -195,6 +195,39 @@ def calculate_yaw(vel_dir, goal_dir, last_yaw, dt, max_yaw_rate=0.3):
     return yaw, yawdot
 
 
+def calculate_path_tangent_yaw_v1(
+    vel_dir, goal_dir, last_yaw, dt, max_yaw_rate=0.3,
+    tangent_weight=0.85, minimum_tracking_speed=0.35,
+):
+    """Keep the forward depth camera aligned with the commanded translation.
+
+    The historical yaw controller heavily re-aimed at the global goal while a
+    lateral primitive was being executed.  That can place the swept vehicle
+    outside the depth camera's observed sector.  V4.2.9 follows the selected
+    path tangent whenever translational speed is meaningful, retaining a small
+    goal bias and the same bounded yaw rate.  At low speed it simply faces the
+    goal so scan/replanning can acquire a new visible corridor.
+    """
+    velocity = np.asarray(vel_dir, dtype=np.float64)[:2]
+    goal = np.asarray(goal_dir, dtype=np.float64)[:2]
+    speed = float(np.linalg.norm(velocity))
+    goal_norm = float(np.linalg.norm(goal))
+    if speed >= minimum_tracking_speed:
+        velocity /= max(speed, 1.0e-9)
+        goal_unit = goal / max(goal_norm, 1.0e-9)
+        direction = tangent_weight * velocity + (1.0 - tangent_weight) * goal_unit
+    elif goal_norm > 1.0e-6:
+        direction = goal / goal_norm
+    else:
+        return float(last_yaw), 0.0
+    desired = float(np.arctan2(direction[1], direction[0]))
+    delta = (desired - last_yaw + np.pi) % (2.0 * np.pi) - np.pi
+    maximum_change = float(max_yaw_rate) * np.pi * float(dt)
+    applied = float(np.clip(delta, -maximum_change, maximum_change))
+    yaw = (float(last_yaw) + applied) % (2.0 * np.pi)
+    return yaw, applied / float(dt)
+
+
 def adaptive_full_trajectory_planning(
     vps, target_vp, uav_state, max_vel=2.0, max_acc=2.0, 
     max_yaw_rate=0.3, sensor_range=4.5, d_thr=4.0, tau=1.2, cs_threshold=0.5, num_time_steps=50

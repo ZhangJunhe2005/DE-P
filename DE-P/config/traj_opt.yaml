@@ -15,10 +15,22 @@ runtime_safety:
   max_acceleration_mps2: 6.0
   vehicle_radius_m: 0.30
   tracking_margin_m: 0.35
+  # V4.2.9 uses the same velocity-dependent stopping reserve in training and
+  # ROS. At 6 m/s the kinematic braking term alone is 3 m; a fixed 0.65 m
+  # clearance cannot be a controlled-invariant safety boundary.
+  reaction_time_s: 0.12
+  braking_acceleration_mps2: 6.0
+  horizontal_fov_deg: 90.0
+  vertical_fov_deg: 60.0
+  visibility_margin_deg: 5.0
   trajectory_samples: 81
   depth_stride: 2
   limit_tolerance: 0.001
   minimum_progress_m: 1.0
+  # Path length prevents hover; signed goal progress independently prevents a
+  # scan-relative "forward" primitive from carrying the vehicle backwards.
+  maximum_reverse_progress_m: 0.05
+  recovery_release_goal_progress_m: 0.25
   braking_duration_min_s: 0.8
   braking_duration_max_s: 2.5
   braking_duration_step_s: 0.05
@@ -45,13 +57,27 @@ deadlock_recovery:
   zero_feasible_trigger_replans: 15
   collision_floor_trigger_replans: 5
   release_feasible_replans: 5
+  # A scan is observational, so release translation authority as soon as a
+  # feasible view is stable for two replans; normal hold/braking keeps the
+  # more conservative five-replan release threshold.
+  scan_release_feasible_replans: 2
   stationary_speed_mps: 0.35
   yaw_scan_rate_deg_s: 45.0
+  max_scan_angle_deg: 90.0
+  max_scan_legs: 2
   breadcrumb_spacing_m: 0.12
   breadcrumb_capacity: 600
   retreat_enabled: true
   retreat_distance_m: 1.20
   retreat_arrival_radius_m: 0.20
+  observed_escape_enabled: true
+  observed_escape_distance_m: 1.20
+  observed_escape_arrival_radius_m: 0.20
+  observed_escape_min_depth_m: 2.00
+  # Never use a camera-forward escape that makes material negative progress
+  # relative to the active goal. A lateral bypass (alignment ~= 0) is valid.
+  observed_escape_min_goal_alignment: -0.05
+  goal_biased_scan_deadband_deg: 10.0
 
 # IMPORTANT: weight of costs for unit speed (can be visualized in tensorboard)
 wg: 0.6   # guidance

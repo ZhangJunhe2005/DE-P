@@ -15,6 +15,7 @@ from pathlib import Path
 import numpy as np
 
 import rospy
+from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Odometry
 from sensor_simulator.msg import DynamicObjectStateArray
 from std_msgs.msg import Bool, String
@@ -38,6 +39,9 @@ def parse_args():
         help="seconds between repeated terminal alarms while contact remains active",
     )
     parser.add_argument("--odom-topic", default="/sim/odom")
+    parser.add_argument("--goal-topic", default="/move_base_simple/goal")
+    parser.add_argument("--goal-z", type=float)
+    parser.add_argument("--arrival-radius", type=float, default=5.0)
     parser.add_argument(
         "--dynamic-ground-truth-topic",
         default="/dynamic_objects/ground_truth",
@@ -77,6 +81,14 @@ class CollisionMonitor:
         self.events_path.write_text("", encoding="utf-8")
         self.started_at = datetime.now(timezone.utc)
         self.last_active_alarm = -math.inf
+        self.active_goal = None
+        self.goal_start_position = None
+        self.goal_path_length_m = 0.0
+        self.goal_direct_distance_m = None
+        self.goal_minimum_distance_m = None
+        self.goal_received_count = 0
+        self.goal_arrival_count = 0
+        self.goal_arrived = False
 
         self.static_pub = rospy.Publisher(
             "/dep_demo/static_collision", Bool, queue_size=1, latch=True
@@ -99,6 +111,10 @@ class CollisionMonitor:
         self.previous_near = False
         rospy.Subscriber(
             args.odom_topic, Odometry, self.on_odom,
+            queue_size=1, tcp_nodelay=True,
+        )
+        rospy.Subscriber(
+            args.goal_topic, PoseStamped, self.on_goal,
             queue_size=1, tcp_nodelay=True,
         )
         rospy.Subscriber(
@@ -280,6 +296,10 @@ class CollisionMonitor:
         )
         with self.lock:
             swept = False
+            previous_position = (
+                None if self.last_position is None
+                else np.asarray(self.last_position, dtype=np.float64)
+            )
             stamp = message.header.stamp.to_sec()
             if (
                 self.last_position is not None
@@ -293,6 +313,33 @@ class CollisionMonitor:
             self.odom_samples += 1
             self.last_position = center
             self.last_odom_stamp = stamp
+            if self.active_goal is not None:
+                current = np.asarray(center, dtype=np.float64)
+                if self.goal_start_position is None:
+                    self.goal_start_position = current.copy()
+                    self.goal_direct_distance_m = float(np.linalg.norm(
+                        self.active_goal - current
+                    ))
+                elif previous_position is not None:
+                    self.goal_path_length_m += float(np.linalg.norm(
+                        current - previous_position
+                    ))
+                distance = float(np.linalg.norm(self.active_goal - current))
+                self.goal_minimum_distance_m = (
+                    distance if self.goal_minimum_distance_m is None
+                    else min(self.goal_minimum_distance_m, distance)
+                )
+                if distance <= self.args.arrival_radius and not self.goal_arrived:
+                    self.goal_arrived = True
+                    self.goal_arrival_count += 1
+                    event = {
+                        "event": "GOAL_ARRIVED",
+                        "timestamp": self.now_iso(),
+                        "distance_m": distance,
+                        "path_length_m": self.goal_path_length_m,
+                    }
+                    self.record_event(event)
+                    rospy.loginfo("DE-P CLOSED-LOOP ARRIVAL %s", json.dumps(event))
             self.static_collision = instantaneous or swept
             self.static_detection_source = (
                 "instantaneous" if instantaneous
@@ -307,6 +354,35 @@ class CollisionMonitor:
             if swept and not self.previous_static:
                 self.swept_static_collision_events += 1
             self.publish_state(message.header.stamp)
+
+    def on_goal(self, message):
+        goal_z = (
+            float(message.pose.position.z)
+            if self.args.goal_z is None else float(self.args.goal_z)
+        )
+        goal = np.asarray([
+            message.pose.position.x, message.pose.position.y, goal_z,
+        ], dtype=np.float64)
+        with self.lock:
+            self.active_goal = goal
+            self.goal_start_position = (
+                None if self.last_position is None
+                else np.asarray(self.last_position, dtype=np.float64).copy()
+            )
+            self.goal_path_length_m = 0.0
+            self.goal_direct_distance_m = (
+                None if self.goal_start_position is None
+                else float(np.linalg.norm(goal - self.goal_start_position))
+            )
+            self.goal_minimum_distance_m = self.goal_direct_distance_m
+            self.goal_received_count += 1
+            self.goal_arrived = False
+            self.record_event({
+                "event": "GOAL_RECEIVED",
+                "timestamp": self.now_iso(),
+                "goal_world": goal.tolist(),
+                "direct_distance_m": self.goal_direct_distance_m,
+            })
 
     def on_dynamic(self, message):
         with self.lock:
@@ -368,6 +444,12 @@ class CollisionMonitor:
 
     def write_report(self):
         with self.lock:
+            path_efficiency = None
+            if self.goal_direct_distance_m is not None \
+                    and self.goal_direct_distance_m > 1.0e-6:
+                path_efficiency = (
+                    self.goal_path_length_m / self.goal_direct_distance_m
+                )
             report = {
                 "status": "COLLISION_DETECTED" if self.first_collision else "NO_COLLISION",
                 "map_uuid": self.args.map_uuid,
@@ -387,6 +469,18 @@ class CollisionMonitor:
                 "near_contact_events": self.near_contact_events,
                 "events_jsonl": str(self.events_path),
                 "first_collision": self.first_collision,
+                "goal_received_count": self.goal_received_count,
+                "goal_arrival_count": self.goal_arrival_count,
+                "goal_arrived": self.goal_arrived,
+                "goal_world": (
+                    None if self.active_goal is None
+                    else self.active_goal.tolist()
+                ),
+                "arrival_radius_m": self.args.arrival_radius,
+                "goal_direct_distance_m": self.goal_direct_distance_m,
+                "goal_path_length_m": self.goal_path_length_m,
+                "goal_minimum_distance_m": self.goal_minimum_distance_m,
+                "path_efficiency": path_efficiency,
             }
             self.args.report.parent.mkdir(parents=True, exist_ok=True)
             self.args.report.write_text(
@@ -404,6 +498,8 @@ def main():
         raise ValueError("--near-margin must be non-negative")
     if args.active_alarm_period <= 0:
         raise ValueError("--active-alarm-period must be positive")
+    if args.arrival_radius <= 0:
+        raise ValueError("--arrival-radius must be positive")
     rospy.init_node("dep_interactive_collision_monitor", anonymous=False)
     CollisionMonitor(args)
     rospy.loginfo(

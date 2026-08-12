@@ -1,0 +1,288 @@
+contract_version: route_a_static_yopo_training_v4_2_9_projected_score_v1
+training_implementation_hash: 5dce5afa564c13538e6abda0d9a9c29d0ca677cc4ddd401d7215eaf2ade78794
+route: A
+source_dataset_root: /home/zjh/YOPO/DE-P/data/route_a_v4_2_raw_static
+derived_dataset_root: /home/zjh/YOPO/DE-P/data/route_a_v4_2_static_yopo
+source_dataset_manifest_hash: f94c5f25fd12fffea9ec4099521a80701668f2a9b177f9c3553e6d0813230774
+derived_dataset_manifest_hash: 611572fabc498299fa46349c7b1c98a7b77fc8f1eb6510adf8b5c2e6160bc75a
+normalization_contract_hash: 17d0ef25b1c828f66e8e414a08f517360d41048f4dc9b6068ce5891bf99837ef
+model_contract_hash: 55d20eab01f0561eb6a3fa6b794ea21304ff4ef17b9cf68582ded13811984a89
+loss_contract_hash: 368c7c89ea10d5f5d17f263d5d526a52d3ec23ae50cf52213653b71581ae8580
+model:
+  name: MixedSceneStaticYOPOV1
+  backbone_variant: legacy
+  head_variant: split
+  initial_checkpoint: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_2_8_goal_mobility/20260806T125140Z-12283/checkpoints/best_unqualified.pth
+  initial_checkpoint_sha256: a09c15f57a77cbf2c8777bf1f3e66cfc517ebef9a198f42d04095f92189ea862
+  strict_load: true
+  allow_unified_to_split: false
+observation:
+  contract: route_a_wide_state_v1
+  seed: 82801
+  speed_range_mps:
+  - 0.0
+  - 6.0
+  acceleration_range_mps2:
+  - 0.0
+  - 6.0
+  goal_distance_range_m:
+  - 10.0
+  - 40.0
+optimizer:
+  name: AdamW
+  learning_rate: 1e-05
+  backbone_learning_rate: 2e-08
+  weight_decay: 0.0002
+  candidate_head_learning_rate: 5e-07
+  score_head_learning_rate: 1e-05
+scheduler:
+  name: ReduceLROnPlateau
+  factor: 0.5
+  patience: 4
+  threshold: 0.0001
+  minimum_learning_rate:
+    backbone: 1e-09
+    candidate_head: 5e-08
+    score_head: 5e-07
+training:
+  batch_size: 32
+  max_epochs: 40
+  seed: 82901
+  amp: false
+  gradient_clip_norm: 5.0
+  checkpoint_every_epochs: 1
+  validation_every_epochs: 1
+  score_only_warmup_epochs: 8
+numerics:
+  cnn_amp: false
+  trajectory_loss_precision: float32
+  nonfinite_policy: fail_fast
+  require_finite_gradient_norm: true
+  max_consecutive_amp_overflows: 8
+logging:
+  progress_every_batches: 100
+  flush_console: true
+  batch_event_log: events.jsonl
+  nonfinite_event_log: nonfinite_batches.jsonl
+loader:
+  num_workers: 8
+  prefetch_factor: 2
+  pin_memory: true
+  mmap_cache_size: 8
+  sampling_strategy: map_type_balanced
+validation:
+  contract_version: route_a_v4_2_9_three_layer_v1
+  primary_metric: projected_contract_macro_loss
+  direction: minimize
+  minimum_epoch: 12
+  patience: 10
+  offline_gate:
+    candidate_availability_rate_min: 0.75
+    conditional_selection_error_rate_max: 0.1
+  metric_weights:
+    candidate_unavailability: 10.0
+    conditional_selection_error: 20.0
+  closed_loop_contract:
+    collision_events_max: 0
+    goal_arrival_required: true
+    path_efficiency_max: 1.75
+    max_speed_mps: 6.0
+    max_acceleration_mps2: 6.0
+  predefined_metrics:
+  - macro_map_type_total_static_loss
+  - per_map_type_total_static_loss
+  - projected_candidate_availability
+  - projected_safe_candidate_count
+  - projected_conditional_selection_error_rate
+  - projected_selected_stopping_reserve
+  - projected_selected_visible
+  - projected_selection_regret
+output_root: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_2_9_projected_score
+resume:
+  automatic: false
+  strict_identity: true
+internal_test_access: false
+post_training_h5_automatic: false
+production_activation_automatic: false
+implementation_hotfixes:
+- route_a_v4_checkpoint_identity_alias_repair_v1
+- route_a_v4_1_local_goal_observability_repair_v1
+- route_a_v4_1_gradient_clip_and_scheduler_rebaseline_v1
+- route_a_v4_2_scene_relative_height_and_observability_contract_v1
+- route_a_v4_2_1_score_head_regularization_v1
+- route_a_v4_2_1_early_stop_contract_v1
+- runtime_trajectory_safety_v1
+- route_a_v4_2_2_safety_first_score_ranking_v1
+- route_a_v4_2_2_static_safety_cvar_v1
+- route_a_v4_2_2_anti_hover_contract_preserved_v1
+- route_a_v4_2_3_dense_full_horizon_kinodynamic_gradient_v2
+- route_a_v4_2_3_ego_time_dilation_supervision_v1
+- route_a_v4_2_3_tangent_normal_anisotropic_acceleration_v1
+- route_a_v4_2_3_all_unsafe_continuous_score_labels_v1
+- route_a_v4_2_4_seven_metre_maneuver_budget_v1
+- route_a_v4_2_4_speed_aware_preventive_clearance_v1
+- route_a_v4_2_4_near_field_adaptive_weight_v1
+- route_a_v4_2_4_clearance_score_ranking_v1
+- route_a_v4_2_4_causal_dynamic_track_safety_v1
+- route_a_v4_2_5_safety_subordinate_progress_labels_v1
+- route_a_v4_2_5_safe_progress_pairwise_ranking_v1
+- route_a_v4_2_5_safe_progress_candidate_coverage_v1
+- deadlock_recovery_v2_bounded_scan_v1
+- deadlock_recovery_v2_observed_escape_certification_v1
+- route_a_v4_2_6_single_hard_feasibility_score_contract_v1
+- route_a_v4_2_6_argmin_aligned_listwise_score_loss_v1
+- route_a_v4_2_6_diagnostic_only_candidate_progress_metrics_v1
+- route_a_v4_2_7_recovery_state_observation_v2
+- route_a_v4_2_7_exact_unified_to_split_head_migration_v1
+- route_a_v4_2_7_independent_candidate_score_learning_rates_v1
+- route_a_v4_2_7_hard_safety_weighted_checkpoint_selection_v1
+- route_a_v4_2_8_v423_candidate_mobility_rebase_v1
+- route_a_v4_2_8_signed_goal_progress_v2
+- route_a_v4_2_8_goal_aware_recovery_release_v1
+- route_a_v4_2_8_score_only_then_joint_finetune_v1
+- route_a_v4_2_9_runtime_equivalent_projection_v1
+- route_a_v4_2_9_physical_stopping_distance_v1
+- route_a_v4_2_9_camera_visibility_and_flight_volume_v1
+- route_a_v4_2_9_three_layer_gate_contract_v1
+parent_v4_config_hash: bbf93d492f50bd7ec41328c40bfba21133dc72de754d98a0b47c0206161c15ca
+objective_contract_hash: 8d1167b110f5e79d4fe616f559e0bbb97d1ca0b4943dad12d5c55a7b20b06000
+objective:
+  route_goal_range_m:
+  - 10.0
+  - 40.0
+  local_goal_horizon_m: 10.0
+  score_label_goal: local_horizon_projection
+parent_v4_1_config_hash: ea8e08fdfce0ee27f003dbea280ebd346207a194428922ac9fde7c7480bc215b
+parent_v4_2_config_hash: 3fcb8cd4226b704434eadc6113513cb19767a97f3d1a56ea598280dd3abb54e9
+parent_v4_2_1_config_hash: cc070f3cec7b9d26bacf4aefcf17dc0c25e21d35d7edacdda7dff2483d7ff0ce
+safety_first:
+  enabled: true
+  required_clearance_m: 0.65
+  unsafe_label_priority: 8.0
+  ranking_margin: 1.0
+  ranking_weight: 0.0
+  safety_cvar_fraction: 0.3333333333333333
+  safety_cvar_weight: 0.5
+  max_speed_mps: 6.0
+  max_acceleration_mps2: 6.0
+  kinematic_weight: 2.0
+parent_v4_2_2_config_hash: d0ed4b8796e23041b8e1a6cb6e96119b58d70effbcfd7fcf195f08194a21cd53
+kinodynamic_v2:
+  enabled: true
+  max_speed_mps: 6.0
+  max_acceleration_mps2: 6.0
+  soft_limit_ratio: 0.9
+  normal_acceleration_soft_ratio: 0.75
+  dense_norm_weight: 1.0
+  axis_weight: 0.25
+  normal_acceleration_weight: 0.5
+  time_dilation_weight: 1.0
+  candidate_mean_weight: 0.5
+  candidate_cvar_weight: 0.5
+  candidate_cvar_fraction: 0.3333333333333333
+  feasible_coverage_weight: 0.5
+  minimum_feasible_candidates: 3
+  label_weight: 1.0
+  numerical_epsilon: 1e-06
+parent_v4_2_3_config_hash: 40a345372d2efa91d034780d8a17ce46b10229baac4e65966d2826b314bf12b5
+preventive_safety:
+  enabled: true
+  base_clearance_m: 1.0
+  speed_clearance_gain_s: 0.08
+  maximum_clearance_m: 1.5
+  softplus_temperature_m: 0.2
+  loss_weight: 0.5
+  ranking_weight: 0.0
+  ranking_margin: 0.5
+  label_weight: 0.0
+  candidate_mean_weight: 0.25
+  candidate_cvar_weight: 0.5
+  candidate_cvar_fraction: 0.3333333333333333
+  feasible_coverage_weight: 0.5
+  minimum_clear_candidates: 2
+  approach_depth_m: 5.0
+  near_depth_m: 3.0
+  near_fraction_reference: 0.1
+  maximum_sample_weight: 2.0
+  depth_max_m: 20.0
+parent_v4_2_4_config_hash: 60972cd920bba0071ba3b1faddcd4081a569ac93a213bc69916f96d5e2203676
+progress_safety:
+  enabled: false
+  minimum_progress_m: 1.0
+  preferred_progress_m: 2.0
+  softplus_temperature_m: 0.25
+  loss_weight: 0.75
+  ranking_weight: 0.0
+  ranking_margin: 0.75
+  label_weight: 0.0
+  minimum_progress_candidates: 2
+parent_v4_2_5_config_hash: 1be8ec9fe480864256e2d4262b488bfa97f1d55d81254745e40b4be5bcefd4a0
+feasibility_score:
+  enabled: false
+  required_clearance_m: 0.65
+  max_speed_mps: 6.0
+  max_acceleration_mps2: 6.0
+  infeasible_label_floor: 2.0
+  regression_weight: 0.5
+  listwise_weight: 1.0
+  ranking_weight: 1.0
+  ranking_margin: 1.0
+  target_temperature: 0.35
+  prediction_temperature: 1.0
+  quality_epsilon: 1e-06
+parent_v4_2_6_config_hash: 68e0dda841b78213b2f6c081672ee0c8139e9c23ccf020186bd35d43738110b6
+parent_v4_2_7_config_hash: d929b48ca1cbbff3255e28c215ca587d61b65324db24c1a773fb2971cc099096
+goal_progress_v2:
+  enabled: true
+  minimum_path_length_m: 1.0
+  minimum_goal_progress_m: 0.25
+  preferred_goal_progress_m: 3.0
+  maximum_reverse_progress_m: 0.05
+  softplus_temperature_m: 0.25
+  loss_weight: 2.0
+  reverse_weight: 4.0
+  ranking_weight: 0.0
+  ranking_margin: 0.75
+  label_weight: 0.0
+  minimum_goal_progress_candidates: 3
+parent_v4_2_8_config_hash: ba373bb49eaec1c821669aae9d13a291d51ea85f414ef9ff3bb06936ba8b0087
+projected_score_v3:
+  enabled: true
+  max_speed_mps: 6.0
+  max_acceleration_mps2: 6.0
+  projection_min_scale: 0.15
+  projection_steps: 18
+  trajectory_samples: 81
+  limit_tolerance: 0.001
+  vehicle_radius_m: 0.3
+  tracking_margin_m: 0.35
+  reaction_time_s: 0.12
+  braking_acceleration_mps2: 6.0
+  clearance_sensor_tolerance_m: 0.08
+  horizontal_fov_deg: 90.0
+  vertical_fov_deg: 60.0
+  visibility_margin_deg: 5.0
+  minimum_path_length_m: 1.0
+  minimum_goal_progress_m: 0.25
+  preferred_goal_progress_m: 3.0
+  clearance_saturation_m: 1.0
+  unsafe_label_floor: 4.0
+  progress_weight: 1.0
+  detour_weight: 0.25
+  smoothness_weight: 0.05
+  regression_weight: 0.25
+  listwise_weight: 1.0
+  safety_ranking_weight: 2.0
+  quality_ranking_weight: 1.0
+  ranking_margin: 1.0
+  quality_pair_gap: 0.1
+  target_temperature: 0.35
+  prediction_temperature: 1.0
+  candidate_trajectory_samples: 30
+  candidate_stopping_loss_weight: 0.25
+  candidate_stopping_temperature_m: 0.25
+  candidate_stopping_mean_weight: 0.25
+  candidate_stopping_cvar_weight: 0.5
+  candidate_stopping_coverage_weight: 1.0
+  candidate_stopping_cvar_fraction: 0.3333333333333333
+  candidate_stopping_minimum_candidates: 3

@@ -9,6 +9,10 @@ from ruamel.yaml import YAML
 
 from config.config import cfg
 from policy.static_yopo_training_v1 import MixedSceneStaticYOPOObjectiveV1
+from policy.static_yopo_safety_first_v1 import StaticSafetyFirstConfigV1
+from policy.static_yopo_kinodynamic_v2 import KinodynamicFeasibilityConfigV2
+from policy.static_yopo_preventive_safety_v1 import PreventiveSafetyConfigV1
+from policy.static_yopo_progress_safety_v1 import ProgressSafetyConfigV1
 from tools.train_mixed_static_yopo_v1 import (
     append_jsonl, build_optimizer, build_scheduler, finite_details,
     optimizer_learning_rates, training_implementation_hash,
@@ -62,6 +66,11 @@ def make_objective():
     )
     torch.nn.Module.__init__(value)
     value.dep_loss = FakeDepLoss()
+    value.local_goal_horizon_m = None
+    value.safety_first_config = StaticSafetyFirstConfigV1()
+    value.kinodynamic_config = KinodynamicFeasibilityConfigV2()
+    value.preventive_safety_config = PreventiveSafetyConfigV1()
+    value.progress_safety_config = ProgressSafetyConfigV1()
     return value
 
 
@@ -129,7 +138,13 @@ def test_v33_balanced_plateau_contract():
     config = YAML(typ="safe").load(
         ROOT / "configs/phase8jqv2_5_mixed_static_yopo_training_v3_3.yaml"
     )
-    assert config["training_implementation_hash"] == training_implementation_hash()
+    # V3.3 is a frozen historical contract.  New versioned objectives must not
+    # rewrite its recorded implementation identity.
+    assert len(config["training_implementation_hash"]) == 64
+    current = YAML(typ="safe").load(
+        ROOT / "configs/route_a_v4_5_10_controlled_continuation.yaml"
+    )
+    assert current["training_implementation_hash"] == training_implementation_hash()
     assert config["loader"]["sampling_strategy"] == "map_type_balanced"
     assert config["validation"]["primary_metric"] == (
         "macro_map_type_total_static_loss"
