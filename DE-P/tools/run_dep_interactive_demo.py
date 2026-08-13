@@ -61,6 +61,10 @@ from policy.runtime_profile_v4_9 import (
     PROFILE_NAME as V49_RUNTIME_PROFILE,
     RUNTIME_BEHAVIOR_VERSION as V49_RUNTIME_BEHAVIOR_VERSION,
 )
+from policy.runtime_profile_v4_9_1 import (
+    PROFILE_NAME as V491_RUNTIME_PROFILE,
+    RUNTIME_BEHAVIOR_VERSION as V491_RUNTIME_BEHAVIOR_VERSION,
+)
 DEFAULT_SCENES = ROOT / "configs" / "dep_interactive_demo_scenes_v4.json"
 DEFAULT_RUN = (
     ROOT / "runs" / "phase8_mixed_static_yopo_v3_2_low_lr_adamw"
@@ -170,7 +174,7 @@ def parse_args():
             V4510_RUNTIME_PROFILE, V47_RUNTIME_PROFILE,
             V48_RUNTIME_PROFILE, V481_RUNTIME_PROFILE,
             V482_RUNTIME_PROFILE, V485_RUNTIME_PROFILE,
-            V49_RUNTIME_PROFILE,
+            V49_RUNTIME_PROFILE, V491_RUNTIME_PROFILE,
         ),
         default="strict",
         help=(
@@ -1761,6 +1765,7 @@ def main():
             V482_RUNTIME_PROFILE: V482_RUNTIME_BEHAVIOR_VERSION,
             V485_RUNTIME_PROFILE: V485_RUNTIME_BEHAVIOR_VERSION,
             V49_RUNTIME_PROFILE: V49_RUNTIME_BEHAVIOR_VERSION,
+            V491_RUNTIME_PROFILE: V491_RUNTIME_BEHAVIOR_VERSION,
         }.get(args.runtime_profile, args.runtime_profile),
         "dynamic_foreground_mode": args.dynamic_foreground_mode,
         "planning_speed_mps": args.planning_speed,

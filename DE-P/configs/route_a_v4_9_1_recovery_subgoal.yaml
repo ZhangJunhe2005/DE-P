@@ -1,0 +1,36 @@
+contract_version: route_a_v4_9_1_recovery_subgoal_v1
+status: IMPLEMENTED_PENDING_CLOSED_LOOP
+selected_version: v4.9.1
+rollback:
+  branch: freeze/route-a-v4-9-uniform-prompt-recovery
+  tag: route-a-v4.9-uniform-prompt-recovery
+  commit: f7efc5a5
+base:
+  runtime_profile: v4_9_dynamic_motion_preserving_safety
+  checkpoint_path: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_8_3_candidate_only_shakedown/20260813T050742Z-13178/checkpoints/best.pth
+  checkpoint_sha256: 22e5c63c273d751c15479d70c99d9b85ad615b7b4c62063946a5b1683776ac60
+scope:
+  network_weights_modified: false
+  training_executed: false
+  training_dataset_modified: false
+  map_specific_logic: false
+  original_v4_9_launcher_modified: false
+  translation_owner: unchanged_v4_8_3_network
+  recovery_owner: temporary_goal_lifecycle_only
+temporary_subgoal:
+  scan_inference_conditioning: current_camera_forward_10m_non_executable_probe
+  source: network_candidate_after_full_runtime_safety
+  minimum_candidate_distance_m: 1.0
+  target_distance_m: 2.5
+  arrival_radius_m: 0.60
+  restore_condition: temporary_goal_reached
+  cancellation_conditions:
+    - new_operator_mission_goal
+    - provisional_handoff_failed
+    - renewed_network_stagnation
+  dynamic_hard_veto_preserved: true
+  mission_arrival_uses_temporary_goal: false
+validation:
+  original_v4_9_ab_preserved: true
+  closed_loop_complete: false
+  production_qualified: false

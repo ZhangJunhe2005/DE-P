@@ -118,6 +118,18 @@ from policy.runtime_profile_v4_9 import (
     deadlock_recovery_mapping_v4_9,
     runtime_safety_mapping_v4_9,
 )
+from policy.runtime_profile_v4_9_1 import (
+    PROFILE_NAME as V491_RUNTIME_PROFILE,
+    RUNTIME_BEHAVIOR_VERSION as V491_RUNTIME_BEHAVIOR_VERSION,
+    calculate_recovery_continuity_yaw_v4_9_1,
+    deadlock_recovery_mapping_v4_9_1,
+    runtime_safety_mapping_v4_9_1,
+)
+from policy.recovery_subgoal_v1 import (
+    RecoverySubgoalConfigV1,
+    recovery_conditioning_goal_v1,
+    select_recovery_subgoal_v1,
+)
 from policy.state_transform import *
 from policy.dynamic.context import DynamicContext
 from policy.dynamic.types import DynamicPerceptionConfig
@@ -166,7 +178,12 @@ class DepNet:
             height=self.height, width=self.width, depth_scale=self.scale,
             min_depth_m=self.min_dis, max_depth_m=self.max_dis,
         )
-        self.goal = np.array(self.config['goal'])
+        self.mission_goal = np.asarray(
+            self.config['goal'], dtype=np.float64
+        ).copy()
+        # ``goal`` remains the active network-planning goal for compatibility.
+        # It differs from mission_goal only during V4.9.1 bounded recovery.
+        self.goal = self.mission_goal.copy()
         self.goal_z = float(self.config.get("goal_z", self.goal[2]))
         self.arrival_radius = float(self.config.get("arrival_radius", 5.0))
         self.wait_for_goal = bool(self.config.get("wait_for_goal", False))
@@ -264,6 +281,7 @@ class DepNet:
             V482_RUNTIME_PROFILE: V482_RUNTIME_BEHAVIOR_VERSION,
             V485_RUNTIME_PROFILE: V485_RUNTIME_BEHAVIOR_VERSION,
             V49_RUNTIME_PROFILE: V49_RUNTIME_BEHAVIOR_VERSION,
+            V491_RUNTIME_PROFILE: V491_RUNTIME_BEHAVIOR_VERSION,
         }.get(runtime_profile, runtime_profile)
         if runtime_profile == V44_RUNTIME_PROFILE:
             safety_mapping = runtime_safety_mapping_v4_4(safety_mapping)
@@ -285,6 +303,8 @@ class DepNet:
             safety_mapping = runtime_safety_mapping_v4_8_5(safety_mapping)
         elif runtime_profile == V49_RUNTIME_PROFILE:
             safety_mapping = runtime_safety_mapping_v4_9(safety_mapping)
+        elif runtime_profile == V491_RUNTIME_PROFILE:
+            safety_mapping = runtime_safety_mapping_v4_9_1(safety_mapping)
         elif runtime_profile == "v4_3_minimal":
             # V4.3 keeps only physical collision/limit/boundary checks.  Camera
             # visibility and minimum-progress heuristics remain observable in
@@ -343,21 +363,25 @@ class DepNet:
             )
         if recovery_profile == "bounded_scan_v3":
             recovery_mapping = (
-                deadlock_recovery_mapping_v4_9(recovery_mapping)
-                if runtime_profile == V49_RUNTIME_PROFILE else
+                deadlock_recovery_mapping_v4_9_1(recovery_mapping)
+                if runtime_profile == V491_RUNTIME_PROFILE else
                 (
-                    deadlock_recovery_mapping_v4_8_5(recovery_mapping)
-                    if runtime_profile == V485_RUNTIME_PROFILE else
+                    deadlock_recovery_mapping_v4_9(recovery_mapping)
+                    if runtime_profile == V49_RUNTIME_PROFILE else
                     (
-                        deadlock_recovery_mapping_v4_8_2(recovery_mapping)
-                        if runtime_profile == V482_RUNTIME_PROFILE else
+                        deadlock_recovery_mapping_v4_8_5(recovery_mapping)
+                        if runtime_profile == V485_RUNTIME_PROFILE else
                         (
-                            deadlock_recovery_mapping_v4_8_1_pillar(recovery_mapping)
-                            if runtime_profile == V481_RUNTIME_PROFILE else
+                            deadlock_recovery_mapping_v4_8_2(recovery_mapping)
+                            if runtime_profile == V482_RUNTIME_PROFILE else
                             (
-                                deadlock_recovery_mapping_v4_8_pillar(recovery_mapping)
-                                if runtime_profile == V48_RUNTIME_PROFILE else
-                                deadlock_recovery_mapping_v4_7_pillar(recovery_mapping)
+                                deadlock_recovery_mapping_v4_8_1_pillar(recovery_mapping)
+                                if runtime_profile == V481_RUNTIME_PROFILE else
+                                (
+                                    deadlock_recovery_mapping_v4_8_pillar(recovery_mapping)
+                                    if runtime_profile == V48_RUNTIME_PROFILE else
+                                    deadlock_recovery_mapping_v4_7_pillar(recovery_mapping)
+                                )
                             )
                         )
                     )
@@ -386,6 +410,17 @@ class DepNet:
                 self.deadlock_recovery_config
             )
         self.recovery_trajectory_installed = False
+        self.recovery_subgoal_config = RecoverySubgoalConfigV1(
+            enabled=(runtime_profile == V491_RUNTIME_PROFILE),
+        )
+        self.recovery_subgoal_config.validate()
+        self.recovery_subgoal_world = None
+        self.recovery_subgoal_origin_world = None
+        self.recovery_subgoal_action_id = None
+        self.recovery_subgoal_last_event = "inactive"
+        self.recovery_probe_goal_world = None
+        self.recovery_probe_active = False
+        self.last_network_goal_world = self.goal.copy()
         self.dynamic_yield_active = False
         self.last_dynamic_certificate_monotonic_s = None
         self.active_trajectory_requires_dynamic_freshness = False
@@ -404,6 +439,9 @@ class DepNet:
         print("Runtime behavior version:", self.runtime_behavior_version)
         print("Deadlock recovery contract:", json.dumps(
             self.deadlock_recovery_config.contract(), sort_keys=True
+        ))
+        print("Recovery subgoal contract:", json.dumps(
+            self.recovery_subgoal_config.contract(), sort_keys=True
         ))
 
         # eval
@@ -766,22 +804,23 @@ class DepNet:
         if not accepted:
             rospy.logwarn(f"Rejected 2D Nav Goal: {reason}")
             return
-        self.goal = candidate_goal
-        self.accepted_goal_count += 1
-        self.goal_received = True
-        self.arrive = False
-        self.ctrl_time = None
-        self.goal_alignment_pending = bool(
-            self.align_goal_before_planning and self.odom_init
-        )
-        print(
-            f"New Goal: ({self.goal[0]:.1f}, {self.goal[1]:.1f}, {self.goal[2]:.1f}); "
-            f"arrival radius={self.arrival_radius:.1f} m; "
-            f"policy={self.goal_policy}; align={self.goal_alignment_pending}"
-        )
-
-        # 可选：重置坐标系轨迹（到达新目标时清空历史坐标系）
         with self.lock:
+            # An operator command is always a new mission.  It atomically
+            # cancels any internal recovery target so an old opening can never
+            # override a newer RViz goal.
+            self.mission_goal = candidate_goal.copy()
+            self.goal = candidate_goal.copy()
+            self.recovery_subgoal_world = None
+            self.recovery_subgoal_origin_world = None
+            self.recovery_subgoal_action_id = None
+            self.recovery_subgoal_last_event = "cancelled_by_new_mission_goal"
+            self.accepted_goal_count += 1
+            self.goal_received = True
+            self.arrive = False
+            self.ctrl_time = None
+            self.goal_alignment_pending = bool(
+                self.align_goal_before_planning and self.odom_init
+            )
             position = None
             if self.odom_init:
                 position = np.asarray([
@@ -795,6 +834,46 @@ class DepNet:
             self.last_dynamic_certificate_monotonic_s = None
             self.frame_list.clear()
             self.next_frame_id = 0
+        print(
+            f"New Goal: ({self.mission_goal[0]:.1f}, "
+            f"{self.mission_goal[1]:.1f}, {self.mission_goal[2]:.1f}); "
+            f"arrival radius={self.arrival_radius:.1f} m; "
+            f"policy={self.goal_policy}; align={self.goal_alignment_pending}"
+        )
+
+    def _activate_recovery_subgoal_locked(self, proposal, origin_world):
+        """Temporarily point the unchanged policy at a certified opening."""
+        if not self.recovery_subgoal_config.enabled:
+            return False
+        target = np.asarray(proposal.target_world, dtype=np.float64)
+        origin = np.asarray(origin_world, dtype=np.float64)
+        if target.shape != (3,) or origin.shape != (3,) \
+                or not np.all(np.isfinite(target)) \
+                or not np.all(np.isfinite(origin)):
+            raise ValueError("recovery subgoal activation requires finite 3-vectors")
+        self.recovery_subgoal_world = target.copy()
+        self.recovery_subgoal_origin_world = origin.copy()
+        self.recovery_subgoal_action_id = int(proposal.action_id)
+        self.goal = target.copy()
+        self.recovery_subgoal_last_event = "activated_from_certified_candidate"
+        rospy.logwarn(
+            "DE-P recovery temporary goal activated at (%.2f, %.2f, %.2f); "
+            "mission goal retained at (%.2f, %.2f, %.2f)",
+            target[0], target[1], target[2],
+            self.mission_goal[0], self.mission_goal[1], self.mission_goal[2],
+        )
+        return True
+
+    def _restore_mission_goal_locked(self, reason):
+        if self.recovery_subgoal_world is None:
+            return False
+        self.goal = self.mission_goal.copy()
+        self.recovery_subgoal_world = None
+        self.recovery_subgoal_origin_world = None
+        self.recovery_subgoal_action_id = None
+        self.recovery_subgoal_last_event = f"restored_mission:{reason}"
+        rospy.loginfo("DE-P restored mission goal after recovery: %s", reason)
+        return True
 
     # the first frame
     def callback_odometry(self, data):
@@ -810,13 +889,18 @@ class DepNet:
         self.odom_init = True
 
         pos = np.array((self.odom.pose.pose.position.x, self.odom.pose.pose.position.y, self.odom.pose.pose.position.z))
-        if (
-            self.goal_received
-            and np.linalg.norm(pos - self.goal) < self.arrival_radius
-            and not self.arrive
-        ):
+        with self.lock:
+            if (
+                self.recovery_subgoal_world is not None
+                and np.linalg.norm(pos - self.recovery_subgoal_world)
+                <= self.recovery_subgoal_config.arrival_radius_m
+            ):
+                self._restore_mission_goal_locked("temporary_goal_reached")
+            mission_distance = float(np.linalg.norm(pos - self.mission_goal))
+        if self.goal_received and mission_distance < self.arrival_radius \
+                and not self.arrive:
             print(
-                f"Arrive! distance={np.linalg.norm(pos - self.goal):.2f} m "
+                f"Arrive! distance={mission_distance:.2f} m "
                 f"(threshold={self.arrival_radius:.2f} m)"
             )
             self.arrive = True
@@ -944,8 +1028,29 @@ class DepNet:
         acc_w = self.desire_acc
         acc_c = np.dot(Rotation_cw, acc_w)
 
-        # goal_dir
-        goal_w = self.goal - self.desire_pos
+        # The bounded scan is an observation action.  At a large yaw offset the
+        # mission goal can be lateral/behind the camera, which makes a forward-
+        # trained lattice collapse before a safe opening can even be proposed.
+        # V4.9.1 therefore uses a forward *conditioning probe* only while
+        # scanning.  It is never installed as a goal or command.  A real local
+        # goal can be activated only later from a fully certified candidate.
+        use_recovery_probe = bool(
+            self.runtime_profile == V491_RUNTIME_PROFILE
+            and self.deadlock_recovery_profile == "bounded_scan_v3"
+            and self.deadlock_recovery.mode != DeadlockRecoveryV2.NORMAL
+            and self.recovery_subgoal_world is None
+        )
+        if use_recovery_probe:
+            planning_goal_world = recovery_conditioning_goal_v1(
+                self.desire_pos, self.Rotation_wc[:, 0], 10.0,
+            )
+            self.recovery_probe_goal_world = planning_goal_world.copy()
+        else:
+            planning_goal_world = self.goal.copy()
+            self.recovery_probe_goal_world = None
+        self.recovery_probe_active = use_recovery_probe
+        self.last_network_goal_world = planning_goal_world.copy()
+        goal_w = planning_goal_world - self.desire_pos
         goal_c = np.dot(Rotation_cw, goal_w)
 
         obs = np.concatenate((vel_c, acc_c, goal_c), axis=0).astype(np.float32)
@@ -957,6 +1062,25 @@ class DepNet:
             "contract_version": "runtime_trajectory_safety_v1",
             "runtime_behavior_version": self.runtime_behavior_version,
             "timestamp": time.time(),
+            "mission_goal_world": self.mission_goal.tolist(),
+            "planning_goal_world": self.goal.tolist(),
+            "recovery_subgoal_active": bool(
+                self.recovery_subgoal_world is not None
+            ),
+            "recovery_subgoal_world": (
+                None if self.recovery_subgoal_world is None else
+                self.recovery_subgoal_world.tolist()
+            ),
+            "recovery_subgoal_action_id": self.recovery_subgoal_action_id,
+            "recovery_subgoal_last_event": self.recovery_subgoal_last_event,
+            "network_conditioning_goal_world": (
+                self.last_network_goal_world.tolist()
+            ),
+            "recovery_probe_active": self.recovery_probe_active,
+            "recovery_probe_goal_world": (
+                None if self.recovery_probe_goal_world is None else
+                self.recovery_probe_goal_world.tolist()
+            ),
             **payload,
         }
         encoded = json.dumps(payload, sort_keys=True)
@@ -1076,6 +1200,7 @@ class DepNet:
         time1 = time.time()
         depth_input = torch.from_numpy(depth).to(self.device, non_blocking=True)  # (non_blocking: copying speed 3x)
         obs_norm = self.process_odom()
+        network_goal_world = self.last_network_goal_world.copy()
         obs_input = self.state_transform.prepare_input(obs_norm)
         obs_input = obs_input.to(self.device, non_blocking=True)
         # torch.cuda.synchronize()
@@ -1161,9 +1286,9 @@ class DepNet:
                         if runtime_dynamic_context is not None
                         and runtime_dynamic_context.valid else ()
                     )
-                    v49_runtime = bool(
-                        self.runtime_profile == V49_RUNTIME_PROFILE
-                    )
+                    v49_runtime = bool(self.runtime_profile in (
+                        V49_RUNTIME_PROFILE, V491_RUNTIME_PROFILE,
+                    ))
                     v49_dynamic_context_valid = bool(
                         v49_runtime
                         and runtime_dynamic_context is not None
@@ -1175,7 +1300,7 @@ class DepNet:
                         start_pos, self.Rotation_wc,
                         dynamic_tracks=runtime_dynamic_tracks,
                         query_timestamp=runtime_query_timestamp,
-                        goal_world=self.goal,
+                        goal_world=network_goal_world,
                         flight_bounds=self.flight_bounds,
                     )
                     blocking_before_scaling = classify_dynamic_blocking_v1(
@@ -1234,7 +1359,7 @@ class DepNet:
                                     self.Rotation_wc,
                                     dynamic_tracks=runtime_dynamic_tracks,
                                     query_timestamp=runtime_query_timestamp,
-                                    goal_world=self.goal,
+                                    goal_world=network_goal_world,
                                     flight_bounds=self.flight_bounds,
                                 )
                             )
@@ -1311,6 +1436,16 @@ class DepNet:
                         and selection.action_id is None
                         and blocking_after_scaling["cause"] == "dynamic_only"
                     )
+                    recovery_subgoal_proposal = None
+                    if (
+                        self.runtime_profile == V491_RUNTIME_PROFILE
+                        and recovery_selection_active
+                    ):
+                        recovery_subgoal_proposal = select_recovery_subgoal_v1(
+                            candidates, candidate_durations, evaluations,
+                            raw_scores, start_pos,
+                            self.recovery_subgoal_config,
+                        )
                     visualization_candidates = candidates
                     visualization_evaluations = evaluations
                     visualization_durations = candidate_durations
@@ -1352,9 +1487,19 @@ class DepNet:
                         ),
                     )
                     if self.deadlock_recovery_profile == "bounded_scan_v3":
+                        recovery_action_id = (
+                            (
+                                None if recovery_subgoal_proposal is None else
+                                recovery_subgoal_proposal.action_id
+                            )
+                            if (
+                                self.runtime_profile == V491_RUNTIME_PROFILE
+                                and recovery_selection_active
+                            ) else selection.action_id
+                        )
                         selected_evaluation = (
-                            None if selection.action_id is None
-                            else evaluations[selection.action_id]
+                            None if recovery_action_id is None
+                            else evaluations[recovery_action_id]
                         )
                         recovery_kwargs.update({
                             "selected_candidate_feasible": bool(
@@ -1362,15 +1507,19 @@ class DepNet:
                                 and selected_evaluation.feasible
                             ),
                             "selected_candidate_goal_progress_m": (
-                                None if selected_evaluation is None
-                                else selected_evaluation.endpoint_goal_progress_m
+                                recovery_subgoal_proposal.target_distance_m
+                                if recovery_subgoal_proposal is not None else
+                                (
+                                    None if selected_evaluation is None else
+                                    selected_evaluation.endpoint_goal_progress_m
+                                )
                             ),
                             "selected_candidate_action_id": (
-                                selection.action_id
+                                recovery_action_id
                             ),
                             "selected_candidate_horizontal_sector_id": (
                                 horizontal_sector_from_action_id(
-                                    selection.action_id,
+                                    recovery_action_id,
                                     self.lattice_primitive.horizon_num,
                                 )
                             ),
@@ -1424,11 +1573,50 @@ class DepNet:
                         rospy.logwarn(
                             "DE-P recovery transition: %s", recovery.transition
                         )
-                    action_id = (
-                        selection.action_id
-                        if recovery.mode == DeadlockRecoveryV2.NORMAL
-                        else None
-                    )
+                    subgoal_release_transitions = {
+                        "braking_to_network_selected_candidate",
+                        "bounded_scan_to_network_selected_candidate",
+                        "bounded_scan_timeout_to_network_selected_candidate",
+                        "bounded_scan_limit_to_network_selected_candidate",
+                    }
+                    if (
+                        self.runtime_profile == V491_RUNTIME_PROFILE
+                        and recovery.transition in {
+                            "network_to_braking",
+                            "network_stagnation_to_braking",
+                            "handoff_validation_failed_to_braking",
+                        }
+                    ):
+                        self._restore_mission_goal_locked(
+                            recovery.transition
+                        )
+                    subgoal_activated = False
+                    if (
+                        self.runtime_profile == V491_RUNTIME_PROFILE
+                        and recovery.transition in subgoal_release_transitions
+                        and recovery_subgoal_proposal is not None
+                    ):
+                        subgoal_activated = (
+                            self._activate_recovery_subgoal_locked(
+                                recovery_subgoal_proposal, start_pos,
+                            )
+                        )
+                    action_id = None
+                    if recovery.mode == DeadlockRecoveryV2.NORMAL:
+                        if subgoal_activated:
+                            action_id = recovery_subgoal_proposal.action_id
+                        elif self.recovery_probe_active:
+                            # A scan-conditioning probe is not a mission or an
+                            # executable authorization.  If scan confirmation
+                            # did not activate a certified subgoal, brake and
+                            # let the next mission-conditioned replan decide.
+                            action_id = None
+                        else:
+                            action_id = selection.action_id
+                    if action_id is not None:
+                        selected_dynamic_time_scale = float(
+                            per_candidate_dynamic_time_scales[action_id]
+                        )
                     braking_compliant = None
                     braking_evaluation = None
                     braking_option_count = 0
@@ -1702,14 +1890,19 @@ class DepNet:
                         )
                         if recovery.mode != DeadlockRecoveryV2.NORMAL else
                         (
-                            "dynamic_yield" if dynamic_yield else
+                            "recovery_probe_no_handoff_brake"
+                            if self.recovery_probe_active
+                            and not subgoal_activated else
                             (
-                                "dynamic_time_scaled_motion"
-                                if selected_dynamic_time_scale > 1.0 else
+                                "dynamic_yield" if dynamic_yield else
                                 (
-                                    "dynamic_risk_motion"
-                                    if dynamic_risk_changed_selection else
-                                    "network_cruise"
+                                    "dynamic_time_scaled_motion"
+                                    if selected_dynamic_time_scale > 1.0 else
+                                    (
+                                        "dynamic_risk_motion"
+                                        if dynamic_risk_changed_selection else
+                                        "network_cruise"
+                                    )
                                 )
                             )
                         )
@@ -1717,6 +1910,11 @@ class DepNet:
                     self._write_safety_telemetry({
                         "mode": recovery.mode,
                         "network_selection_mode": selection.mode,
+                        "executed_selection_source": (
+                            "certified_recovery_subgoal_candidate"
+                            if subgoal_activated else
+                            "runtime_safety_network_selection"
+                        ),
                         "control_state": control_state,
                         "current_speed_mps": float(np.linalg.norm(start_vel)),
                         "dynamic_blocking_cause_before_scaling": (
@@ -1813,8 +2011,24 @@ class DepNet:
                         ),
                         "recovery_selection_uses_raw_network_score": (
                             recovery_selection_active
+                            and self.runtime_profile != V491_RUNTIME_PROFILE
+                        ),
+                        "recovery_selection_policy": (
+                            "certified_capacity_then_network_score"
+                            if (
+                                recovery_selection_active
+                                and self.runtime_profile
+                                == V491_RUNTIME_PROFILE
+                            ) else "runtime_safety_network_score"
                         ),
                         "recovery_transition": recovery.transition,
+                        "recovery_subgoal_proposal": (
+                            None if recovery_subgoal_proposal is None else
+                            recovery_subgoal_proposal.as_dict()
+                        ),
+                        "recovery_subgoal_activated_this_replan": (
+                            subgoal_activated
+                        ),
                         "recovery_retreat_target_world": (
                             recovery.retreat_target_world
                         ),
@@ -2036,7 +2250,9 @@ class DepNet:
                             and v49_dynamic_context_valid
                         ),
                         "normal_candidate_dynamic_hard_veto_preserved": bool(
-                            self.runtime_profile == V49_RUNTIME_PROFILE
+                            self.runtime_profile in (
+                                V49_RUNTIME_PROFILE, V491_RUNTIME_PROFILE,
+                            )
                         ),
                         "dynamic_hard_veto_emergency_brake_exception": bool(
                             braking_selection_mode
@@ -2230,6 +2446,10 @@ class DepNet:
                 )
             elif self.runtime_profile == V49_RUNTIME_PROFILE:
                 yaw, yaw_dot = calculate_recovery_continuity_yaw_v4_9(
+                    self.desire_vel, goal_dir, self.last_yaw, self.ctrl_dt
+                )
+            elif self.runtime_profile == V491_RUNTIME_PROFILE:
+                yaw, yaw_dot = calculate_recovery_continuity_yaw_v4_9_1(
                     self.desire_vel, goal_dir, self.last_yaw, self.ctrl_dt
                 )
             else:
@@ -2524,7 +2744,7 @@ def parser():
             V4510_RUNTIME_PROFILE, V47_RUNTIME_PROFILE,
             V48_RUNTIME_PROFILE, V481_RUNTIME_PROFILE,
             V482_RUNTIME_PROFILE, V485_RUNTIME_PROFILE,
-            V49_RUNTIME_PROFILE,
+            V49_RUNTIME_PROFILE, V491_RUNTIME_PROFILE,
         ),
         default="strict",
         help=(
