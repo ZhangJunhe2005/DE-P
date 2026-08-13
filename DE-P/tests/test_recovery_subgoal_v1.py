@@ -22,6 +22,18 @@ class _LinearAxis:
         return self.start + ratio * (self.end - self.start)
 
 
+class _RetreatThenAdvanceAxis:
+    def __init__(self, endpoint, duration=1.0):
+        self.endpoint = float(endpoint)
+        self.duration = float(duration)
+
+    def get_position(self, timestamp):
+        ratio = float(timestamp) / self.duration
+        if ratio <= 0.4:
+            return -0.20 * ratio / 0.4
+        return -0.20 + (self.endpoint + 0.20) * (ratio - 0.4) / 0.6
+
+
 def _candidate(endpoint):
     endpoint = np.asarray(endpoint, dtype=np.float64)
     return tuple(_LinearAxis(0.0, value) for value in endpoint)
@@ -92,6 +104,37 @@ def test_capacity_is_primary_but_network_score_breaks_sufficient_ties():
     assert proposals.action_id == 1
 
 
+def test_candidate_that_reaches_forward_only_after_retreat_is_rejected():
+    reverse_prefix = (
+        _RetreatThenAdvanceAxis(4.0),
+        _LinearAxis(0.0, 0.0),
+        _LinearAxis(0.0, 0.0),
+    )
+    proposal = select_recovery_subgoal_v1(
+        (reverse_prefix, _candidate((3.0, 0.0, 0.0))),
+        (1.0, 1.0),
+        (_evaluation(distance=4.0), _evaluation(distance=3.0)),
+        (-100.0, 0.0),
+        np.zeros(3),
+    )
+    assert proposal is not None
+    assert proposal.action_id == 1
+    assert proposal.prefix_progress_m >= 0.05
+    assert proposal.maximum_prefix_retreat_m <= 0.05
+
+
+def test_no_temporary_goal_when_every_candidate_first_backs_away():
+    reverse_prefix = (
+        _RetreatThenAdvanceAxis(4.0),
+        _LinearAxis(0.0, 0.0),
+        _LinearAxis(0.0, 0.0),
+    )
+    assert select_recovery_subgoal_v1(
+        (reverse_prefix,), (1.0,), (_evaluation(distance=4.0),),
+        (0.0,), np.zeros(3),
+    ) is None
+
+
 def test_contract_states_network_translation_and_mission_separation():
     contract = RecoverySubgoalConfigV1().contract()
     assert contract["translation_owner"] == "unchanged_learned_policy"
@@ -110,6 +153,7 @@ def test_scan_conditioning_target_is_forward_and_does_not_need_mission_goal():
     "network_to_braking",
     "network_stagnation_to_braking",
     "handoff_validation_failed_to_braking",
+    "handoff_directional_retreat_to_braking",
 ))
 def test_repeated_deadlock_always_restores_mission_before_new_scan(transition):
     assert recovery_subgoal_restore_reason_v1(transition) == transition

@@ -25,6 +25,9 @@ from policy.runtime_profile_v4_8_5 import (
 from policy.runtime_profile_v4_9 import (
     deadlock_recovery_mapping_v4_9,
 )
+from policy.runtime_profile_v4_9_1 import (
+    deadlock_recovery_mapping_v4_9_1,
+)
 
 
 def recovery_config(**updates):
@@ -35,7 +38,7 @@ def recovery_config(**updates):
 
 def observe(recovery, now_s, feasible=0, speed=0.0, selected=False,
             progress=None, depth=None, action_id=None, sector_id=None,
-            clearance=None, position=None):
+            clearance=None, position=None, handoff_target=None):
     if depth is None:
         depth = np.full((20, 30), 5.0, dtype=np.float32)
     return recovery.observe(
@@ -51,6 +54,7 @@ def observe(recovery, now_s, feasible=0, speed=0.0, selected=False,
         selected_candidate_action_id=action_id,
         selected_candidate_horizontal_sector_id=sector_id,
         selected_candidate_min_observed_clearance_m=clearance,
+        handoff_target_world=handoff_target,
         now_s=now_s,
     )
 
@@ -145,6 +149,13 @@ def v4_8_5_recovery():
     return DeadlockRecoveryV3(config)
 
 
+def v4_9_1_recovery():
+    config = DeadlockRecoveryConfigV3.from_mapping(
+        deadlock_recovery_mapping_v4_9_1({"enabled": True})
+    )
+    return DeadlockRecoveryV3(config)
+
+
 def release_v4_8_5_scan(recovery, start_s=0.40, position=None, depth=None):
     now = float(start_s)
     for action_id in (2, 7, 12, 2, 7):
@@ -184,6 +195,48 @@ def test_v4_8_5_handoff_resets_scan_only_after_measured_escape_motion():
     assert decision.handoff_validation_active is False
     assert recovery.unsuccessful_scan_attempts == 0
     assert decision.current_scan_limit_deg == 60.0
+
+
+def test_v4_9_1_handoff_accepts_only_motion_toward_temporary_goal():
+    recovery = v4_9_1_recovery()
+    enter_scan(recovery)
+    now, _ = release_v4_8_5_scan(recovery)
+    target = np.asarray([2.5, 0.0, 0.0])
+
+    # Sideways distance and a clearer camera view cannot validate a
+    # directional temporary-goal handoff.
+    decision = observe(
+        recovery, now + 0.50, feasible=3, selected=True, progress=1.0,
+        action_id=7, sector_id=2, position=[0.0, 0.60, 0.0],
+        handoff_target=target,
+        depth=np.full((20, 30), 20.0, dtype=np.float32),
+    )
+    assert decision.transition is None
+    assert decision.handoff_validation_displacement_m == pytest.approx(0.60)
+    assert decision.handoff_validation_directional_progress_m == pytest.approx(0.0)
+
+    decision = observe(
+        recovery, now + 0.60, feasible=3, selected=True, progress=1.0,
+        action_id=7, sector_id=2, position=[0.51, 0.60, 0.0],
+        handoff_target=target,
+    )
+    assert decision.transition == "handoff_measured_motion_verified"
+    assert decision.handoff_validation_directional_progress_m == pytest.approx(0.51)
+
+
+def test_v4_9_1_handoff_rejects_more_than_ten_centimetres_of_retreat():
+    recovery = v4_9_1_recovery()
+    enter_scan(recovery)
+    now, _ = release_v4_8_5_scan(recovery)
+    decision = observe(
+        recovery, now + 0.30, feasible=3, selected=True, progress=1.0,
+        action_id=7, sector_id=2, position=[-0.11, 0.0, 0.0],
+        handoff_target=[2.5, 0.0, 0.0],
+    )
+    assert decision.transition == "handoff_directional_retreat_to_braking"
+    assert decision.mode == recovery.BRAKING
+    assert decision.handoff_validation_result == "directional_retreat_exceeded"
+    assert decision.handoff_validation_max_directional_retreat_m == pytest.approx(0.11)
 
 
 def test_v4_8_5_failed_handoff_resumes_same_scan_at_ninety_degrees():

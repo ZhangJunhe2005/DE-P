@@ -10,7 +10,7 @@ from policy.runtime_profile_v4_9 import (
 
 
 PROFILE_NAME = "v4_9_1_recovery_temporary_subgoal"
-RUNTIME_BEHAVIOR_VERSION = "v4_9_1_certified_candidate_temporary_subgoal_v1"
+RUNTIME_BEHAVIOR_VERSION = "v4_9_1_directional_temporary_subgoal_handoff_v2"
 
 
 def runtime_safety_mapping_v4_9_1(base):
@@ -18,7 +18,16 @@ def runtime_safety_mapping_v4_9_1(base):
 
 
 def deadlock_recovery_mapping_v4_9_1(base):
-    return deadlock_recovery_mapping_v4_9(base)
+    value = deadlock_recovery_mapping_v4_9(base)
+    value.update({
+        # A temporary goal is a directional contract.  Give the network time
+        # to retime inherited braking state, but never accept sideways or
+        # backward displacement as proof that the escape succeeded.
+        "handoff_validation_window_s": 2.50,
+        "handoff_directional_progress_enabled": True,
+        "handoff_max_directional_retreat_m": 0.10,
+    })
+    return value
 
 
 def calculate_recovery_continuity_yaw_v4_9_1(

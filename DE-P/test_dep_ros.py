@@ -1528,6 +1528,11 @@ class DepNet:
                                 None if selected_evaluation is None
                                 else selected_evaluation.min_observed_clearance_m
                             ),
+                            "handoff_target_world": (
+                                self.recovery_subgoal_world
+                                if self.runtime_profile
+                                == V491_RUNTIME_PROFILE else None
+                            ),
                         })
                     dynamic_yield_suppressed_recovery = False
                     if (
@@ -2116,6 +2121,14 @@ class DepNet:
                         ),
                         "recovery_handoff_validation_displacement_m": getattr(
                             recovery, "handoff_validation_displacement_m", None
+                        ),
+                        "recovery_handoff_validation_directional_progress_m": getattr(
+                            recovery,
+                            "handoff_validation_directional_progress_m", None,
+                        ),
+                        "recovery_handoff_validation_max_directional_retreat_m": getattr(
+                            recovery,
+                            "handoff_validation_max_directional_retreat_m", None,
                         ),
                         "recovery_handoff_validation_forward_clearance_gain_m": getattr(
                             recovery,

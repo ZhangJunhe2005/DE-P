@@ -24,7 +24,13 @@ def test_profile_name_is_versioned_without_replacing_v49():
 def test_v491_keeps_v49_physical_and_dynamic_runtime_contract_exactly():
     base = {}
     assert runtime_safety_mapping_v4_9_1(base) == runtime_safety_mapping_v4_9(base)
-    assert deadlock_recovery_mapping_v4_9_1(base) == deadlock_recovery_mapping_v4_9(base)
+    parent = deadlock_recovery_mapping_v4_9(base)
+    directional = deadlock_recovery_mapping_v4_9_1(base)
+    assert directional.pop("handoff_validation_window_s") == 2.50
+    assert directional.pop("handoff_directional_progress_enabled") is True
+    assert directional.pop("handoff_max_directional_retreat_m") == 0.10
+    parent.pop("handoff_validation_window_s")
+    assert directional == parent
 
 
 def test_ros_entry_keeps_mission_arrival_separate_from_planning_goal():

@@ -18,6 +18,7 @@ SUBGOAL_ABORT_RECOVERY_TRANSITIONS_V1 = frozenset({
     "network_to_braking",
     "network_stagnation_to_braking",
     "handoff_validation_failed_to_braking",
+    "handoff_directional_retreat_to_braking",
 })
 
 
@@ -28,6 +29,9 @@ class RecoverySubgoalConfigV1:
     target_distance_m: float = 2.5
     arrival_radius_m: float = 0.60
     trajectory_samples: int = 81
+    prefix_horizon_s: float = 0.60
+    minimum_prefix_progress_m: float = 0.05
+    maximum_prefix_retreat_m: float = 0.05
 
     def validate(self):
         if self.minimum_candidate_distance_m <= 0.0:
@@ -38,11 +42,17 @@ class RecoverySubgoalConfigV1:
             raise ValueError("recovery subgoal arrival radius must be within its target distance")
         if self.trajectory_samples < 3:
             raise ValueError("recovery subgoal needs at least three trajectory samples")
+        if self.prefix_horizon_s <= 0.0:
+            raise ValueError("recovery prefix horizon must be positive")
+        if self.minimum_prefix_progress_m <= 0.0:
+            raise ValueError("recovery prefix progress must be positive")
+        if self.maximum_prefix_retreat_m < 0.0:
+            raise ValueError("recovery prefix retreat must be non-negative")
 
     def contract(self):
         self.validate()
         return {
-            "contract_version": "recovery_subgoal_v1",
+            "contract_version": "recovery_subgoal_v1_1_directional_prefix",
             "source": "network_candidate_after_full_runtime_safety",
             "translation_owner": "unchanged_learned_policy",
             "mission_goal_mutated": False,
@@ -59,6 +69,8 @@ class RecoverySubgoalProposalV1:
     candidate_endpoint_distance_m: float
     network_score: float
     min_observed_clearance_m: float | None
+    prefix_progress_m: float
+    maximum_prefix_retreat_m: float
 
     def as_dict(self):
         return {
@@ -68,6 +80,8 @@ class RecoverySubgoalProposalV1:
             "candidate_endpoint_distance_m": self.candidate_endpoint_distance_m,
             "network_score": self.network_score,
             "min_observed_clearance_m": self.min_observed_clearance_m,
+            "prefix_progress_m": self.prefix_progress_m,
+            "maximum_prefix_retreat_m": self.maximum_prefix_retreat_m,
         }
 
 
@@ -144,30 +158,65 @@ def select_recovery_subgoal_v1(
             and endpoint_distance >= config.minimum_candidate_distance_m
             and np.isfinite(score)
         ):
+            positions = _sample_candidate_positions(
+                candidates[action_id], durations_s[action_id],
+                config.trajectory_samples,
+            )
+            if positions.shape != (config.trajectory_samples, 3) \
+                    or not np.all(np.isfinite(positions)):
+                raise ValueError(
+                    "network candidate produced non-finite recovery samples"
+                )
+            distances = np.linalg.norm(positions - origin[None, :], axis=1)
+            target_distance = min(
+                config.target_distance_m,
+                float(evaluation.endpoint_progress_m),
+            )
+            sample_index = int(np.argmin(np.abs(distances - target_distance)))
+            target = positions[sample_index].copy()
+            actual_distance = float(distances[sample_index])
+            if actual_distance < config.minimum_candidate_distance_m:
+                continue
+            direction = target - origin
+            direction_norm = float(np.linalg.norm(direction))
+            if direction_norm <= 1.0e-9:
+                continue
+            direction /= direction_norm
+            duration = float(durations_s[action_id])
+            if not np.isfinite(duration) or duration <= 0.0:
+                raise ValueError("recovery candidate duration must be positive")
+            prefix_index = min(
+                sample_index,
+                max(
+                    1,
+                    int(round(
+                        min(config.prefix_horizon_s, duration)
+                        / duration * (config.trajectory_samples - 1)
+                    )),
+                ),
+            )
+            signed_prefix = (
+                positions[:prefix_index + 1] - origin[None, :]
+            ) @ direction
+            prefix_progress = float(signed_prefix[-1])
+            maximum_retreat = max(0.0, -float(np.min(signed_prefix)))
+            if (
+                prefix_progress < config.minimum_prefix_progress_m
+                or maximum_retreat > config.maximum_prefix_retreat_m
+            ):
+                continue
             capacity = min(endpoint_distance, config.target_distance_m)
-            eligible.append((-capacity, score, action_id))
+            eligible.append((
+                -capacity, score, action_id, target, actual_distance,
+                prefix_progress, maximum_retreat,
+            ))
     if not eligible:
         return None
 
-    _, score, action_id = min(eligible)
-    positions = _sample_candidate_positions(
-        candidates[action_id], durations_s[action_id],
-        config.trajectory_samples,
-    )
-    if positions.shape != (config.trajectory_samples, 3) \
-            or not np.all(np.isfinite(positions)):
-        raise ValueError("network candidate produced non-finite recovery samples")
-    distances = np.linalg.norm(positions - origin[None, :], axis=1)
-    target_distance = min(
-        config.target_distance_m,
-        float(evaluations[action_id].endpoint_progress_m),
-    )
-    # Keep the temporary target on the already certified trajectory prefix.
-    sample_index = int(np.argmin(np.abs(distances - target_distance)))
-    target = positions[sample_index].copy()
-    actual_distance = float(distances[sample_index])
-    if actual_distance < config.minimum_candidate_distance_m:
-        return None
+    (
+        _, score, action_id, target, actual_distance,
+        prefix_progress, maximum_retreat,
+    ) = min(eligible, key=lambda item: (item[0], item[1], item[2]))
     clearance = evaluations[action_id].min_observed_clearance_m
     return RecoverySubgoalProposalV1(
         action_id=action_id,
@@ -180,6 +229,8 @@ def select_recovery_subgoal_v1(
         min_observed_clearance_m=(
             None if clearance is None else float(clearance)
         ),
+        prefix_progress_m=prefix_progress,
+        maximum_prefix_retreat_m=maximum_retreat,
     )
 
 

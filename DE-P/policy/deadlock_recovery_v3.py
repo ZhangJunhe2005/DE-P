@@ -48,6 +48,8 @@ class DeadlockRecoveryConfigV3:
     handoff_min_displacement_m: float = 0.50
     handoff_min_forward_clearance_gain_m: float = 0.50
     handoff_forward_clearance_confirmation_replans: int = 5
+    handoff_directional_progress_enabled: bool = False
+    handoff_max_directional_retreat_m: float = 0.10
 
     @classmethod
     def from_mapping(cls, value):
@@ -81,6 +83,15 @@ class DeadlockRecoveryConfigV3:
         if self.handoff_forward_clearance_confirmation_replans < 1:
             raise ValueError(
                 "handoff clearance confirmation count must be positive"
+            )
+        if self.handoff_max_directional_retreat_m < 0.0:
+            raise ValueError("handoff directional retreat must be non-negative")
+        if (
+            self.handoff_directional_progress_enabled
+            and not self.provisional_handoff_validation_enabled
+        ):
+            raise ValueError(
+                "directional handoff requires provisional validation"
             )
         if self.selected_min_goal_progress_m < 0.0:
             raise ValueError("selected goal progress must be non-negative")
@@ -143,8 +154,17 @@ class DeadlockRecoveryConfigV3:
             values.pop("handoff_min_displacement_m")
             values.pop("handoff_min_forward_clearance_gain_m")
             values.pop("handoff_forward_clearance_confirmation_replans")
+            values.pop("handoff_directional_progress_enabled")
+            values.pop("handoff_max_directional_retreat_m")
+        elif not self.handoff_directional_progress_enabled:
+            # Directional progress is a V4.9.1 opt-in refinement.  Preserve
+            # the frozen V4.8.5/V4.9 handoff contract exactly when disabled.
+            values.pop("handoff_directional_progress_enabled")
+            values.pop("handoff_max_directional_retreat_m")
         return {
             "version": (
+                "deadlock_recovery_v4_4_directional_handoff"
+                if self.handoff_directional_progress_enabled else
                 "deadlock_recovery_v4_3_motion_verified_handoff"
                 if verified_handoff else
                 (
@@ -171,6 +191,9 @@ class DeadlockRecoveryConfigV3:
             "recovery_translation_authority": "runtime_brake_only",
             "scan_direction": "depth_free_space_only_no_goal_override",
             "release": (
+                "provisional_same_sector_candidate_then_directional_motion_"
+                "toward_temporary_goal"
+                if self.handoff_directional_progress_enabled else
                 "provisional_same_sector_candidate_then_measured_motion_or_"
                 "stable_forward_clearance_verification"
                 if verified_handoff else
@@ -225,6 +248,8 @@ class RecoveryDecisionV3:
     handoff_validation_active: bool
     handoff_validation_elapsed_s: float | None
     handoff_validation_displacement_m: float | None
+    handoff_validation_directional_progress_m: float | None
+    handoff_validation_max_directional_retreat_m: float | None
     handoff_validation_forward_clearance_gain_m: float | None
     handoff_forward_clearance_confirmation_replans: int
     handoff_validation_result: str | None
@@ -299,6 +324,9 @@ class DeadlockRecoveryV3:
         self.handoff_validation_origin_position = None
         self.handoff_validation_origin_forward_clearance_m = None
         self.handoff_validation_displacement_m = None
+        self.handoff_validation_direction_world = None
+        self.handoff_validation_directional_progress_m = None
+        self.handoff_validation_max_directional_retreat_m = None
         self.handoff_validation_forward_clearance_gain_m = None
         self.handoff_forward_clearance_confirmation_replans = 0
         self.handoff_validation_result = None
@@ -352,6 +380,9 @@ class DeadlockRecoveryV3:
         self.handoff_validation_origin_position = None
         self.handoff_validation_origin_forward_clearance_m = None
         self.handoff_validation_displacement_m = None
+        self.handoff_validation_direction_world = None
+        self.handoff_validation_directional_progress_m = None
+        self.handoff_validation_max_directional_retreat_m = None
         self.handoff_validation_forward_clearance_gain_m = None
         self.handoff_forward_clearance_confirmation_replans = 0
         self.handoff_validation_result = None
@@ -475,6 +506,12 @@ class DeadlockRecoveryV3:
             handoff_validation_displacement_m=(
                 self.handoff_validation_displacement_m
             ),
+            handoff_validation_directional_progress_m=(
+                self.handoff_validation_directional_progress_m
+            ),
+            handoff_validation_max_directional_retreat_m=(
+                self.handoff_validation_max_directional_retreat_m
+            ),
             handoff_validation_forward_clearance_gain_m=(
                 self.handoff_validation_forward_clearance_gain_m
             ),
@@ -506,6 +543,9 @@ class DeadlockRecoveryV3:
             self.last_forward_clearance_m
         )
         self.handoff_validation_displacement_m = 0.0
+        self.handoff_validation_direction_world = None
+        self.handoff_validation_directional_progress_m = 0.0
+        self.handoff_validation_max_directional_retreat_m = 0.0
         self.handoff_validation_forward_clearance_gain_m = 0.0
         self.handoff_forward_clearance_confirmation_replans = 0
         self.handoff_validation_result = "pending"
@@ -518,11 +558,14 @@ class DeadlockRecoveryV3:
         self.handoff_validation_started_s = None
         self.handoff_validation_origin_position = None
         self.handoff_validation_origin_forward_clearance_m = None
+        self.handoff_validation_direction_world = None
         self.handoff_resume_rebase_pending = False
         self.handoff_pause_displacement_vector = None
         self.handoff_pause_forward_clearance_gain_m = None
 
-    def _observe_handoff_validation(self, now_s, position_world):
+    def _observe_handoff_validation(
+        self, now_s, position_world, handoff_target_world=None,
+    ):
         if not self.handoff_validation_active:
             return None
         point = np.asarray(position_world, dtype=np.float64).reshape(3)
@@ -552,10 +595,50 @@ class DeadlockRecoveryV3:
             self.handoff_resume_rebase_pending = False
             self.handoff_pause_displacement_vector = None
             self.handoff_pause_forward_clearance_gain_m = None
+            # The temporary goal stays fixed while a dynamic actor owns the
+            # pause, but braking/drift can move the validation origin.  Rebuild
+            # the direction below from that rebased origin instead of keeping
+            # the stale pre-pause unit vector.
+            self.handoff_validation_direction_world = None
+        displacement = None
         if self.handoff_validation_origin_position is not None:
+            displacement = point - self.handoff_validation_origin_position
             self.handoff_validation_displacement_m = float(np.linalg.norm(
-                point - self.handoff_validation_origin_position
+                displacement
             ))
+        if (
+            self.config.handoff_directional_progress_enabled
+            and self.handoff_validation_direction_world is None
+            and handoff_target_world is not None
+            and self.handoff_validation_origin_position is not None
+        ):
+            target = np.asarray(
+                handoff_target_world, dtype=np.float64
+            ).reshape(3)
+            if not np.isfinite(target).all():
+                raise ValueError("handoff target must be finite")
+            direction = target - self.handoff_validation_origin_position
+            direction_norm = float(np.linalg.norm(direction))
+            if direction_norm <= 1.0e-9:
+                raise ValueError("handoff target must differ from its origin")
+            self.handoff_validation_direction_world = (
+                direction / direction_norm
+            )
+        if (
+            self.config.handoff_directional_progress_enabled
+            and displacement is not None
+            and self.handoff_validation_direction_world is not None
+        ):
+            directional_progress = float(
+                displacement @ self.handoff_validation_direction_world
+            )
+            self.handoff_validation_directional_progress_m = (
+                directional_progress
+            )
+            self.handoff_validation_max_directional_retreat_m = max(
+                float(self.handoff_validation_max_directional_retreat_m or 0.0),
+                max(0.0, -directional_progress),
+            )
         baseline = self.handoff_validation_origin_forward_clearance_m
         current = self.last_forward_clearance_m
         if baseline is not None and current is not None:
@@ -573,12 +656,18 @@ class DeadlockRecoveryV3:
             self.handoff_validation_forward_clearance_gain_m = None
             self.handoff_forward_clearance_confirmation_replans = 0
 
+        motion_measure = (
+            self.handoff_validation_directional_progress_m
+            if self.config.handoff_directional_progress_enabled else
+            self.handoff_validation_displacement_m
+        )
         motion_verified = bool(
-            self.handoff_validation_displacement_m is not None
-            and self.handoff_validation_displacement_m
-            >= self.config.handoff_min_displacement_m
+            motion_measure is not None
+            and motion_measure >= self.config.handoff_min_displacement_m
         )
         clearance_verified = bool(
+            not self.config.handoff_directional_progress_enabled
+            and
             self.handoff_forward_clearance_confirmation_replans
             >= self.config.handoff_forward_clearance_confirmation_replans
         )
@@ -599,6 +688,25 @@ class DeadlockRecoveryV3:
                 if motion_verified else
                 "handoff_forward_clearance_verified"
             )
+
+        if (
+            self.config.handoff_directional_progress_enabled
+            and self.handoff_validation_max_directional_retreat_m is not None
+            and self.handoff_validation_max_directional_retreat_m
+            > self.config.handoff_max_directional_retreat_m
+        ):
+            self.handoff_validation_result = "directional_retreat_exceeded"
+            self._clear_handoff_validation()
+            self.resume_failed_handoff_scan = True
+            self.mode = self.BRAKING
+            self.selected_release_count = 0
+            self.selected_confirmation_horizontal_sector_id = None
+            self.cooldown_until_s = 0.0
+            self.last_recovery_trigger_reason = (
+                "provisional_handoff_directional_retreat"
+            )
+            self._reset_motion_window()
+            return "handoff_directional_retreat_to_braking"
 
         elapsed = float(now_s) - float(self.handoff_validation_started_s)
         if elapsed < self.config.handoff_validation_window_s:
@@ -831,6 +939,7 @@ class DeadlockRecoveryV3:
         selected_candidate_action_id=None,
         selected_candidate_horizontal_sector_id=None,
         selected_candidate_min_observed_clearance_m=None,
+        handoff_target_world=None,
         now_s=None,
     ):
         del (
@@ -858,7 +967,7 @@ class DeadlockRecoveryV3:
         # window or resetting to 60 degrees.
         handoff_validation_was_active = self.handoff_validation_active
         handoff_transition = self._observe_handoff_validation(
-            now_s, position_world
+            now_s, position_world, handoff_target_world
         )
         if handoff_transition is not None:
             return self._decision(now_s, handoff_transition)

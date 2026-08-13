@@ -27,10 +27,12 @@ conda run --no-capture-output -n yopo \
   python tools/validate_route_a_launch_fixture.py \
     --config "$SCENES" --scene "$SCENE"
 
-# V4.9.1 preserves the frozen V4.9 dynamic safety/recovery contracts.  During
-# a bounded scan only, a fully certified network candidate supplies a temporary
-# local goal.  The unchanged network owns all translation; the mission goal is
-# restored when the temporary goal is reached, and a new RViz goal always wins.
+# V4.9.1 preserves the frozen V4.9 physical/dynamic safety contract.  During a
+# bounded scan only, a fully certified network candidate with a genuinely
+# forward prefix supplies a temporary local goal.  The unchanged network owns
+# all translation; directional handoff evidence prevents inherited reverse
+# motion from being accepted as escape.  The mission goal is restored when the
+# temporary goal is reached, and a new RViz goal always wins.
 exec bash scripts/run_dep_interactive_demo.sh \
   --scene "$SCENE" \
   --scenes-config "$SCENES" \

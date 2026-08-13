@@ -1,4 +1,4 @@
-contract_version: route_a_v4_9_1_recovery_subgoal_v1
+contract_version: route_a_v4_9_1_recovery_subgoal_v2
 status: IMPLEMENTED_PENDING_CLOSED_LOOP
 selected_version: v4.9.1
 rollback:
@@ -23,6 +23,9 @@ temporary_subgoal:
   minimum_candidate_distance_m: 1.0
   target_distance_m: 2.5
   arrival_radius_m: 0.60
+  prefix_horizon_s: 0.60
+  minimum_prefix_progress_m: 0.05
+  maximum_prefix_retreat_m: 0.05
   restore_condition: temporary_goal_reached
   cancellation_conditions:
     - new_operator_mission_goal
@@ -31,6 +34,11 @@ temporary_subgoal:
     - dynamic_only_zero_feasible
   dynamic_hard_veto_preserved: true
   mission_arrival_uses_temporary_goal: false
+  handoff_validation:
+    window_s: 2.50
+    measurement: directional_progress_toward_temporary_goal
+    minimum_progress_m: 0.50
+    maximum_retreat_m: 0.10
 validation:
   original_v4_9_ab_preserved: true
   closed_loop_complete: false
