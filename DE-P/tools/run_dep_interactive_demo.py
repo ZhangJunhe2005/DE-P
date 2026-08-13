@@ -57,6 +57,10 @@ from policy.runtime_profile_v4_8_5 import (
     PROFILE_NAME as V485_RUNTIME_PROFILE,
     RUNTIME_BEHAVIOR_VERSION as V485_RUNTIME_BEHAVIOR_VERSION,
 )
+from policy.runtime_profile_v4_9 import (
+    PROFILE_NAME as V49_RUNTIME_PROFILE,
+    RUNTIME_BEHAVIOR_VERSION as V49_RUNTIME_BEHAVIOR_VERSION,
+)
 DEFAULT_SCENES = ROOT / "configs" / "dep_interactive_demo_scenes_v4.json"
 DEFAULT_RUN = (
     ROOT / "runs" / "phase8_mixed_static_yopo_v3_2_low_lr_adamw"
@@ -112,9 +116,15 @@ def parse_args():
         help="number of moving actors (1-64); defaults: none=0, crossing/head_on=1, multi_target=3",
     )
     parser.add_argument(
-        "--actor-layout", choices=("corridor", "map_wide", "hybrid"),
+        "--actor-layout", choices=(
+            "corridor", "map_wide", "hybrid", "route_encounters",
+        ),
         default="hybrid",
-        help="hybrid disperses actors map-wide while retaining some route encounters",
+        help=(
+            "hybrid disperses actors map-wide while retaining some route "
+            "encounters; route_encounters builds a deterministic multi-family "
+            "stress route"
+        ),
     )
     parser.add_argument(
         "--actor-seed", type=int, default=8801,
@@ -158,6 +168,7 @@ def parse_args():
             V4510_RUNTIME_PROFILE, V47_RUNTIME_PROFILE,
             V48_RUNTIME_PROFILE, V481_RUNTIME_PROFILE,
             V482_RUNTIME_PROFILE, V485_RUNTIME_PROFILE,
+            V49_RUNTIME_PROFILE,
         ),
         default="strict",
         help=(
@@ -375,9 +386,275 @@ class CanonicalOccupancy:
         return True
 
 
+def _point_segment_distance(point, first, second):
+    point = np.asarray(point, dtype=np.float64)
+    first = np.asarray(first, dtype=np.float64)
+    second = np.asarray(second, dtype=np.float64)
+    segment = second - first
+    denominator = float(np.dot(segment, segment))
+    if denominator <= 1e-12:
+        return float(np.linalg.norm(point - first))
+    amount = float(np.dot(point - first, segment) / denominator)
+    amount = min(1.0, max(0.0, amount))
+    return float(np.linalg.norm(point - (first + amount * segment)))
+
+
+def _segment_segment_closest(first_a, second_a, first_b, second_b):
+    """Return the exact closest points on two finite 3-D line segments."""
+    first_a = np.asarray(first_a, dtype=np.float64)
+    second_a = np.asarray(second_a, dtype=np.float64)
+    first_b = np.asarray(first_b, dtype=np.float64)
+    second_b = np.asarray(second_b, dtype=np.float64)
+    vector_a = second_a - first_a
+    vector_b = second_b - first_b
+    relative = first_a - first_b
+    aa = float(np.dot(vector_a, vector_a))
+    bb = float(np.dot(vector_b, vector_b))
+    ab = float(np.dot(vector_a, vector_b))
+    ar = float(np.dot(vector_a, relative))
+    br = float(np.dot(vector_b, relative))
+    denominator = aa * bb - ab * ab
+    if aa <= 1e-12 and bb <= 1e-12:
+        amount_a = amount_b = 0.0
+    elif aa <= 1e-12:
+        amount_a = 0.0
+        amount_b = min(1.0, max(0.0, br / bb))
+    elif bb <= 1e-12:
+        amount_b = 0.0
+        amount_a = min(1.0, max(0.0, -ar / aa))
+    else:
+        amount_a = (
+            min(1.0, max(0.0, (ab * br - bb * ar) / denominator))
+            if denominator > 1e-12 else 0.0
+        )
+        amount_b = (ab * amount_a + br) / bb
+        if amount_b < 0.0:
+            amount_b = 0.0
+            amount_a = min(1.0, max(0.0, -ar / aa))
+        elif amount_b > 1.0:
+            amount_b = 1.0
+            amount_a = min(1.0, max(0.0, (ab - ar) / aa))
+    point_a = first_a + amount_a * vector_a
+    point_b = first_b + amount_b * vector_b
+    return point_a, point_b, float(np.linalg.norm(point_a - point_b))
+
+
+def _route_encounter_evidence(actor, candidate=None):
+    """Recompute a route encounter from geometry and time, never metadata.
+
+    ``first appearance`` has an explicit simulator meaning: the actor becomes
+    active at ``trajectory.start_time``.  It is compared with a nominal UAV
+    flying from route start to route goal at 3 m/s with its camera aligned to
+    the route.  An actor therefore cannot first appear in the rear blind
+    half-space merely because a manifest calls it an encounter.
+
+    Temporal proximity is solved exactly for every outbound/return leg of the
+    ping-pong actor while the nominal UAV traverses the route.  This makes the
+    certificate survive path shortening and translation during canonical-map
+    clearance, rather than trusting the pre-relocation anchor label.
+    """
+    contract = actor.get("route_encounter_contract")
+    if contract is None:
+        return None
+    trajectory = actor["trajectory"]
+    waypoints = (
+        candidate if candidate is not None else trajectory["waypoints_world"]
+    )
+    actor_first, actor_second = (
+        np.asarray(value, dtype=np.float64) for value in waypoints
+    )
+    route_first = np.asarray(contract["route_start_world"], dtype=np.float64)
+    route_second = np.asarray(contract["route_goal_world"], dtype=np.float64)
+    anchor = np.asarray(contract["anchor_world"], dtype=np.float64)
+    route_vector = route_second - route_first
+    route_length = float(np.linalg.norm(route_vector))
+    actor_vector = actor_second - actor_first
+    actor_path_length = float(np.linalg.norm(actor_vector))
+    nominal_speed = float(contract.get("nominal_uav_speed_mps", 3.0))
+    actor_speed = float(trajectory["speed"])
+    start_time = float(trajectory["start_time"])
+    end_time = float(trajectory["end_time"])
+    failures = []
+    if route_length <= 1e-9 or actor_path_length <= 1e-9:
+        return {
+            "contract_version": "route_encounter_evidence_v1",
+            "passed": False,
+            "failures": ["degenerate_route_or_actor_path"],
+        }
+    route_direction = route_vector / route_length
+    actor_direction = actor_vector / actor_path_length
+    actor_velocity = actor_speed * actor_direction
+    route_duration = route_length / nominal_speed
+    first_uav_position = route_first + route_direction * min(
+        route_length, nominal_speed * start_time
+    )
+    first_relative = actor_first - first_uav_position
+    first_longitudinal = float(np.dot(first_relative, route_direction))
+    first_lateral_vector = first_relative - first_longitudinal * route_direction
+    first_lateral = float(np.linalg.norm(first_lateral_vector))
+    first_bearing = math.degrees(math.atan2(
+        first_lateral, max(0.0, first_longitudinal)
+    ))
+    direction_cosine = float(np.dot(actor_direction, route_direction))
+    _, _, route_distance = _segment_segment_closest(
+        actor_first, actor_second, route_first, route_second
+    )
+    anchor_distance = _point_segment_distance(
+        anchor, actor_first, actor_second
+    )
+
+    minimum_longitudinal = float(
+        contract.get("minimum_first_appearance_longitudinal_m", 1.0)
+    )
+    maximum_bearing = float(
+        contract.get("maximum_first_appearance_bearing_deg", 80.0)
+    )
+    if first_longitudinal < minimum_longitudinal:
+        failures.append("first_appearance_not_ahead")
+    if first_bearing > maximum_bearing:
+        failures.append("first_appearance_outside_forward_cone")
+    if anchor_distance > float(contract["maximum_anchor_distance_m"]):
+        failures.append("actor_path_misses_declared_anchor")
+    if route_distance > float(contract["maximum_route_distance_m"]):
+        failures.append("actor_path_misses_route")
+
+    family = actor.get("encounter_family")
+    if family in {"crossing", "staggered_crossing"}:
+        if abs(direction_cosine) > float(
+            contract.get("maximum_crossing_direction_cosine", 0.25)
+        ):
+            failures.append("crossing_velocity_not_transverse")
+        # A crossing must actually traverse the route centreline; merely
+        # travelling parallel within the distance tolerance is insufficient.
+        lateral_axis = np.cross(route_direction, [0.0, 0.0, 1.0])
+        lateral_norm = float(np.linalg.norm(lateral_axis))
+        if lateral_norm > 1e-9:
+            lateral_axis /= lateral_norm
+            signed_first = float(np.dot(actor_first - route_first, lateral_axis))
+            signed_second = float(np.dot(actor_second - route_first, lateral_axis))
+            if signed_first * signed_second > 1e-9:
+                failures.append("crossing_does_not_span_route")
+        if family == "staggered_crossing" and start_time <= 0.0:
+            failures.append("staggered_actor_not_delayed")
+    elif family == "head_on":
+        if direction_cosine > float(
+            contract.get("maximum_head_on_direction_cosine", -0.8)
+        ):
+            failures.append("head_on_velocity_not_opposing_route")
+    elif family == "same_direction_slow":
+        if direction_cosine < float(
+            contract.get("minimum_same_direction_cosine", 0.8)
+        ):
+            failures.append("same_direction_velocity_not_forward")
+        if actor_speed > float(
+            contract.get("maximum_same_direction_speed_mps", 0.65)
+        ) or actor_speed >= nominal_speed:
+            failures.append("same_direction_actor_not_slow")
+    else:
+        failures.append("unknown_encounter_family")
+
+    best = None
+    leg_duration = actor_path_length / actor_speed
+    active_end = min(end_time, route_duration)
+    leg_index = 0
+    leg_start_time = start_time
+    while leg_start_time < active_end - 1e-12:
+        leg_end_time = min(active_end, leg_start_time + leg_duration)
+        if leg_index % 2 == 0:
+            leg_first, leg_velocity = actor_first, actor_velocity
+        else:
+            leg_first, leg_velocity = actor_second, -actor_velocity
+        constant = (
+            leg_first - leg_velocity * leg_start_time - route_first
+        )
+        relative_velocity = leg_velocity - nominal_speed * route_direction
+        denominator = float(np.dot(relative_velocity, relative_velocity))
+        if denominator <= 1e-12:
+            encounter_time = leg_start_time
+        else:
+            encounter_time = -float(
+                np.dot(constant, relative_velocity)
+            ) / denominator
+            encounter_time = min(
+                leg_end_time, max(leg_start_time, encounter_time)
+            )
+        actor_position = (
+            leg_first + leg_velocity * (encounter_time - leg_start_time)
+        )
+        uav_position = (
+            route_first
+            + nominal_speed * encounter_time * route_direction
+        )
+        separation = float(np.linalg.norm(actor_position - uav_position))
+        record = (
+            separation, encounter_time, leg_index, actor_position, uav_position
+        )
+        if best is None or record[0] < best[0]:
+            best = record
+        leg_index += 1
+        leg_start_time += leg_duration
+    if best is None:
+        failures.append("no_active_overlap_with_nominal_route")
+        best = (
+            float("inf"), float("nan"), -1,
+            np.full(3, np.nan), np.full(3, np.nan),
+        )
+    elif best[0] > float(
+        contract.get("maximum_nominal_encounter_distance_m", 2.5)
+    ):
+        failures.append("nominal_route_encounter_too_distant")
+
+    return {
+        "contract_version": "route_encounter_evidence_v1",
+        "passed": not failures,
+        "failures": failures,
+        "first_appearance_definition": (
+            "actor active at start_time relative to a route-aligned nominal "
+            "3mps UAV; forward cone excludes the rear blind half-space"
+        ),
+        "first_appearance_relative_longitudinal_m": first_longitudinal,
+        "first_appearance_relative_lateral_m": first_lateral,
+        "first_appearance_bearing_deg": first_bearing,
+        "outbound_velocity_route_direction_cosine": direction_cosine,
+        "actor_speed_mps": actor_speed,
+        "actor_path_to_route_distance_m": route_distance,
+        "actor_path_to_anchor_distance_m": anchor_distance,
+        "nominal_encounter_distance_m": best[0],
+        "nominal_encounter_time_s": best[1],
+        "nominal_encounter_actor_leg_index": best[2],
+        "nominal_encounter_actor_position_world": best[3].tolist(),
+        "nominal_encounter_uav_position_world": best[4].tolist(),
+        "nominal_encounter_route_fraction": (
+            min(1.0, max(0.0, nominal_speed * best[1] / route_length))
+            if np.isfinite(best[1]) else None
+        ),
+    }
+
+
+def _route_contract_is_preserved(actor, candidate):
+    """Validate actual post-relocation geometry and timing, not actor labels."""
+    evidence = _route_encounter_evidence(actor, candidate)
+    return evidence is None or evidence["passed"]
+
+
 def enforce_canonical_actor_clearance(scene, actors, direction, perpendicular):
     if not actors or "authority_root" not in scene:
-        return {"checked": False, "relocated_actor_count": 0}
+        route_actors = [
+            actor for actor in actors if "route_encounter_contract" in actor
+        ]
+        route_contract_preserved = 0
+        for actor in route_actors:
+            evidence = _route_encounter_evidence(actor)
+            actor["route_encounter_evidence"] = evidence
+            route_contract_preserved += int(evidence["passed"])
+        if route_contract_preserved != len(route_actors):
+            raise ValueError("route encounter geometry/time contract failed")
+        return {
+            "checked": False,
+            "relocated_actor_count": 0,
+            "route_contract_actor_count": len(route_actors),
+            "route_contract_preserved_actor_count": route_contract_preserved,
+        }
     authority = CanonicalOccupancy(scene["authority_root"], scene["map_uuid"])
     for label, position in (
         ("start", scene["start"]),
@@ -419,7 +696,10 @@ def enforce_canonical_actor_clearance(scene, actors, direction, perpendicular):
                         actor["trajectory"]["waypoints_world"] = [
                             value.tolist() for value in candidate
                         ]
-                        if authority.actor_path_is_clear(actor):
+                        if (
+                            _route_contract_is_preserved(actor, candidate)
+                            and authority.actor_path_is_clear(actor)
+                        ):
                             accepted = candidate
                             actor["canonical_path_scale"] = path_scale
                             break
@@ -456,7 +736,10 @@ def enforce_canonical_actor_clearance(scene, actors, direction, perpendicular):
                 actor["trajectory"]["waypoints_world"] = [
                     value.tolist() for value in candidate
                 ]
-                if authority.actor_path_is_clear(actor):
+                if (
+                    _route_contract_is_preserved(actor, candidate)
+                    and authority.actor_path_is_clear(actor)
+                ):
                     accepted = candidate
                     actor["canonical_path_scale"] = path_scale
                     actor["canonical_global_resample"] = True
@@ -467,7 +750,22 @@ def enforce_canonical_actor_clearance(scene, actors, direction, perpendicular):
             )
         if any(not np.allclose(a, b) for a, b in zip(original, accepted)):
             relocated += 1
-    return {"checked": True, "relocated_actor_count": relocated}
+    route_actors = [
+        actor for actor in actors if "route_encounter_contract" in actor
+    ]
+    route_contract_preserved = 0
+    for actor in route_actors:
+        evidence = _route_encounter_evidence(actor)
+        actor["route_encounter_evidence"] = evidence
+        route_contract_preserved += int(evidence["passed"])
+    if route_contract_preserved != len(route_actors):
+        raise ValueError("canonical relocation degraded a route encounter contract")
+    return {
+        "checked": True,
+        "relocated_actor_count": relocated,
+        "route_contract_actor_count": len(route_actors),
+        "route_contract_preserved_actor_count": route_contract_preserved,
+    }
 
 
 def _vector_geometry(scene):
@@ -512,11 +810,22 @@ def build_actor_scenario(
     vertical_span = float(vertical_span)
     if not 0.0 <= vertical_span <= 6.0:
         raise ValueError("--actor-vertical-span must be within [0, 6] m")
-    if actor_layout not in {"corridor", "map_wide", "hybrid"}:
+    if actor_layout not in {
+        "corridor", "map_wide", "hybrid", "route_encounters",
+    }:
         raise ValueError("unsupported actor layout")
-    if actor_layout != "corridor" and "actor_xy_bounds" not in scene:
+    if actor_layout in {"map_wide", "hybrid"} and "actor_xy_bounds" not in scene:
         raise ValueError("map-wide actor layout requires scene actor_xy_bounds")
-    _, _, direction, perpendicular, point = _vector_geometry(scene)
+    if actor_layout == "route_encounters":
+        if actor_mode != "multi_target":
+            raise ValueError(
+                "route_encounters requires --actors multi_target"
+            )
+        if count < 8:
+            raise ValueError(
+                "route_encounters requires --actor-count at least 8"
+            )
+    start, goal, direction, perpendicular, point = _vector_geometry(scene)
     rng = np.random.default_rng(int(actor_seed))
     actors = []
     z_bounds = scene.get("actor_z_bounds", [0.8, 14.0])
@@ -524,7 +833,10 @@ def build_actor_scenario(
     if not z_min < z_max:
         raise ValueError("scene actor_z_bounds must be increasing")
 
-    def ping_pong(actor_id, shape, radius, first, second, speed, height=None):
+    def ping_pong(
+        actor_id, shape, radius, first, second, speed, height=None,
+        start_time=0.0, encounter_family=None, route_fraction=None,
+    ):
         actor = {
             "id": actor_id,
             "enabled": True,
@@ -535,12 +847,37 @@ def build_actor_scenario(
                 "type": "waypoint_ping_pong",
                 "waypoints_world": [first, second],
                 "speed": speed,
-                "start_time": 0.0,
+                "start_time": float(start_time),
                 "end_time": 3600.0,
             },
         }
         if height is not None:
             actor["height"] = height
+        if encounter_family is not None:
+            anchor = point(float(route_fraction))
+            actor.update({
+                "encounter_family": str(encounter_family),
+                "route_fraction": float(route_fraction),
+                "route_encounter_contract": {
+                    "contract_version": "route_encounter_actor_v2",
+                    "anchor_world": anchor,
+                    "route_start_world": list(start),
+                    "route_goal_world": list(goal),
+                    "nominal_uav_speed_mps": 3.0,
+                    "maximum_anchor_distance_m": 3.5,
+                    "maximum_route_distance_m": 1.25,
+                    "maximum_nominal_encounter_distance_m": 2.5,
+                    "minimum_first_appearance_longitudinal_m": 1.0,
+                    "maximum_first_appearance_bearing_deg": 80.0,
+                    "maximum_crossing_direction_cosine": 0.25,
+                    "maximum_head_on_direction_cosine": -0.8,
+                    "minimum_same_direction_cosine": 0.8,
+                    "maximum_same_direction_speed_mps": 0.65,
+                    "first_appearance": (
+                        "active_at_start_time_inside_route_aligned_forward_cone"
+                    ),
+                },
+            })
         actors.append(actor)
 
     def bounded_z(value):
@@ -550,6 +887,8 @@ def build_actor_scenario(
         corridor_count = count
     elif actor_layout == "map_wide":
         corridor_count = 0
+    elif actor_layout == "route_encounters":
+        corridor_count = count
     else:
         corridor_count = min(count, max(1, int(math.ceil(count * 0.3))))
     map_wide_count = count - corridor_count
@@ -578,6 +917,72 @@ def build_actor_scenario(
         )
         base_z = point(fraction)[2] + layer_offset
         speed = 0.65 + 0.12 * (index % 5)
+        if actor_layout == "route_encounters":
+            encounter_family = (
+                "crossing", "head_on", "same_direction_slow",
+                "staggered_crossing",
+            )[index % 4]
+            family_ordinal = index // 4
+            route_z = point(fraction)[2]
+            route_vertical_motion = min(0.4, vertical_span * 0.2)
+            route_vertical_motion *= 1.0 if family_ordinal % 2 == 0 else -1.0
+            if encounter_family in {"crossing", "staggered_crossing"}:
+                lateral_extent = 2.6 + 0.3 * (family_ordinal % 3)
+                first = point(
+                    fraction, -lateral_extent,
+                    z=bounded_z(route_z - route_vertical_motion),
+                )
+                second = point(
+                    fraction, lateral_extent,
+                    z=bounded_z(route_z + route_vertical_motion),
+                )
+                if family_ordinal % 2:
+                    first, second = second, first
+                ping_pong(
+                    101 + index, "sphere", 0.38 + 0.03 * (index % 3),
+                    first, second, 0.75 + 0.08 * (family_ordinal % 3),
+                    start_time=(
+                        1.5 + 1.25 * family_ordinal
+                        if encounter_family == "staggered_crossing" else 0.0
+                    ),
+                    encounter_family=encounter_family,
+                    route_fraction=fraction,
+                )
+            elif encounter_family == "head_on":
+                lane_offset = 0.35 if family_ordinal % 2 == 0 else -0.35
+                first = point(
+                    min(0.9, fraction + 0.12), lane_offset,
+                    z=bounded_z(route_z + route_vertical_motion),
+                )
+                second = point(
+                    max(0.1, fraction - 0.10), lane_offset,
+                    z=bounded_z(route_z - route_vertical_motion),
+                )
+                ping_pong(
+                    101 + index, "vertical_cylinder",
+                    0.38 + 0.03 * (index % 3), first, second,
+                    0.8 + 0.08 * (family_ordinal % 3),
+                    height=1.5 + 0.15 * (family_ordinal % 3),
+                    encounter_family=encounter_family,
+                    route_fraction=fraction,
+                )
+            else:
+                lane_offset = -0.45 if family_ordinal % 2 == 0 else 0.45
+                first = point(
+                    max(0.1, fraction - 0.08), lane_offset,
+                    z=bounded_z(route_z - route_vertical_motion),
+                )
+                second = point(
+                    min(0.9, fraction + 0.16), lane_offset,
+                    z=bounded_z(route_z + route_vertical_motion),
+                )
+                ping_pong(
+                    101 + index, "sphere", 0.40,
+                    first, second, 0.42 + 0.04 * (family_ordinal % 3),
+                    encounter_family=encounter_family,
+                    route_fraction=fraction,
+                )
+            continue
         selected_mode = (
             ("crossing" if index % 2 == 0 else "head_on")
             if actor_mode == "multi_target" else actor_mode
@@ -659,24 +1064,51 @@ def build_actor_scenario(
     clearance = enforce_canonical_actor_clearance(
         scene, actors, direction, perpendicular
     )
-    return {
-        "dynamic_scenario": {
-            "enabled": bool(actors),
-            "scenario_id": (
-                f"dep_interactive_{scene_name}_{actor_mode}_{actor_layout}_"
-                f"{count}_actors"
-            ),
-            "seed": int(actor_seed),
-            "requested_actor_count": count,
-            "actor_layout": actor_layout,
-            "corridor_actor_count": corridor_count,
-            "map_wide_actor_count": map_wide_count,
-            "vertical_span_m": vertical_span,
-            "canonical_occupancy_checked": clearance["checked"],
-            "relocated_actor_count": clearance["relocated_actor_count"],
-            "actors": actors,
-        }
+    encounter_family_counts = {}
+    for actor in actors:
+        family = actor.get("encounter_family")
+        if family is not None:
+            encounter_family_counts[family] = (
+                encounter_family_counts.get(family, 0) + 1
+            )
+    scenario = {
+        "enabled": bool(actors),
+        "scenario_id": (
+            f"dep_interactive_{scene_name}_{actor_mode}_{actor_layout}_"
+            f"{count}_actors"
+        ),
+        "seed": int(actor_seed),
+        "requested_actor_count": count,
+        "actor_layout": actor_layout,
+        "corridor_actor_count": corridor_count,
+        "map_wide_actor_count": map_wide_count,
+        "vertical_span_m": vertical_span,
+        "canonical_occupancy_checked": clearance["checked"],
+        "relocated_actor_count": clearance["relocated_actor_count"],
+        "actors": actors,
     }
+    if actor_layout == "route_encounters":
+        scenario.update({
+            "route_encounter_contract_version": "route_encounter_layout_v2",
+            "route_encounter_evidence_version": "route_encounter_evidence_v1",
+            "nominal_uav_route_speed_mps": 3.0,
+            "first_appearance_definition": (
+                "actor active at trajectory.start_time, relative to a nominal "
+                "3mps UAV whose camera is aligned with start-to-goal; actor "
+                "must be at least 1m ahead and within an 80deg forward cone"
+            ),
+            "route_encounter_actor_count": sum(
+                encounter_family_counts.values()
+            ),
+            "encounter_family_counts": encounter_family_counts,
+            "route_contract_actor_count": clearance[
+                "route_contract_actor_count"
+            ],
+            "route_contract_preserved_actor_count": clearance[
+                "route_contract_preserved_actor_count"
+            ],
+        })
+    return {"dynamic_scenario": scenario}
 
 
 def checkpoint_preflight(checkpoint):
@@ -869,6 +1301,24 @@ def main():
             "canonical_occupancy_checked"
         ],
         "relocated_actor_count": actor_contract["relocated_actor_count"],
+        "route_encounter_actor_count": actor_contract.get(
+            "route_encounter_actor_count", 0
+        ),
+        "route_encounter_family_counts": actor_contract.get(
+            "encounter_family_counts", {}
+        ),
+        "route_encounter_contract_version": actor_contract.get(
+            "route_encounter_contract_version"
+        ),
+        "route_encounter_evidence_version": actor_contract.get(
+            "route_encounter_evidence_version"
+        ),
+        "route_first_appearance_definition": actor_contract.get(
+            "first_appearance_definition"
+        ),
+        "route_contract_preserved_actor_count": actor_contract.get(
+            "route_contract_preserved_actor_count", 0
+        ),
         "dynamic_mode": args.dynamic_mode,
         "runtime_safety_enabled": bool(args.runtime_safety),
         "runtime_profile": args.runtime_profile,
@@ -882,6 +1332,7 @@ def main():
             V481_RUNTIME_PROFILE: V481_RUNTIME_BEHAVIOR_VERSION,
             V482_RUNTIME_PROFILE: V482_RUNTIME_BEHAVIOR_VERSION,
             V485_RUNTIME_PROFILE: V485_RUNTIME_BEHAVIOR_VERSION,
+            V49_RUNTIME_PROFILE: V49_RUNTIME_BEHAVIOR_VERSION,
         }.get(args.runtime_profile, args.runtime_profile),
         "dynamic_foreground_mode": args.dynamic_foreground_mode,
         "planning_speed_mps": args.planning_speed,

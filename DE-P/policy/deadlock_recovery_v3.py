@@ -305,6 +305,11 @@ class DeadlockRecoveryV3:
         self.handoff_preserved_scan_offset_rad = None
         self.handoff_preserved_scan_direction = None
         self.resume_failed_handoff_scan = False
+        self.dynamic_yield_paused = False
+        self.dynamic_yield_pause_started_s = None
+        self.handoff_resume_rebase_pending = False
+        self.handoff_pause_displacement_vector = None
+        self.handoff_pause_forward_clearance_gain_m = None
 
     @staticmethod
     def _now(now_s):
@@ -353,6 +358,11 @@ class DeadlockRecoveryV3:
         self.handoff_preserved_scan_offset_rad = None
         self.handoff_preserved_scan_direction = None
         self.resume_failed_handoff_scan = False
+        self.dynamic_yield_paused = False
+        self.dynamic_yield_pause_started_s = None
+        self.handoff_resume_rebase_pending = False
+        self.handoff_pause_displacement_vector = None
+        self.handoff_pause_forward_clearance_gain_m = None
         if position_world is not None:
             self.record_position(position_world)
 
@@ -452,7 +462,15 @@ class DeadlockRecoveryV3:
             handoff_validation_elapsed_s=(
                 None if not self.handoff_validation_active
                 or self.handoff_validation_started_s is None else
-                max(0.0, now_s - self.handoff_validation_started_s)
+                max(
+                    0.0,
+                    (
+                        self.dynamic_yield_pause_started_s
+                        if self.dynamic_yield_paused
+                        and self.dynamic_yield_pause_started_s is not None
+                        else now_s
+                    ) - self.handoff_validation_started_s,
+                )
             ),
             handoff_validation_displacement_m=(
                 self.handoff_validation_displacement_m
@@ -476,6 +494,9 @@ class DeadlockRecoveryV3:
     def _start_handoff_validation(self, now_s):
         self.handoff_validation_active = True
         self.handoff_validation_started_s = float(now_s)
+        self.handoff_resume_rebase_pending = False
+        self.handoff_pause_displacement_vector = None
+        self.handoff_pause_forward_clearance_gain_m = None
         self.handoff_validation_origin_position = (
             None if self.last_position is None else self.last_position.copy()
         )
@@ -497,11 +518,40 @@ class DeadlockRecoveryV3:
         self.handoff_validation_started_s = None
         self.handoff_validation_origin_position = None
         self.handoff_validation_origin_forward_clearance_m = None
+        self.handoff_resume_rebase_pending = False
+        self.handoff_pause_displacement_vector = None
+        self.handoff_pause_forward_clearance_gain_m = None
 
     def _observe_handoff_validation(self, now_s, position_world):
         if not self.handoff_validation_active:
             return None
         point = np.asarray(position_world, dtype=np.float64).reshape(3)
+        if self.handoff_resume_rebase_pending:
+            # A dynamic yield can brake or drift the vehicle and can expose a
+            # different depth view.  Neither change is evidence that the
+            # provisional static opening succeeded.  Rebase the validation
+            # origins on the first post-yield observation while preserving
+            # exactly the displacement vector and clearance gain accumulated
+            # before the pause.  Subsequent evidence then continues from that
+            # frozen state instead of jumping across the paused interval.
+            if self.handoff_pause_displacement_vector is not None:
+                self.handoff_validation_origin_position = (
+                    point - self.handoff_pause_displacement_vector
+                )
+            else:
+                self.handoff_validation_origin_position = point.copy()
+            frozen_gain = self.handoff_pause_forward_clearance_gain_m
+            if frozen_gain is not None and self.last_forward_clearance_m is not None:
+                self.handoff_validation_origin_forward_clearance_m = (
+                    self.last_forward_clearance_m - frozen_gain
+                )
+            elif self.last_forward_clearance_m is not None:
+                self.handoff_validation_origin_forward_clearance_m = (
+                    self.last_forward_clearance_m
+                )
+            self.handoff_resume_rebase_pending = False
+            self.handoff_pause_displacement_vector = None
+            self.handoff_pause_forward_clearance_gain_m = None
         if self.handoff_validation_origin_position is not None:
             self.handoff_validation_displacement_m = float(np.linalg.norm(
                 point - self.handoff_validation_origin_position
@@ -578,6 +628,96 @@ class DeadlockRecoveryV3:
         self.motion_stagnation_replans = 0
         self.motion_window_displacement_m = None
         self.motion_window_duration_s = None
+
+    def set_dynamic_yield_pause(self, paused=True, now_s=None):
+        """Pause static-deadlock evidence during a causal dynamic yield.
+
+        A crossing actor can temporarily veto every otherwise valid network
+        trajectory.  Braking and high-rate replanning remain owned by the ROS
+        loop, while this public boundary prevents the resulting wait from
+        being mistaken for a static deadlock.  Entering *and* leaving the
+        pause breaks candidate-sector confirmation and odometry-stagnation
+        continuity, so evidence from opposite sides of an actor crossing can
+        never be stitched into one recovery handoff.
+
+        Scan escalation is deliberately retained: this method never changes
+        ``unsuccessful_scan_attempts`` or ``current_scan_limit_deg``.  During
+        provisional handoff validation, its remaining time and accumulated
+        motion/clearance evidence are frozen.  Resume shifts the validation
+        clock and the first ordinary observation rebases its origins, so
+        braking, drift or a changed camera view during the actor yield cannot
+        falsely prove or fail the static escape.
+
+        Args:
+            paused: ``True`` while the dynamic actor is the sole blocker;
+                ``False`` immediately before normal observation resumes.
+            now_s: Optional monotonic timestamp used by the returned decision.
+
+        Returns:
+            A public :class:`RecoveryDecisionV3` snapshot.  No private state
+            serializer is required by runtime callers.
+        """
+        now_s = self._now(now_s)
+        paused = bool(paused)
+        was_paused = self.dynamic_yield_paused
+        if paused and self.mode != self.NORMAL:
+            raise RuntimeError(
+                "dynamic-yield pause is only valid in normal network mode; "
+                "provisional handoff validation is supported"
+            )
+
+        if paused and not was_paused:
+            self.dynamic_yield_pause_started_s = now_s
+            if self.handoff_validation_active:
+                if (
+                    self.last_position is not None
+                    and self.handoff_validation_origin_position is not None
+                ):
+                    self.handoff_pause_displacement_vector = (
+                        self.last_position
+                        - self.handoff_validation_origin_position
+                    )
+                else:
+                    self.handoff_pause_displacement_vector = None
+                self.handoff_pause_forward_clearance_gain_m = (
+                    self.handoff_validation_forward_clearance_gain_m
+                )
+        elif not paused and was_paused:
+            pause_started = self.dynamic_yield_pause_started_s
+            if pause_started is None or now_s < pause_started:
+                raise ValueError("dynamic-yield pause clock moved backwards")
+            if (
+                self.handoff_validation_active
+                and self.handoff_validation_started_s is not None
+            ):
+                self.handoff_validation_started_s += now_s - pause_started
+                self.handoff_resume_rebase_pending = True
+            self.dynamic_yield_pause_started_s = None
+
+        # Apply on every paused frame as well as the first resumed frame.  A
+        # caller can therefore remain in a dynamic yield for an arbitrary
+        # number of replans without accumulating either zero-candidate or
+        # measured-motion stagnation evidence.
+        if paused or was_paused:
+            self.zero_feasible_replans = 0
+            self.selected_release_count = 0
+            self.selected_confirmation_horizontal_sector_id = None
+            self.last_selected_candidate_eligible = False
+            self.last_selected_candidate_goal_progress_m = None
+            self.last_selected_candidate_action_id = None
+            self.last_selected_candidate_horizontal_sector_id = None
+            self.last_selected_candidate_min_observed_clearance_m = None
+            self.last_handoff_confirmation_replans = None
+            self.last_handoff_horizontal_sector_id = None
+            self._reset_motion_window()
+
+        self.dynamic_yield_paused = paused
+        transition = None
+        if paused and not was_paused:
+            transition = "network_dynamic_yield_pause_started"
+        elif not paused and was_paused:
+            transition = "network_dynamic_yield_pause_ended"
+        return self._decision(now_s, transition)
 
     def _observe_motion_stagnation(self, now_s, position_world):
         """Update the scene-agnostic measured-motion stagnation evidence.
@@ -700,6 +840,10 @@ class DeadlockRecoveryV3:
             recovery_feasible_candidate_count,
         )
         now_s = self._now(now_s)
+        if self.dynamic_yield_paused:
+            raise RuntimeError(
+                "resume dynamic-yield pause before calling observe()"
+            )
         self.last_handoff_confirmation_replans = None
         self.last_handoff_horizontal_sector_id = None
         self.record_position(position_world)

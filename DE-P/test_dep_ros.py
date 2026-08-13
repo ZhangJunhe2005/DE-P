@@ -37,7 +37,10 @@ from policy.runtime_safety_v1 import (
     RuntimeSafetyConfigV1,
     RuntimeTrajectorySafetyV1,
     clamp_vector_norm_v1,
+    classify_dynamic_blocking_v1,
     depth_to_body_points_v1,
+    dynamic_command_is_fresh_v1,
+    select_dynamic_braking_option_v1,
 )
 from policy.deadlock_recovery_v2 import (
     DeadlockRecoveryConfigV2,
@@ -107,6 +110,13 @@ from policy.runtime_profile_v4_8_5 import (
     calculate_recovery_continuity_yaw_v4_8_5,
     deadlock_recovery_mapping_v4_8_5,
     runtime_safety_mapping_v4_8_5,
+)
+from policy.runtime_profile_v4_9 import (
+    PROFILE_NAME as V49_RUNTIME_PROFILE,
+    RUNTIME_BEHAVIOR_VERSION as V49_RUNTIME_BEHAVIOR_VERSION,
+    calculate_recovery_continuity_yaw_v4_9,
+    deadlock_recovery_mapping_v4_9,
+    runtime_safety_mapping_v4_9,
 )
 from policy.state_transform import *
 from policy.dynamic.context import DynamicContext
@@ -253,6 +263,7 @@ class DepNet:
             V481_RUNTIME_PROFILE: V481_RUNTIME_BEHAVIOR_VERSION,
             V482_RUNTIME_PROFILE: V482_RUNTIME_BEHAVIOR_VERSION,
             V485_RUNTIME_PROFILE: V485_RUNTIME_BEHAVIOR_VERSION,
+            V49_RUNTIME_PROFILE: V49_RUNTIME_BEHAVIOR_VERSION,
         }.get(runtime_profile, runtime_profile)
         if runtime_profile == V44_RUNTIME_PROFILE:
             safety_mapping = runtime_safety_mapping_v4_4(safety_mapping)
@@ -272,6 +283,8 @@ class DepNet:
             safety_mapping = runtime_safety_mapping_v4_8_2(safety_mapping)
         elif runtime_profile == V485_RUNTIME_PROFILE:
             safety_mapping = runtime_safety_mapping_v4_8_5(safety_mapping)
+        elif runtime_profile == V49_RUNTIME_PROFILE:
+            safety_mapping = runtime_safety_mapping_v4_9(safety_mapping)
         elif runtime_profile == "v4_3_minimal":
             # V4.3 keeps only physical collision/limit/boundary checks.  Camera
             # visibility and minimum-progress heuristics remain observable in
@@ -331,7 +344,9 @@ class DepNet:
         if recovery_profile == "bounded_scan_v3":
             recovery_mapping = (
                 deadlock_recovery_mapping_v4_8_5(recovery_mapping)
-                if runtime_profile == V485_RUNTIME_PROFILE else
+                if runtime_profile in (
+                    V485_RUNTIME_PROFILE, V49_RUNTIME_PROFILE
+                ) else
                 (
                     deadlock_recovery_mapping_v4_8_2(recovery_mapping)
                     if runtime_profile == V482_RUNTIME_PROFILE else
@@ -369,6 +384,10 @@ class DepNet:
                 self.deadlock_recovery_config
             )
         self.recovery_trajectory_installed = False
+        self.dynamic_yield_active = False
+        self.last_dynamic_certificate_monotonic_s = None
+        self.active_trajectory_requires_dynamic_freshness = False
+        self.dynamic_watchdog_stop_count = 0
         self.active_traj_duration = self.traj_time
         telemetry_value = config.get("safety_telemetry")
         self.safety_telemetry_path = (
@@ -703,6 +722,8 @@ class DepNet:
 
     def _enter_safe_state(self, reason):
         self.ctrl_time = None
+        self.active_trajectory_requires_dynamic_freshness = False
+        self.last_dynamic_certificate_monotonic_s = None
         self._warn_dynamic(f"safe_state: {reason}")
 
     def _publish_dynamic_debug(self, result, context):
@@ -768,6 +789,8 @@ class DepNet:
                 ], dtype=np.float64)
             self.deadlock_recovery.reset(position)
             self.recovery_trajectory_installed = False
+            self.active_trajectory_requires_dynamic_freshness = False
+            self.last_dynamic_certificate_monotonic_s = None
             self.frame_list.clear()
             self.next_frame_id = 0
 
@@ -954,10 +977,78 @@ class DepNet:
             ))
         return tuple(candidates)
 
-    def _install_trajectory(self, polynomials, duration):
+    def _install_trajectory(
+        self, polynomials, duration, *, requires_dynamic_freshness=False,
+    ):
+        """Atomically replace the active polynomial and its authorization.
+
+        V4.9 does not authorize the unobserved tail of a trajectory forever.
+        The freshness clock is therefore attached to the *trajectory install*
+        that was actually checked against the current dynamic context.  It is
+        never refreshed merely because another depth callback happened.
+        """
         self.optimal_poly_x, self.optimal_poly_y, self.optimal_poly_z = polynomials
         self.active_traj_duration = float(duration)
         self.ctrl_time = 0.0
+        self.active_trajectory_requires_dynamic_freshness = bool(
+            requires_dynamic_freshness
+            and self.runtime_safety_config
+            .dynamic_command_freshness_watchdog_enabled
+        )
+        self.last_dynamic_certificate_monotonic_s = (
+            time.monotonic()
+            if self.active_trajectory_requires_dynamic_freshness else None
+        )
+
+    def _select_v49_bounded_brake(
+        self, start_pos, start_vel, start_acc, obstacle_points,
+        dynamic_tracks, query_timestamp,
+    ):
+        """Fully validate V4.9 braking alternatives before installation.
+
+        A feasible stop is preferred.  If a moving actor makes every stop
+        intersect, the selector may return the least-bad option only when its
+        sole failure is predicted dynamic occupancy.  A static collision,
+        boundary violation or hardware violation can never enter that
+        emergency exception.
+        """
+        options, durations = self.runtime_safety.braking_trajectory_options(
+            start_pos, start_vel, start_acc,
+        )
+        if not options:
+            return None
+        evaluations = self.runtime_safety.evaluate(
+            options, durations, obstacle_points, start_pos, self.Rotation_wc,
+            dynamic_tracks=dynamic_tracks,
+            query_timestamp=query_timestamp,
+            goal_world=self.goal,
+            flight_bounds=self.flight_bounds,
+        )
+        selected_index, certified = select_dynamic_braking_option_v1(
+            evaluations
+        )
+        if selected_index is None:
+            return {
+                "trajectory": None,
+                "duration": None,
+                "evaluation": None,
+                "evaluations": evaluations,
+                "selected_index": None,
+                "certified": False,
+                "mode": "no_statically_valid_bounded_brake",
+            }
+        return {
+            "trajectory": options[selected_index],
+            "duration": durations[selected_index],
+            "evaluation": evaluations[selected_index],
+            "evaluations": evaluations,
+            "selected_index": int(selected_index),
+            "certified": bool(certified),
+            "mode": (
+                "certified_bounded_braking" if certified else
+                "minimum_risk_uncertified_bounded_braking"
+            ),
+        }
 
     @torch.inference_mode()
     def callback_depth(self, data, dynamic_context=None):
@@ -1063,17 +1154,112 @@ class DepNet:
                         self.dynamic_config.camera_rotation_body_from_camera,
                         stride=self.runtime_safety_config.depth_stride,
                     )
+                    runtime_dynamic_tracks = (
+                        runtime_dynamic_context.dynamic_tracks
+                        if runtime_dynamic_context is not None
+                        and runtime_dynamic_context.valid else ()
+                    )
+                    v49_runtime = bool(
+                        self.runtime_profile == V49_RUNTIME_PROFILE
+                    )
+                    v49_dynamic_context_valid = bool(
+                        v49_runtime
+                        and runtime_dynamic_context is not None
+                        and runtime_dynamic_context.valid
+                    )
+                    runtime_query_timestamp = message_timestamp(data)
                     evaluations = self.runtime_safety.evaluate(
                         candidates, candidate_durations, obstacle_points,
                         start_pos, self.Rotation_wc,
-                        dynamic_tracks=(
-                            runtime_dynamic_context.dynamic_tracks
-                            if runtime_dynamic_context is not None
-                            and runtime_dynamic_context.valid else ()
-                        ),
-                        query_timestamp=message_timestamp(data),
+                        dynamic_tracks=runtime_dynamic_tracks,
+                        query_timestamp=runtime_query_timestamp,
                         goal_world=self.goal,
                         flight_bounds=self.flight_bounds,
+                    )
+                    blocking_before_scaling = classify_dynamic_blocking_v1(
+                        evaluations
+                    )
+                    dynamic_time_scaling_attempted = False
+                    dynamic_time_scales_tested = [1.0]
+                    dynamic_time_scaling_accepted_scales = []
+                    per_candidate_dynamic_time_scales = tuple(
+                        1.0 for _ in candidates
+                    )
+                    selected_dynamic_time_scale = 1.0
+                    # V4.9 performs one global temporal search stage at a
+                    # time.  It is entered only when no base candidate is
+                    # executable and at least one is blocked solely by a
+                    # causal dynamic prediction.  Every rebuilt pool is fully
+                    # re-evaluated against static depth, bounds, 6/6 limits
+                    # and moving tracks before it can be selected.
+                    if (
+                        self.runtime_safety_config.dynamic_time_retiming_enabled
+                        and not any(item.feasible for item in evaluations)
+                        and blocking_before_scaling["cause"] == "dynamic_only"
+                    ):
+                        dynamic_time_scaling_attempted = True
+                        for dynamic_scale in tuple(
+                            self.runtime_safety_config
+                            .dynamic_time_retiming_scales
+                        )[1:]:
+                            dynamic_time_scales_tested.append(
+                                float(dynamic_scale)
+                            )
+                            (scaled_candidates, scaled_durations,
+                             scaled_candidate_scales, scaled_eligible) = (
+                                self.runtime_safety
+                                .retime_dynamic_only_candidates(
+                                    candidates, candidate_durations,
+                                    evaluations, dynamic_scale,
+                                )
+                            )
+                            eligible_indices = [
+                                index for index, eligible in enumerate(
+                                    scaled_eligible
+                                ) if eligible
+                            ]
+                            scaled_subset_evaluations = (
+                                self.runtime_safety.evaluate(
+                                    tuple(
+                                        scaled_candidates[index]
+                                        for index in eligible_indices
+                                    ),
+                                    tuple(
+                                        scaled_durations[index]
+                                        for index in eligible_indices
+                                    ),
+                                    obstacle_points, start_pos,
+                                    self.Rotation_wc,
+                                    dynamic_tracks=runtime_dynamic_tracks,
+                                    query_timestamp=runtime_query_timestamp,
+                                    goal_world=self.goal,
+                                    flight_bounds=self.flight_bounds,
+                                )
+                            )
+                            scaled_evaluations = list(evaluations)
+                            for index, scaled_evaluation in zip(
+                                eligible_indices, scaled_subset_evaluations
+                            ):
+                                scaled_evaluations[index] = scaled_evaluation
+                            scaled_evaluations = tuple(scaled_evaluations)
+                            if any(
+                                item.feasible for item in scaled_evaluations
+                            ):
+                                candidates = scaled_candidates
+                                candidate_durations = scaled_durations
+                                evaluations = scaled_evaluations
+                                per_candidate_dynamic_time_scales = (
+                                    scaled_candidate_scales
+                                )
+                                selected_dynamic_time_scale = float(
+                                    dynamic_scale
+                                )
+                                dynamic_time_scaling_accepted_scales.append(
+                                    float(dynamic_scale)
+                                )
+                                break
+                    blocking_after_scaling = classify_dynamic_blocking_v1(
+                        evaluations
                     )
                     # During bounded scan recovery, candidate handoff must use
                     # the learned network score among physically feasible
@@ -1090,11 +1276,38 @@ class DepNet:
                         apply_clearance_preference=(
                             not recovery_selection_active
                         ),
+                        apply_dynamic_risk=(
+                            not recovery_selection_active
+                        ),
                     )
+                    selection_without_dynamic_risk = (
+                        self.runtime_safety.select(
+                            raw_scores, evaluations,
+                            apply_clearance_preference=(
+                                not recovery_selection_active
+                            ),
+                            apply_dynamic_risk=False,
+                        )
+                    )
+                    dynamic_risk_changed_selection = bool(
+                        selection.action_id
+                        != selection_without_dynamic_risk.action_id
+                    )
+                    if selection.action_id is not None:
+                        selected_dynamic_time_scale = float(
+                            per_candidate_dynamic_time_scales[
+                                selection.action_id
+                            ]
+                        )
                     clearance_preference_applied = bool(
                         not recovery_selection_active
-                        and selection.mode
-                        == "network_safe_clearance_preference"
+                        and "_clearance_preference" in selection.mode
+                    )
+                    dynamic_yield = bool(
+                        self.runtime_safety_config
+                        .dynamic_time_retiming_enabled
+                        and selection.action_id is None
+                        and blocking_after_scaling["cause"] == "dynamic_only"
                     )
                     visualization_candidates = candidates
                     visualization_evaluations = evaluations
@@ -1164,9 +1377,47 @@ class DepNet:
                                 else selected_evaluation.min_observed_clearance_m
                             ),
                         })
-                    recovery = self.deadlock_recovery.observe(
-                        **recovery_kwargs
-                    )
+                    dynamic_yield_suppressed_recovery = False
+                    if (
+                        dynamic_yield
+                        and self.deadlock_recovery_profile
+                        == "bounded_scan_v3"
+                        and self.deadlock_recovery.mode
+                        == DeadlockRecoveryV2.NORMAL
+                    ):
+                        # A causal crossing that temporarily blocks every
+                        # otherwise-valid action is not a static deadlock.
+                        # Keep braking/replanning, while the public recovery
+                        # pause boundary prevents this wait from contaminating
+                        # zero-feasible, odometry-stagnation or candidate-
+                        # confirmation evidence.  The recovery object also
+                        # freezes a provisional-handoff clock, when active,
+                        # without resetting the preserved scan chain.
+                        self.dynamic_yield_active = True
+                        recovery = (
+                            self.deadlock_recovery.set_dynamic_yield_pause(
+                                True, now_s=time.monotonic()
+                            )
+                        )
+                        dynamic_yield_suppressed_recovery = True
+                    else:
+                        if (
+                            self.dynamic_yield_active
+                            and self.deadlock_recovery_profile
+                            == "bounded_scan_v3"
+                            and self.deadlock_recovery.mode
+                            == DeadlockRecoveryV2.NORMAL
+                        ):
+                            # Dynamic interruption breaks all candidate and
+                            # stagnation continuity.  Resume explicitly before
+                            # feeding the first ordinary observation.
+                            self.deadlock_recovery.set_dynamic_yield_pause(
+                                False, now_s=time.monotonic()
+                            )
+                        self.dynamic_yield_active = False
+                        recovery = self.deadlock_recovery.observe(
+                            **recovery_kwargs
+                        )
                     if recovery.transition is not None:
                         rospy.logwarn(
                             "DE-P recovery transition: %s", recovery.transition
@@ -1177,6 +1428,12 @@ class DepNet:
                         else None
                     )
                     braking_compliant = None
+                    braking_evaluation = None
+                    braking_option_count = 0
+                    braking_selected_option_index = None
+                    braking_selection_certified = None
+                    braking_selection_mode = None
+                    braking_evaluations = ()
                     retreat_compliant = None
                     escape_compliant = None
                     recovery_evaluation = None
@@ -1193,6 +1450,12 @@ class DepNet:
                             or not self.recovery_trajectory_installed
                             or self.ctrl_time is None
                             or self.ctrl_time >= self.active_traj_duration
+                            # A V4.9 rolling dynamic authorization belongs to
+                            # one evaluated polynomial only.  Rebuild and
+                            # recheck any legacy translational recovery on
+                            # every fresh dynamic frame; never refresh an old
+                            # recovery trajectory by observation alone.
+                            or v49_runtime
                         )
                         if needs_install:
                             is_escape = (
@@ -1211,24 +1474,30 @@ class DepNet:
                             )
                             if is_escape:
                                 escape_compliant = limit_compliant
-                                if recovery_trajectory is not None and limit_compliant:
-                                    recovery_evaluation = self.runtime_safety.evaluate(
-                                        (recovery_trajectory,), duration,
-                                        obstacle_points, start_pos,
-                                        self.Rotation_wc,
-                                        dynamic_tracks=(
-                                            runtime_dynamic_context.dynamic_tracks
-                                            if runtime_dynamic_context is not None
-                                            and runtime_dynamic_context.valid else ()
-                                        ),
-                                        query_timestamp=message_timestamp(data),
-                                        goal_world=self.goal,
-                                    )[0]
+                            else:
+                                retreat_compliant = limit_compliant
+                            if (
+                                recovery_trajectory is not None
+                                and limit_compliant
+                                and (is_escape or v49_runtime)
+                            ):
+                                recovery_evaluation = self.runtime_safety.evaluate(
+                                    (recovery_trajectory,), duration,
+                                    obstacle_points, start_pos,
+                                    self.Rotation_wc,
+                                    dynamic_tracks=runtime_dynamic_tracks,
+                                    query_timestamp=runtime_query_timestamp,
+                                    goal_world=self.goal,
+                                    flight_bounds=self.flight_bounds,
+                                )[0]
+                                if is_escape:
                                     escape_compliant = bool(
                                         recovery_evaluation.feasible
                                     )
-                            else:
-                                retreat_compliant = limit_compliant
+                                else:
+                                    retreat_compliant = bool(
+                                        recovery_evaluation.feasible
+                                    )
                             certified = (
                                 escape_compliant if is_escape
                                 else retreat_compliant
@@ -1246,41 +1515,297 @@ class DepNet:
                                     "DE-P recovery translation rejected: %s",
                                     recovery.transition,
                                 )
-                                braking, duration, braking_compliant = (
-                                    self.runtime_safety.braking_trajectory(
-                                        start_pos, start_vel, start_acc
+                                if v49_runtime:
+                                    brake_result = self._select_v49_bounded_brake(
+                                        start_pos, start_vel, start_acc,
+                                        obstacle_points, runtime_dynamic_tracks,
+                                        runtime_query_timestamp,
                                     )
-                                )
+                                    if brake_result is None:
+                                        self._write_safety_telemetry({
+                                            "mode": "dynamic_emergency_no_action",
+                                            "control_state": (
+                                                "no_kinematically_valid_bounded_brake"
+                                            ),
+                                            "braking_option_count": 0,
+                                            "recovery_translation_rejected": True,
+                                        })
+                                        self._enter_safe_state(
+                                            "unable to construct bounded braking options"
+                                        )
+                                        self._publish_hold()
+                                        return
+                                    braking_evaluations = brake_result["evaluations"]
+                                    braking_option_count = len(braking_evaluations)
+                                    braking_selected_option_index = (
+                                        brake_result["selected_index"]
+                                    )
+                                    braking_selection_certified = (
+                                        brake_result["certified"]
+                                    )
+                                    braking_selection_mode = brake_result["mode"]
+                                    braking_evaluation = brake_result["evaluation"]
+                                    braking = brake_result["trajectory"]
+                                    duration = brake_result["duration"]
+                                    braking_compliant = bool(
+                                        braking_selection_certified
+                                    )
+                                else:
+                                    braking, duration, braking_compliant = (
+                                        self.runtime_safety.braking_trajectory(
+                                            start_pos, start_vel, start_acc
+                                        )
+                                    )
                                 if braking is None:
+                                    if v49_runtime:
+                                        self._write_safety_telemetry({
+                                            "mode": "dynamic_emergency_no_action",
+                                            "control_state": (
+                                                "no_statically_valid_dynamic_action"
+                                            ),
+                                            "braking_option_count": (
+                                                braking_option_count
+                                            ),
+                                            "braking_evaluations": [
+                                                item.as_dict()
+                                                for item in braking_evaluations
+                                            ],
+                                            "recovery_translation_rejected": True,
+                                        })
                                     self._enter_safe_state(
-                                        "unable to brake after recovery rejection"
+                                        "no statically valid brake after recovery rejection"
                                     )
+                                    if v49_runtime:
+                                        self._publish_hold()
                                     return
-                                self._install_trajectory(braking, duration)
+                                self._install_trajectory(
+                                    braking, duration,
+                                    requires_dynamic_freshness=(
+                                        v49_dynamic_context_valid
+                                    ),
+                                )
                             else:
                                 self._install_trajectory(
-                                    recovery_trajectory, duration
+                                    recovery_trajectory, duration,
+                                    requires_dynamic_freshness=(
+                                        v49_dynamic_context_valid
+                                    ),
                                 )
                                 self.recovery_trajectory_installed = True
                     elif action_id is None:
                         self.recovery_trajectory_installed = False
-                        braking, duration, braking_compliant = (
-                            self.runtime_safety.braking_trajectory(
-                                start_pos, start_vel, start_acc
+                        if v49_runtime:
+                            brake_result = self._select_v49_bounded_brake(
+                                start_pos, start_vel, start_acc,
+                                obstacle_points, runtime_dynamic_tracks,
+                                runtime_query_timestamp,
                             )
+                            if brake_result is None:
+                                self._write_safety_telemetry({
+                                    "mode": "dynamic_emergency_no_action",
+                                    "control_state": (
+                                        "no_kinematically_valid_bounded_brake"
+                                    ),
+                                    "braking_option_count": 0,
+                                })
+                                self._enter_safe_state(
+                                    "unable to construct bounded braking options"
+                                )
+                                self._publish_hold()
+                                return
+                            braking_evaluations = brake_result["evaluations"]
+                            braking_option_count = len(braking_evaluations)
+                            braking_selected_option_index = (
+                                brake_result["selected_index"]
+                            )
+                            braking_selection_certified = (
+                                brake_result["certified"]
+                            )
+                            braking_selection_mode = brake_result["mode"]
+                            braking_evaluation = brake_result["evaluation"]
+                            braking = brake_result["trajectory"]
+                            duration = brake_result["duration"]
+                            if braking is None:
+                                self._write_safety_telemetry({
+                                    "mode": "dynamic_emergency_no_action",
+                                    "control_state": (
+                                        "no_statically_valid_dynamic_action"
+                                    ),
+                                    "braking_option_count": (
+                                        braking_option_count
+                                    ),
+                                    "braking_evaluations": [
+                                        item.as_dict()
+                                        for item in braking_evaluations
+                                    ],
+                                })
+                                self._enter_safe_state(
+                                    "no statically valid dynamic braking option"
+                                )
+                                self._publish_hold()
+                                return
+                            braking_compliant = bool(
+                                braking_selection_certified
+                            )
+                            if not braking_selection_certified:
+                                rospy.logwarn_throttle(
+                                    1.0,
+                                    "DE-P has no certified dynamic action; "
+                                    "executing the minimum-risk bounded brake "
+                                    "while continuing high-rate replanning",
+                                )
+                        else:
+                            braking, duration, braking_compliant = (
+                                self.runtime_safety.braking_trajectory(
+                                    start_pos, start_vel, start_acc
+                                )
+                            )
+                            if braking is None:
+                                self._enter_safe_state(
+                                    "unable to construct braking trajectory"
+                                )
+                                return
+                            braking_evaluation = self.runtime_safety.evaluate(
+                                (braking,), duration, obstacle_points,
+                                start_pos, self.Rotation_wc,
+                                dynamic_tracks=runtime_dynamic_tracks,
+                                query_timestamp=runtime_query_timestamp,
+                                goal_world=self.goal,
+                                flight_bounds=self.flight_bounds,
+                            )[0]
+                            braking_selection_certified = bool(
+                                braking_evaluation.feasible
+                            )
+                            braking_selection_mode = "legacy_single_brake"
+                        self._install_trajectory(
+                            braking, duration,
+                            requires_dynamic_freshness=(
+                                v49_dynamic_context_valid
+                            ),
                         )
-                        if braking is None:
-                            self._enter_safe_state("unable to construct braking trajectory")
-                            return
-                        self._install_trajectory(braking, duration)
                     else:
                         self.recovery_trajectory_installed = False
                         self._install_trajectory(
-                            candidates[action_id], candidate_durations[action_id]
+                            candidates[action_id], candidate_durations[action_id],
+                            requires_dynamic_freshness=(
+                                v49_dynamic_context_valid
+                            ),
                         )
+                    control_state = (
+                        (
+                            "mixed_recovery"
+                            if blocking_after_scaling[
+                                "dynamic_hard_veto_count"
+                            ] else "static_recovery"
+                        )
+                        if recovery.mode != DeadlockRecoveryV2.NORMAL else
+                        (
+                            "dynamic_yield" if dynamic_yield else
+                            (
+                                "dynamic_time_scaled_motion"
+                                if selected_dynamic_time_scale > 1.0 else
+                                (
+                                    "dynamic_risk_motion"
+                                    if dynamic_risk_changed_selection else
+                                    "network_cruise"
+                                )
+                            )
+                        )
+                    )
                     self._write_safety_telemetry({
                         "mode": recovery.mode,
                         "network_selection_mode": selection.mode,
+                        "control_state": control_state,
+                        "current_speed_mps": float(np.linalg.norm(start_vel)),
+                        "dynamic_blocking_cause_before_scaling": (
+                            blocking_before_scaling["cause"]
+                        ),
+                        "dynamic_blocking_cause": (
+                            blocking_after_scaling["cause"]
+                        ),
+                        "dynamic_only_veto_candidate_count": (
+                            blocking_after_scaling[
+                                "dynamic_only_veto_candidate_count"
+                            ]
+                        ),
+                        "non_dynamic_feasible_candidate_count": (
+                            blocking_after_scaling[
+                                "non_dynamic_feasible_candidate_count"
+                            ]
+                        ),
+                        "dynamic_induced_zero_feasible": dynamic_yield,
+                        "dynamic_yield_suppressed_recovery": (
+                            dynamic_yield_suppressed_recovery
+                        ),
+                        "dynamic_risk_changed_selection": (
+                            dynamic_risk_changed_selection
+                        ),
+                        "selected_dynamic_risk_cost": (
+                            None if action_id is None else
+                            evaluations[action_id].dynamic_risk_cost
+                        ),
+                        "selected_dynamic_collision_ttc_s": (
+                            None if action_id is None else
+                            evaluations[action_id]
+                            .predicted_dynamic_collision_ttc_s
+                        ),
+                        "selected_minimum_dynamic_ttc_s": (
+                            None if action_id is None else
+                            evaluations[action_id].minimum_dynamic_ttc_s
+                        ),
+                        "selected_dynamic_closest_approach_time_s": (
+                            None if action_id is None else
+                            evaluations[action_id]
+                            .dynamic_closest_approach_time_s
+                        ),
+                        "selected_dynamic_closing_speed_mps": (
+                            None if action_id is None else
+                            evaluations[action_id]
+                            .dynamic_closing_speed_at_closest_mps
+                        ),
+                        "selected_dynamic_certified_horizon_s": (
+                            None if action_id is None else
+                            evaluations[action_id]
+                            .dynamic_certified_horizon_s
+                        ),
+                        "selected_dynamic_full_duration_certified": (
+                            None if action_id is None else
+                            evaluations[action_id]
+                            .dynamic_full_duration_certified
+                        ),
+                        "network_best_dynamic_risk_cost": (
+                            evaluations[int(np.argmin(raw_scores))]
+                            .dynamic_risk_cost
+                        ),
+                        "dynamic_time_scaling_attempted": (
+                            dynamic_time_scaling_attempted
+                        ),
+                        "dynamic_time_scaling_scales_tested": (
+                            dynamic_time_scales_tested
+                        ),
+                        "dynamic_time_scaling_accepted_scales": (
+                            dynamic_time_scaling_accepted_scales
+                        ),
+                        "selected_dynamic_time_scale": (
+                            selected_dynamic_time_scale
+                        ),
+                        "candidate_dynamic_time_scales": (
+                            per_candidate_dynamic_time_scales
+                        ),
+                        "dynamic_hard_veto_count_before_scaling": (
+                            blocking_before_scaling[
+                                "dynamic_hard_veto_count"
+                            ]
+                        ),
+                        "dynamic_hard_veto_count_after_scaling": (
+                            blocking_after_scaling[
+                                "dynamic_hard_veto_count"
+                            ]
+                        ),
+                        "dynamic_prediction_certified_prefix_s": (
+                            self.runtime_safety_config
+                            .dynamic_track_prediction_horizon_s
+                        ),
                         "clearance_preference_applied": (
                             clearance_preference_applied
                         ),
@@ -1464,6 +1989,12 @@ class DepNet:
                                 "observed_extent": list(
                                     track.observed_extent
                                 ),
+                                "position_world": list(
+                                    track.position_world
+                                ),
+                                "velocity_world": list(
+                                    track.velocity_world
+                                ),
                                 "position_covariance_diagonal": (
                                     np.diag(np.asarray(
                                         track.state_covariance,
@@ -1481,6 +2012,34 @@ class DepNet:
                             )
                         ],
                         "braking_limit_compliant": braking_compliant,
+                        "braking_evaluation": (
+                            None if braking_evaluation is None else
+                            braking_evaluation.as_dict()
+                        ),
+                        "braking_dynamic_action_certified": (
+                            None if braking_evaluation is None else
+                            braking_evaluation.feasible
+                        ),
+                        "braking_option_count": braking_option_count,
+                        "braking_selected_option_index": (
+                            braking_selected_option_index
+                        ),
+                        "braking_selection_certified": (
+                            braking_selection_certified
+                        ),
+                        "braking_selection_mode": braking_selection_mode,
+                        "no_certified_dynamic_action": bool(
+                            braking_evaluation is not None
+                            and not bool(braking_selection_certified)
+                            and v49_dynamic_context_valid
+                        ),
+                        "normal_candidate_dynamic_hard_veto_preserved": bool(
+                            self.runtime_profile == V49_RUNTIME_PROFILE
+                        ),
+                        "dynamic_hard_veto_emergency_brake_exception": bool(
+                            braking_selection_mode
+                            == "minimum_risk_uncertified_bounded_braking"
+                        ),
                         "retreat_limit_compliant": retreat_compliant,
                         "escape_safety_compliant": escape_compliant,
                         "escape_evaluation": (
@@ -1507,6 +2066,8 @@ class DepNet:
             else:
                 action_id = int(np.argmin(raw_scores)) if return_all else 0
                 self._install_trajectory(candidates[action_id], self.traj_time)
+                self.active_trajectory_requires_dynamic_freshness = False
+                self.last_dynamic_certificate_monotonic_s = None
         time4 = time.time()
         self.visualize_trajectory(
             score_pred, endstate_w,
@@ -1538,15 +2099,52 @@ class DepNet:
         ):
             self._publish_hold()
             return
-        if self.ctrl_time is None or self.ctrl_time > self.active_traj_duration:
-            return
-        if self.arrive and self.last_control_msg is not None:
-            self.desire_init = False   # ready for next rollout
-            self.last_control_msg.trajectory_flag = self.last_control_msg.TRAJECTORY_STATUS_EMPTY
-            self.ctrl_pub.publish(self.last_control_msg)
-            return
-
         with self.lock:  # Python3.8: threads are scheduled using time slices, add the lock to ensure safety and publish frequency
+            stale_dynamic_command = bool(
+                self.active_trajectory_requires_dynamic_freshness
+                and not dynamic_command_is_fresh_v1(
+                    self.last_dynamic_certificate_monotonic_s,
+                    time.monotonic(),
+                    self.runtime_safety_config.dynamic_command_max_age_s,
+                )
+            )
+            if stale_dynamic_command:
+                # Check and use share callback_depth's planner lock: a stale
+                # command cannot be executed after the deadline, and this hold
+                # cannot overwrite a newly installed trajectory.
+                self.ctrl_time = None
+                self.active_trajectory_requires_dynamic_freshness = False
+                self.last_dynamic_certificate_monotonic_s = None
+                self.dynamic_watchdog_stop_count += 1
+                self._publish_hold()
+                self._write_safety_telemetry({
+                    "mode": "dynamic_command_freshness_watchdog",
+                    "control_state": "stale_dynamic_plan_hold",
+                    "dynamic_watchdog_stop_count": (
+                        self.dynamic_watchdog_stop_count
+                    ),
+                    "dynamic_command_max_age_s": (
+                        self.runtime_safety_config.dynamic_command_max_age_s
+                    ),
+                })
+                rospy.logerr_throttle(
+                    1.0,
+                    "DE-P stopped a stale rolling dynamic command; waiting "
+                    "for fresh depth/perception replanning",
+                )
+                return
+            if (
+                self.ctrl_time is None
+                or self.ctrl_time > self.active_traj_duration
+            ):
+                return
+            if self.arrive and self.last_control_msg is not None:
+                self.desire_init = False   # ready for next rollout
+                self.last_control_msg.trajectory_flag = (
+                    self.last_control_msg.TRAJECTORY_STATUS_EMPTY
+                )
+                self.ctrl_pub.publish(self.last_control_msg)
+                return
             self.ctrl_time += self.ctrl_dt
             control_msg = PositionCommand()
             control_msg.header.stamp = rospy.Time.now()
@@ -1626,6 +2224,10 @@ class DepNet:
                 )
             elif self.runtime_profile == V485_RUNTIME_PROFILE:
                 yaw, yaw_dot = calculate_recovery_continuity_yaw_v4_8_5(
+                    self.desire_vel, goal_dir, self.last_yaw, self.ctrl_dt
+                )
+            elif self.runtime_profile == V49_RUNTIME_PROFILE:
+                yaw, yaw_dot = calculate_recovery_continuity_yaw_v4_9(
                     self.desire_vel, goal_dir, self.last_yaw, self.ctrl_dt
                 )
             else:
@@ -1920,6 +2522,7 @@ def parser():
             V4510_RUNTIME_PROFILE, V47_RUNTIME_PROFILE,
             V48_RUNTIME_PROFILE, V481_RUNTIME_PROFILE,
             V482_RUNTIME_PROFILE, V485_RUNTIME_PROFILE,
+            V49_RUNTIME_PROFILE,
         ),
         default="strict",
         help=(

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
 import math
 import sys
@@ -21,6 +22,16 @@ from sensor_simulator.msg import DynamicObjectStateArray
 from std_msgs.msg import Bool, String
 from visualization_msgs.msg import Marker
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from policy.dynamic.collision_observability_v1 import (
+    CONTRACT_VERSION as COLLISION_OBSERVABILITY_CONTRACT_VERSION,
+    associate_gt_actors_to_tracks_posthoc,
+    classify_dynamic_collision_observability,
+    normalize_simulator_visibility,
+)
 from run_dep_interactive_demo import CanonicalOccupancy
 
 
@@ -46,6 +57,26 @@ def parse_args():
         "--dynamic-ground-truth-topic",
         default="/dynamic_objects/ground_truth",
     )
+    parser.add_argument(
+        "--safety-decision-topic", default="/dep_net/safety_decision",
+        help="planner telemetry used only for post-hoc collision classification",
+    )
+    parser.add_argument(
+        "--planner-telemetry-max-age", type=float, default=0.5,
+        help="maximum receipt age for planner telemetry used by diagnostics",
+    )
+    parser.add_argument(
+        "--posthoc-binding-distance-threshold", type=float, default=1.0,
+        help="diagnostic-only GT actor/track centroid distance gate in metres",
+    )
+    parser.add_argument(
+        "--posthoc-binding-time-threshold", type=float, default=0.5,
+        help="diagnostic-only planner telemetry receipt-age gate in seconds",
+    )
+    parser.add_argument(
+        "--posthoc-binding-ambiguity-margin", type=float, default=0.25,
+        help="minimum nearest-neighbour separation for a unique diagnostic binding",
+    )
     return parser.parse_args()
 
 
@@ -59,6 +90,9 @@ class CollisionMonitor:
         self.static_collision = False
         self.dynamic_collision = False
         self.dynamic_actor_ids = []
+        self.dynamic_collision_observability = []
+        self.dynamic_collision_actor_snapshots = []
+        self.dynamic_collision_observability_counts = Counter()
         self.last_position = None
         self.last_odom_stamp = None
         self.previous_dynamic_uav_position = None
@@ -75,6 +109,10 @@ class CollisionMonitor:
         self.near_contact_events = 0
         self.odom_samples = 0
         self.dynamic_samples = 0
+        self.planner_telemetry_messages = 0
+        self.planner_telemetry_invalid_messages = 0
+        self.latest_planner_telemetry = None
+        self.latest_planner_telemetry_receipt = None
         self.first_collision = None
         self.events_path = args.report.with_name("collision_events.jsonl")
         self.events_path.parent.mkdir(parents=True, exist_ok=True)
@@ -122,6 +160,13 @@ class CollisionMonitor:
             DynamicObjectStateArray,
             self.on_dynamic,
             queue_size=1,
+            tcp_nodelay=True,
+        )
+        rospy.Subscriber(
+            args.safety_decision_topic,
+            String,
+            self.on_safety_decision,
+            queue_size=10,
             tcp_nodelay=True,
         )
         rospy.on_shutdown(self.write_report)
@@ -178,7 +223,66 @@ class CollisionMonitor:
             ], dtype=np.float64),
             "radius": float(message.radius),
             "height": float(message.height),
+            "velocity": np.asarray([
+                message.velocity_world.x,
+                message.velocity_world.y,
+                message.velocity_world.z,
+            ], dtype=np.float64),
+            "visible": bool(message.visible),
+            "occluded": bool(message.occluded),
+            "inside_image": bool(message.inside_image),
+            "projected_u": float(message.projected_u),
+            "projected_v": float(message.projected_v),
+            "expected_surface_depth": float(message.expected_surface_depth),
+            "observed_depth": float(message.observed_depth),
+            "depth_error": float(message.depth_error),
+            "rendered_pixel_count": int(message.rendered_pixel_count),
         }
+
+    @staticmethod
+    def actor_snapshot(actor_id, actor, uav_position):
+        position = np.asarray(actor["position"], dtype=np.float64)
+        uav = (
+            None if uav_position is None
+            else np.asarray(uav_position, dtype=np.float64)
+        )
+        return {
+            "actor_id": int(actor_id),
+            "shape": str(actor["shape"]),
+            "position_world": position.tolist(),
+            "velocity_world": np.asarray(
+                actor.get("velocity", np.zeros(3)), dtype=np.float64
+            ).tolist(),
+            "radius_m": float(actor["radius"]),
+            "height_m": float(actor["height"]),
+            "center_distance_to_uav_m": (
+                None if uav is None else float(np.linalg.norm(position - uav))
+            ),
+            "simulator_visibility": normalize_simulator_visibility(actor),
+        }
+
+    def on_safety_decision(self, message):
+        try:
+            payload = json.loads(message.data)
+            if not isinstance(payload, dict):
+                raise ValueError("safety telemetry must be a JSON object")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            with self.lock:
+                self.planner_telemetry_invalid_messages += 1
+            return
+
+        # The topic also carries command-clamp events.  Those do not contain
+        # perception state and must not overwrite the latest rich replan row.
+        if not any(key in payload for key in (
+            "predicted_dynamic_track_count",
+            "dynamic_context_valid",
+            "dynamic_track_summaries",
+        )):
+            return
+        with self.lock:
+            self.latest_planner_telemetry = payload
+            self.latest_planner_telemetry_receipt = time.monotonic()
+            self.planner_telemetry_messages += 1
 
     def terminal_alarm(self, event, repeated=False):
         label = "COLLISION STILL ACTIVE" if repeated else "COLLISION DETECTED"
@@ -210,7 +314,7 @@ class CollisionMonitor:
         self.static_collision_events += int(static_rising)
         self.dynamic_collision_events += int(dynamic_rising)
         self.any_collision_events += int(any_rising)
-        if any_rising:
+        if any_rising or dynamic_rising or static_rising:
             event = {
                 "event": "COLLISION",
                 "timestamp": self.now_iso(),
@@ -220,7 +324,18 @@ class CollisionMonitor:
                 "position_world": self.last_position,
                 "static_detection_source": self.static_detection_source,
                 "dynamic_detection_sources": self.dynamic_detection_sources,
+                "dynamic_collision_observability": (
+                    self.dynamic_collision_observability
+                ),
+                "dynamic_collision_actor_snapshots": (
+                    self.dynamic_collision_actor_snapshots
+                ),
             }
+            if dynamic_rising:
+                for item in self.dynamic_collision_observability:
+                    self.dynamic_collision_observability_counts[
+                        str(item.get("classification", "unknown"))
+                    ] += 1
             if self.first_collision is None:
                 self.first_collision = event
             encoded = json.dumps(event, separators=(",", ":"))
@@ -422,11 +537,64 @@ class CollisionMonitor:
                     ):
                         swept_ids.add(actor_id)
             colliding = sorted(gt_ids | independent_ids | swept_ids)
+            telemetry_age = (
+                None if self.latest_planner_telemetry_receipt is None else
+                max(0.0, time.monotonic()
+                    - self.latest_planner_telemetry_receipt)
+            )
+            collision_observability = []
+            collision_snapshots = []
+            # This binding is strictly post-hoc.  It receives a copy of the
+            # planner telemetry here in the monitor process and is never fed
+            # back to the planner or simulator control path.  All active
+            # actors participate so that one track cannot be credited to two
+            # nearby ground-truth actors at a collision.
+            posthoc_bindings = associate_gt_actors_to_tracks_posthoc(
+                actor_states=current_states,
+                planner_telemetry=self.latest_planner_telemetry,
+                planner_telemetry_age_s=telemetry_age,
+                time_threshold_s=self.args.posthoc_binding_time_threshold,
+                distance_threshold_m=(
+                    self.args.posthoc_binding_distance_threshold
+                ),
+                ambiguity_margin_m=(
+                    self.args.posthoc_binding_ambiguity_margin
+                ),
+            )
+            for actor_id in colliding:
+                actor = current_states.get(actor_id)
+                if actor is None:
+                    collision_observability.append({
+                        "contract_version": (
+                            COLLISION_OBSERVABILITY_CONTRACT_VERSION
+                        ),
+                        "actor_id": int(actor_id),
+                        "classification": "unknown",
+                        "reason": "colliding_actor_state_missing",
+                    })
+                    continue
+                collision_snapshots.append(self.actor_snapshot(
+                    actor_id, actor, current_uav
+                ))
+                collision_observability.append(
+                    classify_dynamic_collision_observability(
+                        actor_id=actor_id,
+                        simulator_visibility=actor,
+                        planner_telemetry=self.latest_planner_telemetry,
+                        planner_telemetry_age_s=telemetry_age,
+                        planner_telemetry_max_age_s=(
+                            self.args.planner_telemetry_max_age
+                        ),
+                        posthoc_binding=posthoc_bindings.get(actor_id),
+                    )
+                )
             self.dynamic_samples += 1
             self.dynamic_collision = bool(
                 message.uav_collision or colliding
             )
             self.dynamic_actor_ids = colliding
+            self.dynamic_collision_observability = collision_observability
+            self.dynamic_collision_actor_snapshots = collision_snapshots
             sources = []
             if message.uav_collision or gt_ids:
                 sources.append("simulator_ground_truth")
@@ -459,6 +627,27 @@ class CollisionMonitor:
                 "finished_at": self.now_iso(),
                 "odom_samples": self.odom_samples,
                 "dynamic_samples": self.dynamic_samples,
+                "planner_telemetry_messages": self.planner_telemetry_messages,
+                "planner_telemetry_invalid_messages": (
+                    self.planner_telemetry_invalid_messages
+                ),
+                "planner_telemetry_max_age_s": (
+                    self.args.planner_telemetry_max_age
+                ),
+                "posthoc_binding_contract": {
+                    "binding_method": "posthoc_spatial_binding",
+                    "distance_threshold_m": (
+                        self.args.posthoc_binding_distance_threshold
+                    ),
+                    "time_threshold_s": (
+                        self.args.posthoc_binding_time_threshold
+                    ),
+                    "ambiguity_margin_m": (
+                        self.args.posthoc_binding_ambiguity_margin
+                    ),
+                    "diagnostic_only": True,
+                    "planner_control_affected": False,
+                },
                 "static_collision_events": self.static_collision_events,
                 "dynamic_collision_events": self.dynamic_collision_events,
                 "any_collision_events": self.any_collision_events,
@@ -467,6 +656,9 @@ class CollisionMonitor:
                     self.independent_dynamic_collision_events
                 ),
                 "near_contact_events": self.near_contact_events,
+                "dynamic_collision_observability_counts": dict(
+                    self.dynamic_collision_observability_counts
+                ),
                 "events_jsonl": str(self.events_path),
                 "first_collision": self.first_collision,
                 "goal_received_count": self.goal_received_count,
@@ -500,6 +692,18 @@ def main():
         raise ValueError("--active-alarm-period must be positive")
     if args.arrival_radius <= 0:
         raise ValueError("--arrival-radius must be positive")
+    if args.planner_telemetry_max_age <= 0:
+        raise ValueError("--planner-telemetry-max-age must be positive")
+    if args.posthoc_binding_distance_threshold <= 0:
+        raise ValueError(
+            "--posthoc-binding-distance-threshold must be positive"
+        )
+    if args.posthoc_binding_time_threshold <= 0:
+        raise ValueError("--posthoc-binding-time-threshold must be positive")
+    if args.posthoc_binding_ambiguity_margin < 0:
+        raise ValueError(
+            "--posthoc-binding-ambiguity-margin must be non-negative"
+        )
     rospy.init_node("dep_interactive_collision_monitor", anonymous=False)
     CollisionMonitor(args)
     rospy.loginfo(

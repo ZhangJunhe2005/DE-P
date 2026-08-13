@@ -1,10 +1,12 @@
 import math
 
 import numpy as np
+import pytest
 
 from policy.deadlock_recovery_v3 import (
     DeadlockRecoveryConfigV3,
     DeadlockRecoveryV3,
+    RecoveryDecisionV3,
     deadlock_recovery_mapping_v4_7_pillar,
     horizontal_sector_from_action_id,
 )
@@ -204,6 +206,214 @@ def test_v4_8_5_second_failed_handoff_escalates_to_one_twenty_degrees():
         position=[0.0, 0.0, 0.0], depth=blocked,
     )
     assert decision.current_scan_limit_deg == 120.0
+
+
+def test_dynamic_yield_pause_breaks_confirmation_but_preserves_scan_escalation():
+    recovery = v4_8_5_recovery()
+    recovery.unsuccessful_scan_attempts = 2
+    recovery.current_scan_limit_deg = 120.0
+    for index in range(4):
+        decision = observe(
+            recovery, index * 0.03,
+            feasible=3, selected=True, progress=1.0,
+            action_id=7, sector_id=2, clearance=0.8,
+        )
+    assert decision.selected_release_replans == 4
+    assert decision.selected_confirmation_horizontal_sector_id is None
+    assert decision.selected_candidate_action_id == 7
+
+    decision = recovery.set_dynamic_yield_pause(True, now_s=0.20)
+    assert isinstance(decision, RecoveryDecisionV3)
+    assert decision.transition == "network_dynamic_yield_pause_started"
+    assert decision.mode == recovery.NORMAL
+    assert decision.selected_release_replans == 0
+    assert decision.selected_candidate_eligible is False
+    assert decision.selected_candidate_action_id is None
+    assert recovery.selected_confirmation_horizontal_sector_id is None
+    assert recovery.unsuccessful_scan_attempts == 2
+    assert recovery.current_scan_limit_deg == 120.0
+
+    # Repeated yield frames remain public snapshots and retain escalation.
+    decision = recovery.set_dynamic_yield_pause(True, now_s=3.20)
+    assert decision.transition is None
+    assert recovery.motion_stagnation_replans == 0
+    assert recovery.unsuccessful_scan_attempts == 2
+    assert recovery.current_scan_limit_deg == 120.0
+
+    decision = recovery.set_dynamic_yield_pause(False, now_s=3.23)
+    assert decision.transition == "network_dynamic_yield_pause_ended"
+    decision = observe(
+        recovery, 3.23,
+        feasible=3, selected=True, progress=1.0,
+        action_id=7, sector_id=2, clearance=0.8,
+    )
+    # Four observations before the yield plus one after it must not release or
+    # reset the retained escalation evidence as a stitched five-frame streak.
+    assert decision.selected_release_replans == 1
+    assert recovery.unsuccessful_scan_attempts == 2
+    assert recovery.current_scan_limit_deg == 120.0
+
+
+def test_dynamic_yield_pause_discards_zero_and_motion_stagnation_evidence():
+    mapping = deadlock_recovery_mapping_v4_8_5({"enabled": True})
+    mapping.update({
+        "zero_feasible_trigger_replans": 100,
+        "motion_stagnation_window_s": 0.10,
+        "motion_stagnation_trigger_replans": 100,
+    })
+    config = DeadlockRecoveryConfigV3.from_mapping(mapping)
+    recovery = DeadlockRecoveryV3(config)
+    for index in range(20):
+        decision = observe(
+            recovery, index * 0.03, feasible=0,
+            position=[0.0, 0.0, 0.0],
+        )
+    assert decision.zero_feasible_replans == 20
+    assert decision.motion_stagnation_replans > 0
+    assert len(recovery.motion_history) > 0
+
+    decision = recovery.set_dynamic_yield_pause(True, now_s=2.0)
+    assert decision.zero_feasible_replans == 0
+    assert decision.motion_stagnation_replans == 0
+    assert recovery.motion_window_displacement_m is None
+    assert len(recovery.motion_history) == 0
+    for index in range(100):
+        recovery.set_dynamic_yield_pause(True, now_s=2.03 + index * 0.03)
+    assert recovery.zero_feasible_replans == 0
+    assert recovery.motion_stagnation_replans == 0
+    assert len(recovery.motion_history) == 0
+
+    recovery.set_dynamic_yield_pause(False, now_s=5.03)
+    decision = observe(
+        recovery, 5.03, feasible=0, position=[0.0, 0.0, 0.0]
+    )
+    assert decision.mode == recovery.NORMAL
+    assert decision.transition is None
+    assert decision.zero_feasible_replans == 1
+    assert decision.motion_stagnation_replans == 0
+
+
+def test_dynamic_yield_pause_requires_explicit_resume_before_observe():
+    recovery = v4_8_5_recovery()
+    recovery.set_dynamic_yield_pause(True, now_s=0.0)
+    with pytest.raises(RuntimeError, match="resume dynamic-yield pause"):
+        observe(recovery, 0.03, feasible=1, selected=True, progress=1.0)
+    recovery.set_dynamic_yield_pause(False, now_s=0.04)
+    assert observe(recovery, 0.04, feasible=1).mode == recovery.NORMAL
+
+
+def test_dynamic_yield_pause_freezes_handoff_time_and_motion_evidence():
+    recovery = v4_8_5_recovery()
+    enter_scan(recovery)
+    now, _ = release_v4_8_5_scan(recovery)
+    decision = observe(
+        recovery, now + 0.40, feasible=3, selected=True, progress=1.0,
+        action_id=7, sector_id=2, position=[0.20, 0.0, 0.0],
+    )
+    assert decision.handoff_validation_active
+    assert decision.handoff_validation_displacement_m == pytest.approx(0.20)
+    scan_attempts = recovery.unsuccessful_scan_attempts
+    scan_limit = recovery.current_scan_limit_deg
+
+    paused = recovery.set_dynamic_yield_pause(True, now_s=now + 0.50)
+    frozen_elapsed = paused.handoff_validation_elapsed_s
+    assert paused.handoff_validation_active
+    assert frozen_elapsed is not None
+    # Ten seconds of actor yielding consumes none of the remaining handoff
+    # window and cannot alter the already escalated scan chain.
+    paused = recovery.set_dynamic_yield_pause(True, now_s=now + 10.50)
+    assert paused.handoff_validation_elapsed_s == pytest.approx(frozen_elapsed)
+    assert recovery.unsuccessful_scan_attempts == scan_attempts
+    assert recovery.current_scan_limit_deg == scan_limit
+
+    resumed = recovery.set_dynamic_yield_pause(False, now_s=now + 10.50)
+    assert resumed.handoff_validation_elapsed_s == pytest.approx(frozen_elapsed)
+    # Large brake/drift motion during the pause is rebased away.  Only the
+    # pre-pause 0.20 m remains as handoff evidence.
+    decision = observe(
+        recovery, now + 10.51, feasible=3, selected=True, progress=1.0,
+        action_id=7, sector_id=2, position=[4.0, 0.0, 0.0],
+    )
+    assert decision.transition is None
+    assert decision.handoff_validation_displacement_m == pytest.approx(0.20)
+    decision = observe(
+        recovery, now + 10.70, feasible=3, selected=True, progress=1.0,
+        action_id=7, sector_id=2, position=[4.31, 0.0, 0.0],
+    )
+    assert decision.transition == "handoff_measured_motion_verified"
+    assert recovery.unsuccessful_scan_attempts == 0
+
+
+def test_dynamic_yield_pause_resumes_only_the_remaining_handoff_window():
+    recovery = v4_8_5_recovery()
+    enter_scan(recovery)
+    now, _ = release_v4_8_5_scan(recovery)
+    observe(recovery, now + 0.70, position=[0.0, 0.0, 0.0])
+    paused = recovery.set_dynamic_yield_pause(True, now_s=now + 0.80)
+    elapsed = paused.handoff_validation_elapsed_s
+    assert elapsed is not None
+    remaining = recovery.config.handoff_validation_window_s - elapsed
+    assert 0.0 < remaining < recovery.config.handoff_validation_window_s
+    scan_attempts = recovery.unsuccessful_scan_attempts
+    scan_limit = recovery.current_scan_limit_deg
+
+    resume_time = now + 8.80
+    recovery.set_dynamic_yield_pause(False, now_s=resume_time)
+    decision = observe(
+        recovery, resume_time + remaining - 0.01,
+        position=[0.0, 0.0, 0.0],
+    )
+    assert decision.transition is None
+    assert decision.handoff_validation_active
+    decision = observe(
+        recovery, resume_time + remaining + 0.01,
+        position=[0.0, 0.0, 0.0],
+    )
+    assert decision.transition == "handoff_validation_failed_to_braking"
+    assert recovery.unsuccessful_scan_attempts == scan_attempts
+    assert recovery.current_scan_limit_deg == scan_limit
+
+
+def test_dynamic_yield_pause_does_not_turn_changed_view_into_handoff_evidence():
+    recovery = v4_8_5_recovery()
+    enter_scan(recovery)
+    baseline = np.full((20, 30), 5.0, dtype=np.float32)
+    now, _ = release_v4_8_5_scan(recovery, depth=baseline)
+    partial = np.full((20, 30), 5.3, dtype=np.float32)
+    decision = observe(
+        recovery, now + 0.10, feasible=3, selected=True, progress=1.0,
+        action_id=7, sector_id=2, position=[0.0, 0.0, 0.0], depth=partial,
+    )
+    assert decision.handoff_validation_forward_clearance_gain_m == pytest.approx(
+        0.30, abs=1.0e-5
+    )
+    assert decision.handoff_forward_clearance_confirmation_replans == 0
+
+    recovery.set_dynamic_yield_pause(True, now_s=now + 0.15)
+    recovery.set_dynamic_yield_pause(False, now_s=now + 5.15)
+    changed_view = np.full((20, 30), 20.0, dtype=np.float32)
+    decision = observe(
+        recovery, now + 5.16, feasible=3, selected=True, progress=1.0,
+        action_id=7, sector_id=2, position=[0.0, 0.0, 0.0],
+        depth=changed_view,
+    )
+    # The large view change happened during the pause, so the preserved gain
+    # is still 0.30 m and cannot instantly validate the handoff.
+    assert decision.transition is None
+    assert decision.handoff_validation_forward_clearance_gain_m == pytest.approx(
+        0.30, abs=1.0e-5
+    )
+    assert decision.handoff_forward_clearance_confirmation_replans == 0
+
+    clearer = np.full((20, 30), 20.3, dtype=np.float32)
+    for index in range(5):
+        decision = observe(
+            recovery, now + 5.19 + 0.03 * index,
+            feasible=3, selected=True, progress=1.0,
+            action_id=7, sector_id=2, position=[0.0, 0.0, 0.0],
+            depth=clearer,
+        )
+    assert decision.transition == "handoff_forward_clearance_verified"
 
 
 def enter_scan(recovery, trigger=None):

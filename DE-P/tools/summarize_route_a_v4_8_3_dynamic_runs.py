@@ -130,7 +130,7 @@ def collect(run_root=RUN_ROOT):
         "checkpoint": str(CHECKPOINT),
         "contract": {
             "actors": "multi_target",
-            "actor_count": 8,
+            "actor_count": 16,
             "actor_layout": "hybrid",
             "actor_seed": 8801,
             "dynamic_mode": "dynamic_safety",

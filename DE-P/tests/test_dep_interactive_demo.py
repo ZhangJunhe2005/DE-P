@@ -1,4 +1,6 @@
 import importlib.util
+import copy
+import math
 from argparse import Namespace
 from pathlib import Path
 
@@ -12,6 +14,60 @@ TOOL_PATH = ROOT / "tools" / "run_dep_interactive_demo.py"
 SPEC = importlib.util.spec_from_file_location("run_dep_interactive_demo", TOOL_PATH)
 DEMO = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(DEMO)
+
+
+def _independent_route_encounter_measurements(scene, actor):
+    """Numerical black-box oracle independent of the production certificate."""
+    route_start = np.asarray(scene["start"], dtype=np.float64)
+    route_goal = np.asarray(scene["suggested_goal"], dtype=np.float64)
+    route_vector = route_goal - route_start
+    route_length = float(np.linalg.norm(route_vector))
+    route_direction = route_vector / route_length
+    route_duration = route_length / 3.0
+    first, second = (
+        np.asarray(value, dtype=np.float64)
+        for value in actor["trajectory"]["waypoints_world"]
+    )
+    actor_vector = second - first
+    actor_path_length = float(np.linalg.norm(actor_vector))
+    actor_direction = actor_vector / actor_path_length
+    actor_speed = float(actor["trajectory"]["speed"])
+    start_time = float(actor["trajectory"]["start_time"])
+    first_uav = route_start + route_direction * min(
+        route_length, 3.0 * start_time
+    )
+    relative = first - first_uav
+    longitudinal = float(np.dot(relative, route_direction))
+    off_axis = relative - longitudinal * route_direction
+    bearing = math.degrees(math.atan2(
+        float(np.linalg.norm(off_axis)), max(0.0, longitudinal)
+    ))
+
+    # Sample the actual ping-pong kinematics rather than calling the launcher's
+    # analytic checker.  A 1 ms-class grid is much finer than the 2.5 m bound.
+    times = np.linspace(start_time, route_duration, 16001)
+    leg_duration = actor_path_length / actor_speed
+    phase = (times - start_time) / leg_duration
+    leg = np.floor(phase).astype(np.int64)
+    amount = phase - leg
+    amount = np.where(leg % 2 == 0, amount, 1.0 - amount)
+    actor_positions = first + amount[:, None] * actor_vector
+    uav_positions = route_start + 3.0 * times[:, None] * route_direction
+    separations = np.linalg.norm(actor_positions - uav_positions, axis=1)
+    closest_index = int(np.argmin(separations))
+    return {
+        "route_direction": route_direction,
+        "actor_direction": actor_direction,
+        "first": first,
+        "second": second,
+        "first_longitudinal": longitudinal,
+        "first_bearing_deg": bearing,
+        "direction_cosine": float(np.dot(actor_direction, route_direction)),
+        "closest_distance_m": float(separations[closest_index]),
+        "closest_time_s": float(times[closest_index]),
+        "closest_actor_position": actor_positions[closest_index],
+        "closest_uav_position": uav_positions[closest_index],
+    }
 
 
 @pytest.mark.parametrize("scene_name", ["cave", "forest", "pillar", "room", "wall"])
@@ -105,6 +161,166 @@ def test_hybrid_layout_spreads_actors_across_map_and_keeps_route_encounters():
     assert scenario["map_wide_actor_count"] == 11
     assert max(value[0] for value in centers) - min(value[0] for value in centers) > 25
     assert max(value[1] for value in centers) - min(value[1] for value in centers) > 25
+
+
+def test_route_encounter_layout_requires_a_meaningful_multi_target_stress_set():
+    scene = DEMO.load_scene(DEMO.DEFAULT_SCENES, "forest")
+    with pytest.raises(ValueError, match="requires --actors multi_target"):
+        DEMO.build_actor_scenario(
+            "forest", scene, "crossing", actor_count=8,
+            actor_layout="route_encounters",
+        )
+    with pytest.raises(ValueError, match="at least 8"):
+        DEMO.build_actor_scenario(
+            "forest", scene, "multi_target", actor_count=7,
+            actor_layout="route_encounters",
+        )
+
+
+@pytest.mark.parametrize("scene_name", ["cave", "forest", "pillar", "wall"])
+def test_route_encounters_are_balanced_delayed_and_canonically_preserved(
+    scene_name,
+):
+    scenes = ROOT / "configs" / "dep_interactive_demo_scenes_v4_6.json"
+    scene = DEMO.load_scene(scenes, scene_name)
+    payload = DEMO.build_actor_scenario(
+        scene_name, scene, "multi_target", actor_count=16,
+        vertical_span=2.0, actor_layout="route_encounters", actor_seed=9917,
+    )
+    scenario = payload["dynamic_scenario"]
+    assert scenario["encounter_family_counts"] == {
+        "crossing": 4,
+        "head_on": 4,
+        "same_direction_slow": 4,
+        "staggered_crossing": 4,
+    }
+    assert scenario["route_encounter_actor_count"] == 16
+    assert scenario["route_contract_actor_count"] == 16
+    assert scenario["route_contract_preserved_actor_count"] == 16
+    assert scenario["canonical_occupancy_checked"] is True
+    assert scenario["route_encounter_contract_version"] == (
+        "route_encounter_layout_v2"
+    )
+    assert max(actor["route_fraction"] for actor in scenario["actors"]) - min(
+        actor["route_fraction"] for actor in scenario["actors"]
+    ) > 0.5
+    staggered = [
+        actor for actor in scenario["actors"]
+        if actor["encounter_family"] == "staggered_crossing"
+    ]
+    assert all(actor["trajectory"]["start_time"] > 0.0 for actor in staggered)
+    assert len({
+        actor["trajectory"]["start_time"] for actor in staggered
+    }) == len(staggered)
+    for actor in scenario["actors"]:
+        # This oracle reconstructs kinematics from the emitted simulator input;
+        # it neither trusts evidence metadata nor calls the production helper.
+        measured = _independent_route_encounter_measurements(scene, actor)
+        assert measured["first_longitudinal"] >= 1.0
+        assert measured["first_bearing_deg"] <= 80.0
+        assert measured["closest_distance_m"] <= 2.5 + 1e-3
+        assert actor["trajectory"]["start_time"] <= measured["closest_time_s"]
+        assert measured["closest_time_s"] <= (
+            np.linalg.norm(
+                np.asarray(scene["suggested_goal"])
+                - np.asarray(scene["start"])
+            ) / 3.0
+        )
+        assert 0.0 <= float(np.dot(
+            measured["closest_uav_position"] - np.asarray(scene["start"]),
+            measured["route_direction"],
+        )) <= np.linalg.norm(
+            np.asarray(scene["suggested_goal"])
+            - np.asarray(scene["start"])
+        )
+
+        family = actor["encounter_family"]
+        if family in {"crossing", "staggered_crossing"}:
+            assert abs(measured["direction_cosine"]) <= 0.25
+            lateral_axis = np.cross(
+                measured["route_direction"], [0.0, 0.0, 1.0]
+            )
+            lateral_axis /= np.linalg.norm(lateral_axis)
+            signed_first = float(np.dot(
+                measured["first"] - np.asarray(scene["start"]), lateral_axis
+            ))
+            signed_second = float(np.dot(
+                measured["second"] - np.asarray(scene["start"]), lateral_axis
+            ))
+            assert signed_first * signed_second <= 1e-9
+        elif family == "head_on":
+            assert measured["direction_cosine"] <= -0.8
+        else:
+            assert family == "same_direction_slow"
+            assert measured["direction_cosine"] >= 0.8
+            assert actor["trajectory"]["speed"] <= 0.65
+
+        evidence = actor["route_encounter_evidence"]
+        assert evidence["passed"] is True
+        assert evidence["failures"] == []
+        assert evidence["first_appearance_relative_longitudinal_m"] == (
+            pytest.approx(measured["first_longitudinal"], abs=1e-9)
+        )
+        assert evidence["outbound_velocity_route_direction_cosine"] == (
+            pytest.approx(measured["direction_cosine"], abs=1e-9)
+        )
+        # Analytic and independently sampled closest approaches must agree.
+        assert evidence["nominal_encounter_distance_m"] == pytest.approx(
+            measured["closest_distance_m"], abs=0.01
+        )
+        assert evidence["nominal_encounter_time_s"] == pytest.approx(
+            measured["closest_time_s"], abs=0.01
+        )
+
+
+def test_route_contract_rejects_wrong_direction_rear_birth_and_missed_timing():
+    scene = DEMO.load_scene(
+        ROOT / "configs" / "dep_interactive_demo_scenes_v4_6.json", "forest"
+    )
+    actors = DEMO.build_actor_scenario(
+        "forest", scene, "multi_target", actor_count=16,
+        vertical_span=2.0, actor_layout="route_encounters", actor_seed=9917,
+    )["dynamic_scenario"]["actors"]
+
+    head_on = copy.deepcopy(next(
+        actor for actor in actors if actor["encounter_family"] == "head_on"
+    ))
+    head_on["trajectory"]["waypoints_world"].reverse()
+    assert not DEMO._route_contract_is_preserved(
+        head_on, head_on["trajectory"]["waypoints_world"]
+    )
+
+    rear = copy.deepcopy(next(
+        actor for actor in actors
+        if actor["encounter_family"] == "same_direction_slow"
+    ))
+    route = np.asarray(scene["suggested_goal"]) - np.asarray(scene["start"])
+    route /= np.linalg.norm(route)
+    rear["trajectory"]["waypoints_world"] = [
+        (np.asarray(value) - 30.0 * route).tolist()
+        for value in rear["trajectory"]["waypoints_world"]
+    ]
+    assert not DEMO._route_contract_is_preserved(
+        rear, rear["trajectory"]["waypoints_world"]
+    )
+
+    delayed = copy.deepcopy(next(
+        actor for actor in actors if actor["encounter_family"] == "crossing"
+    ))
+    delayed["trajectory"]["start_time"] = 30.0
+    assert not DEMO._route_contract_is_preserved(
+        delayed, delayed["trajectory"]["waypoints_world"]
+    )
+
+
+def test_hybrid_actors_do_not_acquire_route_encounter_contract_metadata():
+    scene = DEMO.load_scene(DEMO.DEFAULT_SCENES, "forest")
+    actors = DEMO.build_actor_scenario(
+        "forest", scene, "multi_target", actor_count=16,
+        vertical_span=2.0, actor_layout="hybrid", actor_seed=9917,
+    )["dynamic_scenario"]["actors"]
+    assert all("route_encounter_contract" not in actor for actor in actors)
+    assert all("route_encounter_evidence" not in actor for actor in actors)
 
 
 def test_actor_limit_is_64_for_static_reactive_scenarios():

@@ -62,6 +62,16 @@ class RuntimeSafetyConfigV1:
     dynamic_track_max_age_s: float = 0.25
     dynamic_track_prediction_horizon_s: float = 1.50
     dynamic_track_covariance_sigma: float = 2.0
+    dynamic_risk_ranking_enabled: bool = False
+    dynamic_risk_score_weight: float = 0.0
+    dynamic_risk_score_cap: float = 1.0
+    dynamic_risk_distance_scale_m: float = 0.75
+    dynamic_risk_ttc_scale_s: float = 1.50
+    dynamic_risk_closing_speed_scale_mps: float = 2.0
+    dynamic_time_retiming_enabled: bool = False
+    dynamic_time_retiming_scales: tuple[float, ...] = (1.0, 1.2, 1.4)
+    dynamic_command_freshness_watchdog_enabled: bool = False
+    dynamic_command_max_age_s: float = 0.25
     clearance_preference_weight: float = 0.0
     clearance_preference_saturation_m: float = 0.90
 
@@ -137,6 +147,27 @@ class RuntimeSafetyConfigV1:
             self.dynamic_track_covariance_sigma,
         ) < 0:
             raise ValueError("dynamic prediction geometry must be non-negative")
+        if self.dynamic_risk_score_weight < 0.0:
+            raise ValueError("dynamic risk score weight must be non-negative")
+        if self.dynamic_risk_score_cap <= 0.0:
+            raise ValueError("dynamic risk score cap must be positive")
+        if min(
+            self.dynamic_risk_distance_scale_m,
+            self.dynamic_risk_ttc_scale_s,
+            self.dynamic_risk_closing_speed_scale_mps,
+        ) <= 0.0:
+            raise ValueError("dynamic risk scales must be positive")
+        scales = tuple(float(value) for value in self.dynamic_time_retiming_scales)
+        if not scales or not np.isclose(scales[0], 1.0):
+            raise ValueError("dynamic time scales must start at 1.0")
+        if any(not np.isfinite(value) for value in scales) \
+                or any(value < 1.0 for value in scales) \
+                or any(right <= left for left, right in zip(scales, scales[1:])):
+            raise ValueError(
+                "dynamic time scales must be finite and strictly increasing"
+            )
+        if self.dynamic_command_max_age_s <= 0.0:
+            raise ValueError("dynamic command maximum age must be positive")
         if self.clearance_preference_weight < 0.0:
             raise ValueError("clearance preference weight must be non-negative")
         if self.clearance_preference_saturation_m <= 0.0:
@@ -165,6 +196,28 @@ class RuntimeSafetyConfigV1:
                 if self.candidate_retiming_enabled else
                 "reject_limit_violating_candidate"
             ),
+            "dynamic_selection_policy": (
+                "normal_candidate_hard_predicted_occupancy_veto_plus_"
+                "bounded_ttc_distance_closing_speed_ranking"
+                if self.dynamic_risk_ranking_enabled else
+                "hard_predicted_occupancy_veto"
+            ),
+            "dynamic_emergency_policy": (
+                "certified_brake_first_else_dynamic_only_minimum_risk_"
+                "brake_static_hardware_boundary_failures_forbidden"
+                if self.dynamic_risk_ranking_enabled else
+                "legacy_finite_horizon_braking"
+            ),
+            "dynamic_time_policy": (
+                "ordered_global_dynamic_only_temporal_retiming"
+                if self.dynamic_time_retiming_enabled else
+                "no_dynamic_temporal_retiming"
+            ),
+            "dynamic_authorization_scope": (
+                "rolling_certified_prefix_with_command_freshness_watchdog"
+                if self.dynamic_command_freshness_watchdog_enabled else
+                "rolling_certified_prefix_without_command_freshness_watchdog"
+            ),
             **asdict(self),
             "collision_floor_m": self.collision_floor_m,
             "required_clearance_m": self.required_clearance_m,
@@ -189,6 +242,15 @@ class CandidateSafetyV1:
     initial_boundary_clearance_m: float | None = None
     minimum_boundary_clearance_m: float | None = None
     final_boundary_clearance_m: float | None = None
+    predicted_dynamic_collision_ttc_s: float | None = None
+    minimum_dynamic_ttc_s: float | None = None
+    dynamic_closest_approach_time_s: float | None = None
+    dynamic_closing_speed_at_closest_mps: float = 0.0
+    dynamic_uncertainty_radius_at_closest_m: float = 0.0
+    dynamic_risk_cost: float = 0.0
+    dynamic_risk_track_id: int | None = None
+    dynamic_certified_horizon_s: float | None = None
+    dynamic_full_duration_certified: bool | None = None
 
     def as_dict(self):
         return asdict(self)
@@ -199,6 +261,109 @@ class SafetySelectionV1:
     action_id: int | None
     mode: str
     evaluations: tuple[CandidateSafetyV1, ...]
+
+
+def dynamic_command_is_fresh_v1(
+    last_certified_plan_monotonic_s, now_monotonic_s, maximum_age_s,
+):
+    """Return whether a rolling dynamic certificate is still actionable.
+
+    Dynamic occupancy is deliberately certified only over a near-term prefix:
+    long constant-velocity extrapolation is not trustworthy for interactive
+    actors.  Therefore a controller may keep executing a longer polynomial
+    only while fresh depth/perception replans continually replace that prefix.
+    """
+    maximum_age_s = float(maximum_age_s)
+    now_monotonic_s = float(now_monotonic_s)
+    if maximum_age_s <= 0.0 or not np.isfinite(maximum_age_s):
+        raise ValueError("maximum dynamic command age must be positive")
+    if not np.isfinite(now_monotonic_s):
+        raise ValueError("dynamic command clock must be finite")
+    if last_certified_plan_monotonic_s is None:
+        return False
+    last = float(last_certified_plan_monotonic_s)
+    if not np.isfinite(last):
+        return False
+    age = now_monotonic_s - last
+    return bool(0.0 <= age <= maximum_age_s)
+
+
+def select_dynamic_braking_option_v1(evaluations):
+    """Choose a certified brake, else the least-bad dynamic-only brake.
+
+    Static collision, boundary and hardware failures are never eligible for
+    the uncertified fallback.  If no fully feasible stop exists, later TTC,
+    shallower predicted overlap and lower continuous risk are preferred and
+    the result is explicitly marked uncertified for telemetry.
+    """
+    evaluations = tuple(evaluations)
+    if not evaluations:
+        return None, False
+    for index, evaluation in enumerate(evaluations):
+        if evaluation.feasible:
+            return index, True
+    eligible = [
+        (index, evaluation)
+        for index, evaluation in enumerate(evaluations)
+        if tuple(evaluation.reasons) == ("predicted_dynamic_clearance",)
+    ]
+    if not eligible:
+        return None, False
+
+    def key(value):
+        _, evaluation = value
+        collision_ttc = evaluation.predicted_dynamic_collision_ttc_s
+        clearance = evaluation.min_predicted_dynamic_clearance_m
+        return (
+            -np.inf if collision_ttc is None else float(collision_ttc),
+            -np.inf if clearance is None else float(clearance),
+            -float(evaluation.dynamic_risk_cost),
+        )
+
+    return int(max(eligible, key=key)[0]), False
+
+
+def classify_dynamic_blocking_v1(evaluations):
+    """Classify why a complete candidate pool has no executable action.
+
+    This is diagnostic/control-state semantics, not another Gate.  A
+    ``dynamic_only`` result means at least one candidate would be executable
+    after removing only the causal moving-occupancy reason.  ``mixed`` means
+    dynamic predictions are present but every such candidate also violates a
+    non-dynamic contract.
+    """
+    evaluations = tuple(evaluations)
+    dynamic_only_count = sum(
+        tuple(item.reasons) == ("predicted_dynamic_clearance",)
+        for item in evaluations
+    )
+    non_dynamic_feasible_count = sum(
+        not tuple(
+            reason for reason in item.reasons
+            if reason != "predicted_dynamic_clearance"
+        )
+        for item in evaluations
+    )
+    dynamic_veto_count = sum(
+        "predicted_dynamic_clearance" in item.reasons
+        for item in evaluations
+    )
+    if any(item.feasible for item in evaluations):
+        cause = "none"
+    elif dynamic_only_count:
+        cause = "dynamic_only"
+    elif dynamic_veto_count:
+        cause = "mixed"
+    else:
+        cause = "non_dynamic_only"
+    return {
+        "cause": cause,
+        "dynamic_only_veto_candidate_count": int(dynamic_only_count),
+        "non_dynamic_feasible_candidate_count": int(
+            non_dynamic_feasible_count
+        ),
+        "dynamic_hard_veto_count": int(dynamic_veto_count),
+    }
 
 
 _BOUNDARY_CLEARANCE_NAMES = (
@@ -253,6 +418,207 @@ def _candidate_durations(duration_s, candidate_count):
     if not np.isfinite(values).all() or np.any(values <= 0.0):
         raise ValueError("candidate durations must be finite and positive")
     return values
+
+
+def _dynamic_prediction_batch_v1(
+    positions, velocities, durations, prepared_tracks, config,
+):
+    """Vectorize candidate/track prediction for bounded runtime latency."""
+    candidate_count, sample_count, _ = positions.shape
+    track_count = len(prepared_tracks)
+    if track_count == 0:
+        return tuple(None for _ in range(candidate_count))
+
+    sample_fraction = np.linspace(
+        0.0, 1.0, sample_count, dtype=np.float64,
+    )
+    times = durations[:, None] * sample_fraction[None, :]
+    state_ages = np.asarray(
+        [value[1] for value in prepared_tracks], dtype=np.float64,
+    )
+    track_positions = np.stack(
+        [value[2] for value in prepared_tracks], axis=0,
+    )
+    track_velocities = np.stack(
+        [value[3] for value in prepared_tracks], axis=0,
+    )
+    track_radii = np.asarray(
+        [value[4] for value in prepared_tracks], dtype=np.float64,
+    )
+    covariance_radii = np.asarray(
+        [value[5] for value in prepared_tracks], dtype=np.float64,
+    )
+
+    prediction_time = np.maximum(
+        0.0,
+        state_ages[None, :, None] + times[:, None, :],
+    )
+    active = np.broadcast_to(
+        times[:, None, :]
+        <= config.dynamic_track_prediction_horizon_s + config.limit_tolerance,
+        (candidate_count, track_count, sample_count),
+    )
+    centers = (
+        track_positions[None, :, None, :]
+        + prediction_time[:, :, :, None]
+        * track_velocities[None, :, None, :]
+    )
+    occupied_radius = (
+        config.vehicle_radius_m
+        + track_radii[None, :, None]
+        + config.dynamic_track_prediction_margin_m
+        + covariance_radii[None, :, None]
+        + config.dynamic_track_uncertainty_growth_mps * prediction_time
+    )
+    relative = positions[:, None, :, :] - centers
+    separation = np.linalg.norm(relative, axis=3)
+    signed = separation - occupied_radius
+    signed = np.where(active, signed, np.inf)
+    closest_index = np.argmin(signed, axis=2)
+    closest_signed = np.take_along_axis(
+        signed, closest_index[:, :, None], axis=2,
+    )[:, :, 0]
+
+    relative_velocity = (
+        velocities[:, None, :, :]
+        - track_velocities[None, :, None, :]
+    )
+    radial_rate = np.sum(relative * relative_velocity, axis=3) \
+        / np.maximum(separation, 1.0e-6)
+    closing_speed = np.where(active, np.maximum(0.0, -radial_rate), 0.0)
+    closest_closing = np.take_along_axis(
+        closing_speed, closest_index[:, :, None], axis=2,
+    )[:, :, 0]
+    closest_time = np.take_along_axis(
+        np.broadcast_to(times[:, None, :], signed.shape),
+        closest_index[:, :, None], axis=2,
+    )[:, :, 0]
+    closest_prediction_time = np.take_along_axis(
+        prediction_time, closest_index[:, :, None], axis=2,
+    )[:, :, 0]
+
+    collision_times = np.full(
+        (candidate_count, track_count), np.inf, dtype=np.float64,
+    )
+    for candidate_index in range(candidate_count):
+        for track_index in range(track_count):
+            colliding = np.flatnonzero(
+                active[candidate_index, track_index]
+                & (signed[candidate_index, track_index] <= 0.0)
+            )
+            if not len(colliding):
+                continue
+            crossing_index = int(colliding[0])
+            if crossing_index == 0:
+                collision_times[candidate_index, track_index] = float(
+                    times[candidate_index, 0]
+                )
+                continue
+            before = float(signed[
+                candidate_index, track_index, crossing_index - 1
+            ])
+            after = float(signed[
+                candidate_index, track_index, crossing_index
+            ])
+            fraction = before / max(before - after, 1.0e-12)
+            collision_times[candidate_index, track_index] = float(
+                times[candidate_index, crossing_index - 1]
+                + fraction * (
+                    times[candidate_index, crossing_index]
+                    - times[candidate_index, crossing_index - 1]
+                )
+            )
+
+    surface_ttc = np.full_like(signed, np.inf)
+    approaching = active & (closing_speed > 1.0e-6)
+    surface_ttc[approaching] = (
+        np.broadcast_to(times[:, None, :], signed.shape)[approaching]
+        + np.maximum(signed[approaching], 0.0)
+        / closing_speed[approaching]
+    )
+    minimum_surface_ttc = np.min(surface_ttc, axis=2)
+    ttc_for_risk = np.where(
+        np.isfinite(collision_times), collision_times, minimum_surface_ttc,
+    )
+
+    distance_risk = np.exp(
+        -np.maximum(closest_signed, 0.0)
+        / config.dynamic_risk_distance_scale_m
+    )
+    ttc_risk = np.where(
+        np.isfinite(ttc_for_risk),
+        np.exp(
+            -np.maximum(ttc_for_risk, 0.0)
+            / config.dynamic_risk_ttc_scale_s
+        ),
+        0.0,
+    )
+    closing_risk = np.clip(
+        closest_closing / config.dynamic_risk_closing_speed_scale_mps,
+        0.0, 1.0,
+    ) * distance_risk
+    track_risk = np.clip(
+        0.50 * distance_risk + 0.35 * ttc_risk + 0.15 * closing_risk,
+        0.0, config.dynamic_risk_score_cap,
+    )
+    if not config.dynamic_risk_ranking_enabled:
+        track_risk.fill(0.0)
+    best_risk_track = np.argmax(track_risk, axis=1)
+
+    results = []
+    for candidate_index in range(candidate_count):
+        candidate_collision_times = collision_times[candidate_index]
+        candidate_ttc = ttc_for_risk[candidate_index]
+        finite_collision = candidate_collision_times[
+            np.isfinite(candidate_collision_times)
+        ]
+        finite_ttc = candidate_ttc[np.isfinite(candidate_ttc)]
+        track_index = int(best_risk_track[candidate_index])
+        track = prepared_tracks[track_index][0]
+        results.append({
+            "predicted_clearance": float(np.min(
+                closest_signed[candidate_index]
+            )),
+            "collision_ttc": (
+                float(np.min(finite_collision))
+                if len(finite_collision) else None
+            ),
+            "minimum_ttc": (
+                float(np.min(finite_ttc)) if len(finite_ttc) else None
+            ),
+            "closest_time": (
+                float(closest_time[candidate_index, track_index])
+                if config.dynamic_risk_ranking_enabled else None
+            ),
+            "closing_speed": (
+                float(closest_closing[candidate_index, track_index])
+                if config.dynamic_risk_ranking_enabled else 0.0
+            ),
+            "uncertainty_radius": (
+                float(
+                    covariance_radii[track_index]
+                    + config.dynamic_track_uncertainty_growth_mps
+                    * closest_prediction_time[candidate_index, track_index]
+                ) if config.dynamic_risk_ranking_enabled else 0.0
+            ),
+            "risk_cost": float(track_risk[candidate_index, track_index]),
+            "risk_track_id": (
+                int(track.track_id)
+                if config.dynamic_risk_ranking_enabled
+                and getattr(track, "track_id", None) is not None
+                else None
+            ),
+            "certified_horizon": float(min(
+                durations[candidate_index],
+                config.dynamic_track_prediction_horizon_s,
+            )),
+            "full_duration_certified": bool(
+                durations[candidate_index]
+                <= config.dynamic_track_prediction_horizon_s
+                + config.limit_tolerance
+            ),
+        })
+    return tuple(results)
 
 
 def depth_to_body_points_v1(depth, camera_model, rotation_body_from_camera,
@@ -340,6 +706,13 @@ class RuntimeTrajectorySafetyV1:
         rotation = np.asarray(rotation_world_from_body, dtype=np.float64).reshape(3, 3)
         points = np.asarray(obstacle_points_body, dtype=np.float64).reshape(-1, 3)
         tree = cKDTree(points) if len(points) else None
+        relative_positions = (positions - origin[None, None, :]) @ rotation
+        observed_clearance_samples = (
+            None if tree is None else
+            tree.query(
+                relative_positions.reshape(-1, 3), workers=1
+            )[0].reshape(relative_positions.shape[:2])
+        )
         tracks = tuple(dynamic_tracks or ())
         goal_direction = None
         if goal_world is not None:
@@ -349,18 +722,76 @@ class RuntimeTrajectorySafetyV1:
                 goal_direction = goal_delta / goal_norm
         if tracks and query_timestamp is None:
             raise ValueError("query_timestamp is required with dynamic tracks")
+        prepared_tracks = []
+        if self.config.dynamic_track_prediction_enabled and tracks:
+            for track in tracks:
+                if not bool(getattr(track, "is_dynamic", False)):
+                    continue
+                state_timestamp = float(track.timestamp)
+                direct_timestamp = getattr(
+                    track, "last_direct_observation_timestamp", None
+                )
+                if direct_timestamp is None:
+                    direct_timestamp = state_timestamp
+                measurement_age = (
+                    float(query_timestamp) - float(direct_timestamp)
+                )
+                state_age = float(query_timestamp) - state_timestamp
+                if (
+                    measurement_age < -1.0e-6
+                    or measurement_age > self.config.dynamic_track_max_age_s
+                    or state_age < -1.0e-6
+                ):
+                    continue
+                extent = np.asarray(
+                    getattr(track, "observed_extent", (0.0, 0.0, 0.0)),
+                    dtype=np.float64,
+                )
+                track_radius = max(
+                    self.config.dynamic_track_radius_m,
+                    0.5 * float(np.max(extent))
+                    if extent.shape == (3,) and np.isfinite(extent).all()
+                    else 0.0,
+                )
+                covariance_radius = 0.0
+                covariance = np.asarray(
+                    getattr(track, "state_covariance", ()),
+                    dtype=np.float64,
+                )
+                if covariance.shape == (6, 6) \
+                        and np.isfinite(covariance).all():
+                    covariance_radius = (
+                        self.config.dynamic_track_covariance_sigma
+                        * float(np.sqrt(max(
+                            np.max(np.linalg.eigvalsh(covariance[:3, :3])),
+                            0.0,
+                        )))
+                    )
+                prepared_tracks.append((
+                    track,
+                    state_age,
+                    np.asarray(track.position_world, dtype=np.float64),
+                    np.asarray(track.velocity_world, dtype=np.float64),
+                    track_radius,
+                    covariance_radius,
+                ))
+        dynamic_predictions = _dynamic_prediction_batch_v1(
+            positions, velocities, durations, prepared_tracks, self.config,
+        )
         results = []
-        for (candidate_position, candidate_velocity, candidate_acceleration,
-             candidate_duration) in zip(
-            positions, velocities, accelerations, durations
-        ):
+        for candidate_index, (
+            candidate_position, candidate_velocity, candidate_acceleration,
+            candidate_duration, relative_body,
+        ) in enumerate(zip(
+            positions, velocities, accelerations, durations,
+            relative_positions,
+        )):
             times = np.linspace(
                 0.0, float(candidate_duration),
                 self.config.trajectory_samples, dtype=np.float64,
             )
             speed = np.linalg.norm(candidate_velocity, axis=1)
             acceleration = np.linalg.norm(candidate_acceleration, axis=1)
-            relative_body = (candidate_position - origin) @ rotation
             visible_points = relative_body[1:]
             forward = visible_points[:, 0]
             horizontal = np.arctan2(visible_points[:, 1], forward)
@@ -454,7 +885,9 @@ class RuntimeTrajectorySafetyV1:
                 final_clearance = None
                 minimum_stopping_reserve = None
             else:
-                clearance_samples = tree.query(relative_body, workers=1)[0]
+                clearance_samples = observed_clearance_samples[
+                    candidate_index
+                ]
                 clearance = float(np.min(clearance_samples))
                 initial_clearance = float(clearance_samples[0])
                 final_clearance = float(clearance_samples[-1])
@@ -506,80 +939,41 @@ class RuntimeTrajectorySafetyV1:
             if not flight_volume_compliant:
                 reasons.append("flight_volume")
             predicted_dynamic_clearance = None
-            if self.config.dynamic_track_prediction_enabled and tracks:
-                dynamic_clearances = []
-                for track in tracks:
-                    if not bool(getattr(track, "is_dynamic", False)):
-                        continue
-                    state_timestamp = float(track.timestamp)
-                    direct_timestamp = getattr(
-                        track, "last_direct_observation_timestamp", None
-                    )
-                    if direct_timestamp is None:
-                        direct_timestamp = state_timestamp
-                    measurement_age = (
-                        float(query_timestamp) - float(direct_timestamp)
-                    )
-                    state_age = float(query_timestamp) - state_timestamp
-                    if (measurement_age < -1.0e-6
-                            or measurement_age
-                            > self.config.dynamic_track_max_age_s
-                            or state_age < -1.0e-6):
-                        continue
-                    active = times <= (
-                        self.config.dynamic_track_prediction_horizon_s
-                        + self.config.limit_tolerance
-                    )
-                    if not bool(np.any(active)):
-                        continue
-                    active_times = times[active]
-                    horizon = np.maximum(0.0, state_age + active_times)
-                    center = (
-                        np.asarray(track.position_world, dtype=np.float64)[None, :]
-                        + horizon[:, None]
-                        * np.asarray(track.velocity_world, dtype=np.float64)[None, :]
-                    )
-                    extent = np.asarray(
-                        getattr(track, "observed_extent", (0.0, 0.0, 0.0)),
-                        dtype=np.float64,
-                    )
-                    track_radius = max(
-                        self.config.dynamic_track_radius_m,
-                        0.5 * float(np.max(extent))
-                        if extent.shape == (3,) and np.isfinite(extent).all()
-                        else 0.0,
-                    )
-                    covariance_radius = 0.0
-                    covariance = np.asarray(
-                        getattr(track, "state_covariance", ()),
-                        dtype=np.float64,
-                    )
-                    if covariance.shape == (6, 6) \
-                            and np.isfinite(covariance).all():
-                        covariance_radius = (
-                            self.config.dynamic_track_covariance_sigma
-                            * float(np.sqrt(max(
-                                np.max(np.linalg.eigvalsh(
-                                    covariance[:3, :3]
-                                )),
-                                0.0,
-                            )))
-                        )
-                    occupied_radius = (
-                        self.config.vehicle_radius_m
-                        + track_radius
-                        + self.config.dynamic_track_prediction_margin_m
-                        + covariance_radius
-                        + self.config.dynamic_track_uncertainty_growth_mps * horizon
-                    )
-                    signed = np.linalg.norm(
-                        candidate_position[active] - center, axis=1
-                    ) - occupied_radius
-                    dynamic_clearances.append(float(np.min(signed)))
-                if dynamic_clearances:
-                    predicted_dynamic_clearance = min(dynamic_clearances)
-                    if predicted_dynamic_clearance < 0.0:
-                        reasons.append("predicted_dynamic_clearance")
+            predicted_dynamic_collision_ttc = None
+            minimum_dynamic_ttc = None
+            dynamic_closest_approach_time = None
+            dynamic_closing_speed_at_closest = 0.0
+            dynamic_uncertainty_radius_at_closest = 0.0
+            dynamic_risk_cost = 0.0
+            dynamic_risk_track_id = None
+            dynamic_certified_horizon = None
+            dynamic_full_duration_certified = None
+            prediction = dynamic_predictions[candidate_index]
+            if prediction is not None:
+                predicted_dynamic_clearance = prediction[
+                    "predicted_clearance"
+                ]
+                predicted_dynamic_collision_ttc = prediction[
+                    "collision_ttc"
+                ]
+                minimum_dynamic_ttc = prediction["minimum_ttc"]
+                dynamic_closest_approach_time = prediction["closest_time"]
+                dynamic_closing_speed_at_closest = prediction[
+                    "closing_speed"
+                ]
+                dynamic_uncertainty_radius_at_closest = prediction[
+                    "uncertainty_radius"
+                ]
+                dynamic_risk_cost = prediction["risk_cost"]
+                dynamic_risk_track_id = prediction["risk_track_id"]
+                dynamic_certified_horizon = prediction[
+                    "certified_horizon"
+                ]
+                dynamic_full_duration_certified = prediction[
+                    "full_duration_certified"
+                ]
+                if predicted_dynamic_clearance < 0.0:
+                    reasons.append("predicted_dynamic_clearance")
             if not (np.isfinite(candidate_position).all()
                     and np.isfinite(candidate_velocity).all()
                     and np.isfinite(candidate_acceleration).all()):
@@ -642,6 +1036,25 @@ class RuntimeTrajectorySafetyV1:
                 initial_boundary_clearance_m=initial_boundary_clearance,
                 minimum_boundary_clearance_m=minimum_boundary_clearance,
                 final_boundary_clearance_m=final_boundary_clearance,
+                predicted_dynamic_collision_ttc_s=(
+                    predicted_dynamic_collision_ttc
+                ),
+                minimum_dynamic_ttc_s=minimum_dynamic_ttc,
+                dynamic_closest_approach_time_s=(
+                    dynamic_closest_approach_time
+                ),
+                dynamic_closing_speed_at_closest_mps=(
+                    dynamic_closing_speed_at_closest
+                ),
+                dynamic_uncertainty_radius_at_closest_m=(
+                    dynamic_uncertainty_radius_at_closest
+                ),
+                dynamic_risk_cost=dynamic_risk_cost,
+                dynamic_risk_track_id=dynamic_risk_track_id,
+                dynamic_certified_horizon_s=dynamic_certified_horizon,
+                dynamic_full_duration_certified=(
+                    dynamic_full_duration_certified
+                ),
             ))
         return tuple(results)
 
@@ -779,6 +1192,90 @@ class RuntimeTrajectorySafetyV1:
             tuple(succeeded),
         )
 
+    def retime_dynamic_only_candidates(
+        self, polynomials, duration_s, evaluations, scale,
+    ):
+        """Retain geometry while slowing candidates blocked only by actors.
+
+        This is a separate operation from hardware retiming.  It is permitted
+        only for candidates whose complete base evaluation contains exactly
+        ``predicted_dynamic_clearance``.  All other candidates and durations
+        are preserved byte-for-byte so temporal scaling cannot wash out a
+        static collision, boundary, visibility or vehicle-limit failure.
+
+        The caller must run :meth:`evaluate` again on the returned pool.  V4.9
+        searches one global scale at a time (1.2 before 1.4), rather than
+        mixing a slower candidate into a pool where a faster safe action was
+        already available.
+        """
+        candidates = tuple(polynomials)
+        durations = _candidate_durations(duration_s, len(candidates))
+        if len(evaluations) != len(candidates):
+            raise ValueError("candidate/evaluation counts differ")
+        scale = float(scale)
+        if not np.isfinite(scale) or scale <= 1.0:
+            raise ValueError("dynamic time scale must be finite and above one")
+        allowed = tuple(float(value) for value in (
+            self.config.dynamic_time_retiming_scales
+        ))
+        if not any(np.isclose(scale, value) for value in allowed[1:]):
+            raise ValueError("dynamic time scale is not in the profile contract")
+
+        rebuilt_pool = []
+        rebuilt_durations = []
+        applied_scales = []
+        eligible = []
+        for candidate, candidate_duration, evaluation in zip(
+            candidates, durations, evaluations
+        ):
+            is_dynamic_only = tuple(evaluation.reasons) == (
+                "predicted_dynamic_clearance",
+            )
+            eligible.append(is_dynamic_only)
+            if not is_dynamic_only:
+                rebuilt_pool.append(candidate)
+                rebuilt_durations.append(float(candidate_duration))
+                applied_scales.append(1.0)
+                continue
+            if len(candidate) != 3:
+                raise ValueError("candidate must contain three axis polynomials")
+            start_position = np.asarray([
+                axis.get_position(0.0) for axis in candidate
+            ], dtype=np.float64)
+            start_velocity = np.asarray([
+                axis.get_velocity(0.0) for axis in candidate
+            ], dtype=np.float64)
+            start_acceleration = np.asarray([
+                axis.get_acceleration(0.0) for axis in candidate
+            ], dtype=np.float64)
+            end_position = np.asarray([
+                axis.get_position(candidate_duration) for axis in candidate
+            ], dtype=np.float64)
+            end_velocity = np.asarray([
+                axis.get_velocity(candidate_duration) for axis in candidate
+            ], dtype=np.float64)
+            end_acceleration = np.asarray([
+                axis.get_acceleration(candidate_duration) for axis in candidate
+            ], dtype=np.float64)
+            scaled_duration = float(candidate_duration) * scale
+            rebuilt = tuple(
+                Poly5Solver(
+                    start_position[axis], start_velocity[axis],
+                    start_acceleration[axis], end_position[axis],
+                    end_velocity[axis] / scale,
+                    end_acceleration[axis] / scale ** 2,
+                    scaled_duration,
+                )
+                for axis in range(3)
+            )
+            rebuilt_pool.append(rebuilt)
+            rebuilt_durations.append(scaled_duration)
+            applied_scales.append(scale)
+        return (
+            tuple(rebuilt_pool), tuple(rebuilt_durations),
+            tuple(applied_scales), tuple(eligible),
+        )
+
     def project_endstate_candidates(self, start_position, start_velocity,
                                     start_acceleration, endstate_world,
                                     duration_s):
@@ -845,6 +1342,7 @@ class RuntimeTrajectorySafetyV1:
 
     def select(
         self, scores, evaluations, *, apply_clearance_preference=True,
+        apply_dynamic_risk=True,
     ):
         scores = np.asarray(scores, dtype=np.float64).reshape(-1)
         if len(scores) != len(evaluations):
@@ -878,6 +1376,23 @@ class RuntimeTrajectorySafetyV1:
                 tuple(evaluations),
             )
         effective_scores = scores.copy()
+        dynamic_risk_active = bool(
+            apply_dynamic_risk
+            and self.config.dynamic_risk_ranking_enabled
+            and self.config.dynamic_risk_score_weight > 0.0
+        )
+        if dynamic_risk_active:
+            # Continuous dynamic risk is a bounded ranking term among actions
+            # that have already passed the hard predicted-occupancy veto.  It
+            # cannot make an intersecting trajectory eligible and cannot
+            # outweigh an arbitrarily better learned score.
+            risk = np.clip(
+                np.asarray([
+                    item.dynamic_risk_cost for item in evaluations
+                ], dtype=np.float64),
+                0.0, self.config.dynamic_risk_score_cap,
+            )
+            effective_scores += self.config.dynamic_risk_score_weight * risk
         clearance_preference_active = bool(
             apply_clearance_preference
             and self.config.clearance_preference_weight > 0.0
@@ -895,7 +1410,10 @@ class RuntimeTrajectorySafetyV1:
                         item.min_observed_clearance_m
                         - self.config.collision_floor_m
                     )
-                if item.min_predicted_dynamic_clearance_m is not None:
+                if (
+                    not dynamic_risk_active
+                    and item.min_predicted_dynamic_clearance_m is not None
+                ):
                     # Dynamic clearance is already signed relative to the
                     # predicted occupied radius.
                     values.append(item.min_predicted_dynamic_clearance_m)
@@ -911,10 +1429,11 @@ class RuntimeTrajectorySafetyV1:
         safe_scores = np.where(eligible, effective_scores, np.inf)
         return SafetySelectionV1(
             int(np.argmin(safe_scores)),
-            (
-                "network_safe_clearance_preference"
-                if clearance_preference_active
-                else "network_safe"
+            "network_safe" + (
+                "_dynamic_risk" if dynamic_risk_active else ""
+            ) + (
+                "_clearance_preference"
+                if clearance_preference_active else ""
             ),
             tuple(evaluations),
         )
@@ -952,6 +1471,60 @@ class RuntimeTrajectorySafetyV1:
             ):
                 return candidate, float(duration), True
         return (*last, False) if last is not None else (None, None, False)
+
+    def braking_trajectory_options(
+        self, position, velocity, acceleration, option_count=5,
+    ):
+        """Return bounded stop timings for dynamic minimum-risk fallback.
+
+        A crossing actor can make the shortest stop unsafe while a slightly
+        slower or longer stop is clear (or vice versa).  V4.9 therefore
+        compares a small deterministic set rather than blindly installing the
+        first limit-compliant brake.  This method owns only kinematics; every
+        option must still undergo the complete static/dynamic evaluation.
+        """
+        option_count = int(option_count)
+        if option_count < 2:
+            raise ValueError("braking option count must be at least two")
+        position = np.asarray(position, dtype=np.float64).reshape(3)
+        velocity = np.asarray(velocity, dtype=np.float64).reshape(3)
+        acceleration = np.asarray(acceleration, dtype=np.float64).reshape(3)
+        acc_norm = float(np.linalg.norm(acceleration))
+        if acc_norm > self.config.max_acceleration_mps2:
+            acceleration *= self.config.max_acceleration_mps2 / acc_norm
+        durations = np.linspace(
+            self.config.braking_duration_min_s,
+            self.config.braking_duration_max_s,
+            option_count,
+            dtype=np.float64,
+        )
+        options = []
+        option_durations = []
+        for duration in durations:
+            endpoint = position + 0.5 * velocity * float(duration)
+            candidate = tuple(
+                Poly5Solver(
+                    position[axis], velocity[axis], acceleration[axis],
+                    endpoint[axis], 0.0, 0.0, float(duration),
+                )
+                for axis in range(3)
+            )
+            _, sampled_velocity, sampled_acceleration = _sample_polynomials(
+                [candidate], duration, self.config.trajectory_samples,
+            )
+            if (
+                float(np.max(np.linalg.norm(sampled_velocity[0], axis=1)))
+                <= self.config.max_speed_mps + self.config.limit_tolerance
+                and float(np.max(np.linalg.norm(
+                    sampled_acceleration[0], axis=1,
+                ))) <= (
+                    self.config.max_acceleration_mps2
+                    + self.config.limit_tolerance
+                )
+            ):
+                options.append(candidate)
+                option_durations.append(float(duration))
+        return tuple(options), tuple(option_durations)
 
     def recovery_trajectory(self, position, velocity, acceleration, target):
         """Construct a bounded point-to-point retreat after braking.

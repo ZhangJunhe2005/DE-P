@@ -1,0 +1,91 @@
+contract_version: route_a_v4_9_dynamic_motion_safety_v1
+status: IMPLEMENTED_PENDING_FOUR_SCENE_CLOSED_LOOP
+selected_version: v4.9
+implementation_sha256: 41e66b8432d2fd71b046c257c9ad41bedb03175e4a09a613577e971edc94f388
+implementation_hash_method: sha256_of_sorted_core_file_sha256_lines
+base:
+  recovery_freeze_version: v4.8.5
+  recovery_freeze_commit: 7e1524a435143bedbafdc08bf98ce84021501a35
+  static_policy_version: v4.8.3
+  checkpoint_path: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_8_3_candidate_only_shakedown/20260813T050742Z-13178/checkpoints/best.pth
+  checkpoint_sha256: 22e5c63c273d751c15479d70c99d9b85ad615b7b4c62063946a5b1683776ac60
+scope:
+  network_weights_modified: false
+  training_executed: false
+  training_dataset_modified: false
+  v4_8_5_recovery_parameters_modified: false
+  v4_8_5_recovery_scan_limits_deg: [60, 90, 120]
+  runtime_profile: v4_9_dynamic_motion_preserving_safety
+  runtime_behavior_version: v4_9_bounded_risk_ordered_retiming_fresh_prefix_v1
+dynamic_selection:
+  normal_candidate_hard_predicted_collision_veto_preserved: true
+  emergency_brake_dynamic_only_exception: true
+  bounded_continuous_risk_weight: 0.20
+  bounded_continuous_risk_cap: 1.0
+  distance_scale_m: 0.75
+  ttc_scale_s: 1.50
+  closing_speed_scale_mps: 2.0
+  applies_only_among_hard_feasible_candidates: true
+dynamic_time_retiming:
+  scales: [1.0, 1.2, 1.4]
+  eligible_reason_exactly: predicted_dynamic_clearance
+  ordered_global_search: true
+  skip_1_4_when_1_2_has_feasible_action: true
+  full_static_dynamic_hardware_boundary_revalidation: true
+rolling_prediction_certificate:
+  constant_velocity_prefix_s: 1.50
+  command_freshness_watchdog_s: 0.20
+  full_long_trajectory_claim_forbidden: true
+  stale_command_behavior: hold_and_wait_for_fresh_depth_perception_replan
+dynamic_yield:
+  excluded_from_static_zero_feasible_evidence: true
+  excluded_from_odometry_stagnation_evidence: true
+  breaks_candidate_confirmation_continuity: true
+  preserves_scan_escalation_state: true
+  freezes_provisional_handoff_window: true
+  excludes_pause_motion_and_view_change_from_handoff_evidence: true
+emergency_braking:
+  bounded_option_count: 5
+  duration_range_s: [0.8, 2.5]
+  prefer_fully_certified_option: true
+  fallback: minimum_risk_dynamic_only_brake
+  static_unsafe_fallback_forbidden: true
+actor_validation:
+  actor_count: 16
+  layout: route_encounters
+  families:
+    crossing: 4
+    head_on: 4
+    same_direction_slow: 4
+    staggered_crossing: 4
+  canonical_relocation_must_preserve_geometry_and_timing: true
+  independent_test_oracle: true
+collision_diagnostics:
+  categories: [visible, tracked, unobservable, unknown]
+  track_binding: posthoc_spatial_binding
+  diagnostic_only: true
+  planner_control_affected: false
+automated_validation:
+  relevant_pytest_passed: 215
+  relevant_pytest_xfailed: 1
+  relevant_subtests_passed: 10
+  four_scene_preflight_exit_zero: true
+  strict_checkpoint_load: PASS
+  compileall: PASS
+  git_diff_check: PASS
+latency_smoke:
+  role: diagnostic_not_gate
+  candidates: 15
+  trajectory_samples: 81
+  depth_points: 3600
+  dynamic_tracks: 16
+  iterations: 100
+  single_evaluation_p95_ms: 7.232174549972115
+  conservative_three_stage_p95_ms: 23.695463699095853
+qualification:
+  static_policy_frozen: true
+  recovery_baseline_preserved: true
+  dynamic_runtime_implemented: true
+  four_scene_closed_loop_complete: false
+  production_qualified: false
+  next_evidence: fixed_ab_four_scene_closed_loop_then_operator_interactive_trials
