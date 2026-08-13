@@ -13,6 +13,7 @@ Those historical semantics must not be changed by the Pillar-only recovery.
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import asdict, dataclass
 import math
 import time
@@ -34,6 +35,14 @@ class DeadlockRecoveryConfigV3:
     scan_timeout_s: float = 2.25
     heading_commitment_s: float = 0.45
     cooldown_s: float = 2.0
+    accumulate_zero_during_cooldown: bool = False
+    defer_scan_reset_until_post_release_confirmation: bool = False
+    post_release_confirmation_replans: int = 3
+    require_consistent_selected_horizontal_sector: bool = False
+    motion_stagnation_enabled: bool = False
+    motion_stagnation_window_s: float = 2.0
+    motion_stagnation_min_displacement_m: float = 0.20
+    motion_stagnation_trigger_replans: int = 30
 
     @classmethod
     def from_mapping(cls, value):
@@ -50,6 +59,14 @@ class DeadlockRecoveryConfigV3:
             raise ValueError("zero-feasible trigger must be positive")
         if self.selected_release_replans < 1:
             raise ValueError("selected-candidate release count must be positive")
+        if self.post_release_confirmation_replans < 1:
+            raise ValueError("post-release confirmation count must be positive")
+        if self.motion_stagnation_trigger_replans < 1:
+            raise ValueError("motion-stagnation trigger must be positive")
+        if self.motion_stagnation_window_s <= 0.0:
+            raise ValueError("motion-stagnation window must be positive")
+        if self.motion_stagnation_min_displacement_m <= 0.0:
+            raise ValueError("motion-stagnation displacement must be positive")
         if self.selected_min_goal_progress_m < 0.0:
             raise ValueError("selected goal progress must be non-negative")
         positive = (
@@ -70,13 +87,64 @@ class DeadlockRecoveryConfigV3:
             raise ValueError("scan-only recovery may not exceed 120 degrees")
 
     def contract(self):
+        values = asdict(self)
+        stable_sector_handoff = bool(
+            self.require_consistent_selected_horizontal_sector
+        )
+        motion_stagnation = bool(self.motion_stagnation_enabled)
+        evidence_preserving = bool(
+            self.accumulate_zero_during_cooldown
+            or self.defer_scan_reset_until_post_release_confirmation
+            or self.post_release_confirmation_replans
+            != self.selected_release_replans
+        )
+        if not evidence_preserving:
+            # Preserve the frozen V4.7 public contract byte-for-byte.  The new
+            # fields are an opt-in V4.8 extension, not a retroactive V4.7
+            # semantic change.
+            values.pop("accumulate_zero_during_cooldown")
+            values.pop("defer_scan_reset_until_post_release_confirmation")
+            values.pop("post_release_confirmation_replans")
+        if not stable_sector_handoff:
+            # This opt-in field belongs to V4.8.1.  Omitting its default keeps
+            # the frozen V4.7 and already validated V4.8 contracts unchanged.
+            values.pop("require_consistent_selected_horizontal_sector")
+        if not motion_stagnation:
+            # Keep all frozen V4.7/V4.8/V4.8.1 contracts unchanged.  The
+            # motion-window fields are an opt-in V4.8.2 extension.
+            values.pop("motion_stagnation_enabled")
+            values.pop("motion_stagnation_window_s")
+            values.pop("motion_stagnation_min_displacement_m")
+            values.pop("motion_stagnation_trigger_replans")
         return {
-            "version": "deadlock_recovery_v3_bounded_scan_only",
-            "trigger": "consecutive_zero_runtime_safe_candidates",
+            "version": (
+                "deadlock_recovery_v4_2_universal_motion_stagnation"
+                if motion_stagnation else
+                (
+                    "deadlock_recovery_v4_1_stable_sector_handoff"
+                    if stable_sector_handoff else
+                    (
+                        "deadlock_recovery_v4_evidence_preserving_handoff"
+                        if evidence_preserving else
+                        "deadlock_recovery_v3_bounded_scan_only"
+                    )
+                )
+            ),
+            "trigger": (
+                "consecutive_zero_runtime_safe_candidates_or_observed_"
+                "motion_stagnation"
+                if motion_stagnation else
+                "consecutive_zero_runtime_safe_candidates"
+            ),
             "normal_translation_authority": "network",
             "recovery_translation_authority": "runtime_brake_only",
             "scan_direction": "depth_free_space_only_no_goal_override",
-            "release": "selected_runtime_safe_goal_progress_candidate",
+            "release": (
+                "same_horizontal_sector_selected_runtime_safe_goal_progress_"
+                "candidate"
+                if stable_sector_handoff else
+                "selected_runtime_safe_goal_progress_candidate"
+            ),
             "post_release_yaw": "bounded_scan_heading_commitment_translation_remains_network_owned",
             "exhaustion": "return_to_network_with_reentry_cooldown",
             "retreat_enabled": False,
@@ -85,7 +153,7 @@ class DeadlockRecoveryConfigV3:
             "repeated_attempt_policy": (
                 "increase_scan_angle_then_alternate_direction_up_to_120_deg"
             ),
-            **asdict(self),
+            **values,
         }
 
 
@@ -108,6 +176,36 @@ class RecoveryDecisionV3:
     scan_direction: float
     selected_candidate_eligible: bool
     selected_candidate_goal_progress_m: float | None
+    selected_candidate_action_id: int | None
+    selected_candidate_horizontal_sector_id: int | None
+    selected_confirmation_horizontal_sector_id: int | None
+    selected_candidate_min_observed_clearance_m: float | None
+    handoff_confirmation_replans: int | None
+    handoff_horizontal_sector_id: int | None
+    motion_stagnation_replans: int
+    motion_window_displacement_m: float | None
+    motion_window_duration_s: float | None
+    recovery_trigger_reason: str | None
+
+
+def horizontal_sector_from_action_id(action_id, horizontal_sector_count):
+    """Map a row-major ``[vertical, horizontal]`` action to its column.
+
+    Network actions are flattened from the ``3 x 5`` output grid.  Actions
+    separated by one horizontal row (for example 0, 5 and 10) therefore share
+    the same physical horizontal sector while retaining different vertical
+    choices.  Only equality of sectors is used by recovery; no left/right
+    preference is introduced here.
+    """
+    if action_id is None:
+        return None
+    count = int(horizontal_sector_count)
+    action = int(action_id)
+    if count < 1:
+        raise ValueError("horizontal sector count must be positive")
+    if action < 0:
+        raise ValueError("candidate action id must be non-negative")
+    return action % count
 
 
 class DeadlockRecoveryV3:
@@ -139,6 +237,17 @@ class DeadlockRecoveryV3:
         self.last_position = None
         self.last_selected_candidate_eligible = False
         self.last_selected_candidate_goal_progress_m = None
+        self.last_selected_candidate_action_id = None
+        self.last_selected_candidate_horizontal_sector_id = None
+        self.last_selected_candidate_min_observed_clearance_m = None
+        self.selected_confirmation_horizontal_sector_id = None
+        self.last_handoff_confirmation_replans = None
+        self.last_handoff_horizontal_sector_id = None
+        self.motion_history = deque()
+        self.motion_stagnation_replans = 0
+        self.motion_window_displacement_m = None
+        self.motion_window_duration_s = None
+        self.last_recovery_trigger_reason = None
 
     @staticmethod
     def _now(now_s):
@@ -163,6 +272,17 @@ class DeadlockRecoveryV3:
         self.last_position = None
         self.last_selected_candidate_eligible = False
         self.last_selected_candidate_goal_progress_m = None
+        self.last_selected_candidate_action_id = None
+        self.last_selected_candidate_horizontal_sector_id = None
+        self.last_selected_candidate_min_observed_clearance_m = None
+        self.selected_confirmation_horizontal_sector_id = None
+        self.last_handoff_confirmation_replans = None
+        self.last_handoff_horizontal_sector_id = None
+        self.motion_history.clear()
+        self.motion_stagnation_replans = 0
+        self.motion_window_displacement_m = None
+        self.motion_window_duration_s = None
+        self.last_recovery_trigger_reason = None
         if position_world is not None:
             self.record_position(position_world)
 
@@ -214,24 +334,121 @@ class DeadlockRecoveryV3:
             selected_candidate_goal_progress_m=(
                 self.last_selected_candidate_goal_progress_m
             ),
+            selected_candidate_action_id=(
+                self.last_selected_candidate_action_id
+            ),
+            selected_candidate_horizontal_sector_id=(
+                self.last_selected_candidate_horizontal_sector_id
+            ),
+            selected_confirmation_horizontal_sector_id=(
+                self.selected_confirmation_horizontal_sector_id
+            ),
+            selected_candidate_min_observed_clearance_m=(
+                self.last_selected_candidate_min_observed_clearance_m
+            ),
+            handoff_confirmation_replans=(
+                self.last_handoff_confirmation_replans
+            ),
+            handoff_horizontal_sector_id=(
+                self.last_handoff_horizontal_sector_id
+            ),
+            motion_stagnation_replans=self.motion_stagnation_replans,
+            motion_window_displacement_m=self.motion_window_displacement_m,
+            motion_window_duration_s=self.motion_window_duration_s,
+            recovery_trigger_reason=self.last_recovery_trigger_reason,
+        )
+
+    def _reset_motion_window(self, now_s=None):
+        self.motion_history.clear()
+        if now_s is not None and self.last_position is not None:
+            self.motion_history.append((float(now_s), self.last_position.copy()))
+        self.motion_stagnation_replans = 0
+        self.motion_window_displacement_m = None
+        self.motion_window_duration_s = None
+
+    def _observe_motion_stagnation(self, now_s, position_world):
+        """Update the scene-agnostic measured-motion stagnation evidence.
+
+        This deliberately ignores map type, candidate count and network score.
+        A recovery takeover is justified only when odometry shows that the
+        vehicle has remained inside a small displacement ball for a complete
+        time window and this observation persists across multiple replans.
+        """
+        if not self.config.motion_stagnation_enabled:
+            self.motion_stagnation_replans = 0
+            self.motion_window_displacement_m = None
+            self.motion_window_duration_s = None
+            return False
+
+        point = np.asarray(position_world, dtype=np.float64).reshape(3)
+        self.motion_history.append((float(now_s), point.copy()))
+        cutoff = float(now_s) - self.config.motion_stagnation_window_s
+        # Retain the newest sample at or before the cutoff so the measured
+        # duration never becomes materially shorter than the stated window.
+        while (
+            len(self.motion_history) >= 2
+            and self.motion_history[1][0] <= cutoff
+        ):
+            self.motion_history.popleft()
+        oldest_time, oldest_position = self.motion_history[0]
+        duration = float(now_s) - oldest_time
+        self.motion_window_duration_s = duration
+        if duration < self.config.motion_stagnation_window_s:
+            self.motion_window_displacement_m = None
+            self.motion_stagnation_replans = 0
+            return False
+
+        displacement = float(np.linalg.norm(point - oldest_position))
+        self.motion_window_displacement_m = displacement
+        if displacement < self.config.motion_stagnation_min_displacement_m:
+            self.motion_stagnation_replans += 1
+        else:
+            self.motion_stagnation_replans = 0
+        return (
+            self.motion_stagnation_replans
+            >= self.config.motion_stagnation_trigger_replans
         )
 
     def _return_to_network(
         self, now_s, transition, preserve_scan_heading=False,
         successful_release=False,
     ):
+        self.last_handoff_confirmation_replans = (
+            self.selected_release_count if successful_release else None
+        )
+        self.last_handoff_horizontal_sector_id = (
+            self.selected_confirmation_horizontal_sector_id
+            if successful_release else None
+        )
         self.mode = self.NORMAL
         self.zero_feasible_replans = 0
         self.selected_release_count = 0
+        self.selected_confirmation_horizontal_sector_id = None
         self.scan_started_s = None
         self.heading_commitment_until_s = (
             now_s + self.config.heading_commitment_s
             if preserve_scan_heading else 0.0
         )
         self.cooldown_until_s = now_s + self.config.cooldown_s
+        self._reset_motion_window(now_s)
         if successful_release:
-            self.unsuccessful_scan_attempts = 0
-            self.current_scan_limit_deg = self.config.max_scan_angle_deg
+            if self.config.defer_scan_reset_until_post_release_confirmation:
+                # A candidate visible for the configured scan-confirmation
+                # interval is still only a provisional escape.  Count it as
+                # the next escalation level
+                # until normal flight sustains the same useful evidence.  This
+                # prevents repeated 60-degree scans when the candidate vanishes
+                # immediately after the camera starts moving again.
+                self.unsuccessful_scan_attempts += 1
+                self.current_scan_limit_deg = min(
+                    self.config.max_escalated_scan_angle_deg,
+                    self.config.max_scan_angle_deg
+                    + self.unsuccessful_scan_attempts
+                    * self.config.scan_angle_step_deg,
+                )
+            else:
+                self.unsuccessful_scan_attempts = 0
+                self.current_scan_limit_deg = self.config.max_scan_angle_deg
         return self._decision(now_s, transition)
 
     def heading_commitment_active(self, now_s=None):
@@ -256,6 +473,9 @@ class DeadlockRecoveryV3:
         recovery_feasible_candidate_count=None,
         selected_candidate_feasible=False,
         selected_candidate_goal_progress_m=None,
+        selected_candidate_action_id=None,
+        selected_candidate_horizontal_sector_id=None,
+        selected_candidate_min_observed_clearance_m=None,
         now_s=None,
     ):
         del (
@@ -265,6 +485,8 @@ class DeadlockRecoveryV3:
             recovery_feasible_candidate_count,
         )
         now_s = self._now(now_s)
+        self.last_handoff_confirmation_replans = None
+        self.last_handoff_horizontal_sector_id = None
         self.record_position(position_world)
         if not self.config.enabled:
             return self._decision(now_s)
@@ -273,37 +495,90 @@ class DeadlockRecoveryV3:
         collision_floor_present = bool(collision_floor_present)
         speed_mps = float(speed_mps)
         progress = selected_candidate_goal_progress_m
+        action_id = (
+            None if selected_candidate_action_id is None
+            else int(selected_candidate_action_id)
+        )
+        sector_id = (
+            None if selected_candidate_horizontal_sector_id is None
+            else int(selected_candidate_horizontal_sector_id)
+        )
+        if action_id is not None and action_id < 0:
+            raise ValueError("selected candidate action id must be non-negative")
+        if sector_id is not None and sector_id < 0:
+            raise ValueError(
+                "selected candidate horizontal sector must be non-negative"
+            )
+        selected_clearance = selected_candidate_min_observed_clearance_m
+        if selected_clearance is not None:
+            selected_clearance = float(selected_clearance)
+            if not math.isfinite(selected_clearance):
+                raise ValueError("selected candidate clearance must be finite")
         selected_eligible = bool(
             selected_candidate_feasible
             and not collision_floor_present
             and progress is not None
             and math.isfinite(float(progress))
             and float(progress) >= self.config.selected_min_goal_progress_m
+            and (
+                not self.config.require_consistent_selected_horizontal_sector
+                or self.mode == self.NORMAL
+                or sector_id is not None
+            )
         )
         self.last_selected_candidate_eligible = selected_eligible
         self.last_selected_candidate_goal_progress_m = (
             None if progress is None else float(progress)
         )
-        self.selected_release_count = (
-            self.selected_release_count + 1 if selected_eligible else 0
+        self.last_selected_candidate_action_id = action_id
+        self.last_selected_candidate_horizontal_sector_id = sector_id
+        self.last_selected_candidate_min_observed_clearance_m = (
+            selected_clearance
         )
+        if not selected_eligible:
+            self.selected_release_count = 0
+            if self.mode != self.NORMAL:
+                self.selected_confirmation_horizontal_sector_id = None
+        elif (
+            self.config.require_consistent_selected_horizontal_sector
+            and self.mode != self.NORMAL
+        ):
+            if self.selected_confirmation_horizontal_sector_id == sector_id:
+                self.selected_release_count += 1
+            else:
+                # A vertical-row change within one horizontal column is
+                # allowed.  Moving to another horizontal opening starts a new
+                # confirmation streak instead of stitching unrelated flickers
+                # into one recovery handoff.
+                self.selected_confirmation_horizontal_sector_id = sector_id
+                self.selected_release_count = 1
+        else:
+            self.selected_release_count += 1
 
         if self.mode == self.NORMAL:
-            # Cooldown suppresses only another recovery takeover.  It never
-            # blocks a runtime-safe network candidate from being executed.
-            if now_s < self.cooldown_until_s:
-                self.zero_feasible_replans = 0
-                return self._decision(now_s)
+            motion_stagnation_triggered = self._observe_motion_stagnation(
+                now_s, position_world
+            )
             if (
                 selected_eligible
                 and self.selected_release_count
-                >= self.config.selected_release_replans
+                >= self.config.post_release_confirmation_replans
             ):
-                # Sustained useful network motion closes the escalation chain;
-                # the next unrelated deadlock starts with the normal 60 deg
-                # observation turn.
+                # Only sustained useful network motion closes the escalation
+                # chain.  This check intentionally also runs during cooldown.
                 self.unsuccessful_scan_attempts = 0
                 self.current_scan_limit_deg = self.config.max_scan_angle_deg
+            # Cooldown suppresses only another recovery takeover.  It never
+            # blocks a runtime-safe network candidate from being executed.
+            if now_s < self.cooldown_until_s:
+                if self.config.accumulate_zero_during_cooldown:
+                    self.zero_feasible_replans = (
+                        self.zero_feasible_replans + 1
+                        if feasible_candidate_count == 0 else 0
+                    )
+                else:
+                    self.zero_feasible_replans = 0
+                return self._decision(now_s)
             self.zero_feasible_replans = (
                 self.zero_feasible_replans + 1
                 if feasible_candidate_count == 0 else 0
@@ -311,10 +586,26 @@ class DeadlockRecoveryV3:
             if (
                 self.zero_feasible_replans
                 >= self.config.zero_feasible_trigger_replans
+                or motion_stagnation_triggered
             ):
+                self.last_recovery_trigger_reason = (
+                    "zero_runtime_safe_candidates"
+                    if self.zero_feasible_replans
+                    >= self.config.zero_feasible_trigger_replans else
+                    "observed_motion_stagnation"
+                )
                 self.mode = self.BRAKING
                 self.selected_release_count = 0
-                return self._decision(now_s, "network_to_braking")
+                self.selected_confirmation_horizontal_sector_id = None
+                # Stop accumulating normal-flight samples, but retain the
+                # triggering count/displacement in braking telemetry.
+                self.motion_history.clear()
+                return self._decision(
+                    now_s,
+                    "network_stagnation_to_braking"
+                    if motion_stagnation_triggered else
+                    "network_to_braking",
+                )
             return self._decision(now_s)
 
         if self.mode == self.BRAKING:
@@ -364,7 +655,15 @@ class DeadlockRecoveryV3:
             )
             if self.scan_leg_complete or timed_out:
                 self.scan_legs_completed = 1
-                if selected_eligible:
+                stable_release_ready = bool(
+                    self.selected_release_count
+                    >= self.config.selected_release_replans
+                )
+                if (
+                    stable_release_ready
+                    if self.config.require_consistent_selected_horizontal_sector
+                    else selected_eligible
+                ):
                     transition = (
                         "bounded_scan_timeout_to_network_selected_candidate"
                         if timed_out and not self.scan_leg_complete else
@@ -444,4 +743,5 @@ __all__ = [
     "DeadlockRecoveryV3",
     "RecoveryDecisionV3",
     "deadlock_recovery_mapping_v4_7_pillar",
+    "horizontal_sector_from_action_id",
 ]

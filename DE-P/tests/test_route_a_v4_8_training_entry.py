@@ -220,7 +220,9 @@ def test_v4_8_shell_entries_preserve_launch_contract():
 
     rviz = (ROOT / "scripts/route_a_v4_8_rviz_host.sh").read_text()
     assert "validate_route_a_launch_fixture.py" in rviz
-    assert "--runtime-profile v4_7_balanced_dynamic" in rviz
+    assert 'RUNTIME_PROFILE="v4_8_recovery_continuity"' in rviz
+    assert 'RUNTIME_PROFILE="v4_7_balanced_dynamic"' in rviz
+    assert '--runtime-profile "$RUNTIME_PROFILE"' in rviz
     assert '[[ "$SCENE" == "pillar" ]]' in rviz
     assert "--deadlock-recovery-profile bounded_scan_v3" in rviz
     assert "cave|forest|pillar|wall" in rviz

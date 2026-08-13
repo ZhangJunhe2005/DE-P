@@ -4,9 +4,97 @@ import torch
 
 from policy.static_yopo_training_v1 import MixedSceneStaticYOPOV1
 from tools.train_mixed_static_yopo_v1 import (
+    apply_trainable_group_contract,
     apply_score_only_warmup,
     build_optimizer,
 )
+
+
+def test_candidate_only_contract_freezes_backbone_and_score_tower():
+    model = MixedSceneStaticYOPOV1(head_variant="independent")
+    config = {
+        "optimizer": {
+            "name": "AdamW", "learning_rate": 5.0e-7,
+            "backbone_learning_rate": 0.0,
+            "candidate_head_learning_rate": 5.0e-7,
+            "score_head_learning_rate": 0.0,
+            "weight_decay": 1.0e-5,
+        },
+        "training": {"trainable_groups": "candidate_head_only"},
+    }
+    optimizer = build_optimizer(model, config)
+    model.train()
+    assert apply_trainable_group_contract(optimizer, config, model) == (
+        "candidate_head_only"
+    )
+    groups = {group["group_name"]: group for group in optimizer.param_groups}
+    assert groups["backbone"]["lr"] == 0.0
+    assert groups["candidate_head"]["lr"] == 5.0e-7
+    assert groups["score_head"]["lr"] == 0.0
+    assert all(not p.requires_grad for p in groups["backbone"]["params"])
+    assert all(p.requires_grad for p in groups["candidate_head"]["params"])
+    assert all(not p.requires_grad for p in groups["score_head"]["params"])
+    assert model.network.image_backbone.training is False
+    assert model.network.dep_head.score_model.training is False
+
+
+def test_score_only_contract_freezes_backbone_and_candidate_tower():
+    model = MixedSceneStaticYOPOV1(head_variant="independent")
+    config = {
+        "optimizer": {
+            "name": "AdamW", "learning_rate": 5.0e-7,
+            "backbone_learning_rate": 0.0,
+            "candidate_head_learning_rate": 0.0,
+            "score_head_learning_rate": 5.0e-7,
+            "weight_decay": 1.0e-5,
+        },
+        "training": {"trainable_groups": "score_head_only"},
+    }
+    optimizer = build_optimizer(model, config)
+    model.train()
+    assert apply_trainable_group_contract(optimizer, config, model) == (
+        "score_head_only"
+    )
+    groups = {group["group_name"]: group for group in optimizer.param_groups}
+    assert groups["backbone"]["lr"] == 0.0
+    assert groups["candidate_head"]["lr"] == 0.0
+    assert groups["score_head"]["lr"] == 5.0e-7
+    assert all(not p.requires_grad for p in groups["backbone"]["params"])
+    assert all(not p.requires_grad for p in groups["candidate_head"]["params"])
+    assert all(p.requires_grad for p in groups["score_head"]["params"])
+    assert model.network.image_backbone.training is False
+    assert model.network.dep_head.trajectory_model.training is False
+    assert model.network.dep_head.score_model.training is True
+
+
+def test_persistent_score_only_step_preserves_candidate_outputs():
+    torch.manual_seed(84804)
+    model = MixedSceneStaticYOPOV1(head_variant="independent")
+    config = {
+        "optimizer": {
+            "name": "AdamW", "learning_rate": 5.0e-7,
+            "backbone_learning_rate": 0.0,
+            "candidate_head_learning_rate": 0.0,
+            "score_head_learning_rate": 5.0e-7,
+            "weight_decay": 1.0e-5,
+        },
+        "training": {"trainable_groups": "score_head_only"},
+    }
+    optimizer = build_optimizer(model, config)
+    model.train()
+    apply_trainable_group_contract(optimizer, config, model)
+    depth = torch.rand(2, 1, 96, 160)
+    observation = torch.randn(2, 9)
+    with torch.no_grad():
+        proposal_before, score_before = model(depth, observation)
+    optimizer.zero_grad(set_to_none=True)
+    _, score = model(depth, observation)
+    score.square().mean().backward()
+    optimizer.step()
+    with torch.no_grad():
+        proposal_after, score_after = model(depth, observation)
+    assert torch.equal(proposal_before, proposal_after)
+    assert not torch.equal(score_before, score_after)
 
 
 def test_formal_model_unified_to_split_migration_is_exact(tmp_path: Path):

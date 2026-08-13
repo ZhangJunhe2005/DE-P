@@ -3,16 +3,13 @@ set -euo pipefail
 
 ROOT="/home/zjh/YOPO/DE-P"
 RUN_ROOT="$ROOT/runs/route_a_static_yopo_v4_8_recovery_capacity_shakedown"
-# Keep the frozen V4.7 closed-loop fixture.  The versioned V4.8 runtime profile
-# changes only recovery-to-network yaw/cooldown continuity; physical candidate
-# checks and learned scores remain unchanged.
 SCENES="$ROOT/configs/dep_interactive_demo_scenes_v4_6.json"
 SCENE="${1:-pillar}"
 if [[ $# -gt 0 ]]; then shift; fi
 
 case "$SCENE" in
   cave|forest|pillar|wall) ;;
-  *) echo "V4.8 scene must be cave, forest, pillar, or wall" >&2; exit 2 ;;
+  *) echo "V4.8.2 scene must be cave, forest, pillar, or wall" >&2; exit 2 ;;
 esac
 
 CHECKPOINT=""
@@ -43,8 +40,8 @@ if [[ -z "$CHECKPOINT" ]]; then
         done
   } || true)"
   if [[ -z "$LATEST" ]]; then
-    echo "No completed V4.8 best checkpoint found under $RUN_ROOT" >&2
-    echo "Use --checkpoint PATH to test an explicit epoch or checkpoint." >&2
+    echo "No completed V4.8 checkpoint found under $RUN_ROOT" >&2
+    echo "Use --checkpoint PATH to test an explicit checkpoint." >&2
     exit 1
   fi
   CHECKPOINT="$LATEST"
@@ -57,22 +54,9 @@ if [[ ! -f "$CHECKPOINT" ]]; then
   exit 1
 fi
 
-# The recovery-capacity objective is exercised by the same bounded pillar scan
-# used in V4.7; other scenes retain the unchanged legacy recovery setting.
-if [[ "$SCENE" == "pillar" ]]; then
-  RUNTIME_PROFILE="v4_8_recovery_continuity"
-  RECOVERY_ARGS=(
-    --deadlock-recovery 1
-    --deadlock-recovery-profile bounded_scan_v3
-  )
-else
-  RUNTIME_PROFILE="v4_7_balanced_dynamic"
-  RECOVERY_ARGS=(
-    --deadlock-recovery 0
-    --deadlock-recovery-profile legacy_v2
-  )
-fi
-
+# All supported scenes deliberately use the same runtime and recovery
+# contract.  No maze type, scene name or map UUID changes the trigger,
+# scan angles, handoff confirmation or candidate safety rules.
 cd "$ROOT"
 conda run --no-capture-output -n yopo \
   python tools/validate_route_a_launch_fixture.py \
@@ -85,9 +69,10 @@ exec bash scripts/run_dep_interactive_demo.sh \
   --actor-count 0 \
   --goal-mode fixed-ab \
   --runtime-safety 1 \
-  --runtime-profile "$RUNTIME_PROFILE" \
+  --runtime-profile v4_8_2_universal_stagnation_recovery \
   --planning-speed 3.0 \
   --dynamic-foreground-mode range_image_hybrid \
-  "${RECOVERY_ARGS[@]}" \
+  --deadlock-recovery 1 \
+  --deadlock-recovery-profile bounded_scan_v3 \
   --arrival-radius 5 \
   "${FORWARD_ARGS[@]}"

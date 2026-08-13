@@ -1,10 +1,10 @@
-contract_version: route_a_static_yopo_training_v4_5_10_controlled_continuation_v1
-training_implementation_hash: 43fe671893a7f930eb3181e7f96713973ed372069dc52b660130ac20fd70a7e4
+contract_version: route_a_static_yopo_training_v4_8_3_candidate_only_shakedown_v1
+training_implementation_hash: 77d4253f69acde97bcac644b687e454bf9f0facebd05900629c9619041c02304
 route: A
-source_dataset_root: /home/zjh/YOPO/DE-P/data/route_a_v4_2_raw_static
-derived_dataset_root: /home/zjh/YOPO/DE-P/data/route_a_v4_2_static_yopo
-source_dataset_manifest_hash: f94c5f25fd12fffea9ec4099521a80701668f2a9b177f9c3553e6d0813230774
-derived_dataset_manifest_hash: 611572fabc498299fa46349c7b1c98a7b77fc8f1eb6510adf8b5c2e6160bc75a
+source_dataset_root: /home/zjh/YOPO/DE-P/data/route_a_v4_7_raw_static
+derived_dataset_root: /home/zjh/YOPO/DE-P/data/route_a_v4_7_static_yopo
+source_dataset_manifest_hash: 1ef196a176c939693574cbe8267f06477b3dfe6f5dd10e38be2efc93badacba6
+derived_dataset_manifest_hash: d0a37045a11a4e32d81ea5ef77fa3d59c815014cb8591e7b305e846ecab003da
 normalization_contract_hash: 17d0ef25b1c828f66e8e414a08f517360d41048f4dc9b6068ce5891bf99837ef
 model_contract_hash: 55d20eab01f0561eb6a3fa6b794ea21304ff4ef17b9cf68582ded13811984a89
 loss_contract_hash: 368c7c89ea10d5f5d17f263d5d526a52d3ec23ae50cf52213653b71581ae8580
@@ -12,42 +12,41 @@ model:
   name: MixedSceneStaticYOPOV1
   backbone_variant: legacy
   head_variant: independent
-  initial_checkpoint: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_5_10_tail_aware_safety/20260811T065127Z-48990/checkpoints/best.pth
-  initial_checkpoint_sha256: cbb78f53b0849b5e4237ddc4fcc8b6c4c56602eefef9d4c57f3bab376a9bda84
+  initial_checkpoint: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_8_recovery_capacity_shakedown/20260812T121425Z-125126/checkpoints/best.pth
+  initial_checkpoint_sha256: 165330e1eebb66c912dbfc30e3729b10af3163a18f70f6a029b9f27c80ec914a
   strict_load: true
   allow_unified_to_split: false
 observation:
-  contract: route_a_original_yopo_state_v4_4
-  seed: 82501
-  velocity_distribution: original_yopo_forward_biased
-  acceleration_distribution: original_yopo_zero_centered_gaussian
-  goal_distribution: original_yopo_forward_10m_with_near_goal_tail
+  contract: route_a_recovery_state_v4_8
+  seed: 84710
 optimizer:
   name: AdamW
-  learning_rate: 1e-05
-  backbone_learning_rate: 1e-07
-  candidate_head_learning_rate: 1e-06
-  score_head_learning_rate: 1e-05
-  score_only_learning_rate: 1e-05
+  learning_rate: 5e-07
+  backbone_learning_rate: 0.0
+  candidate_head_learning_rate: 5e-07
+  score_head_learning_rate: 0.0
+  score_only_learning_rate: 0.0
   weight_decay: 1e-05
 scheduler:
   name: ReduceLROnPlateau
   factor: 0.5
-  patience: 2
+  patience: 1
   threshold: 0.0001
   minimum_learning_rate:
-    backbone: 2.5e-08
-    candidate_head: 2.5e-07
-    score_head: 2.5e-06
+    backbone: 0.0
+    candidate_head: 1.25e-07
+    score_head: 0.0
 training:
   batch_size: 32
-  max_epochs: 10
-  seed: 84511
+  max_epochs: 3
+  seed: 84803
   amp: false
   gradient_clip_norm: 5.0
   checkpoint_every_epochs: 1
   validation_every_epochs: 1
   score_only_warmup_epochs: 0
+  trainable_groups: candidate_head_only
+  evaluate_initial_checkpoint: true
 numerics:
   cnn_amp: false
   trajectory_loss_precision: float32
@@ -66,11 +65,11 @@ loader:
   mmap_cache_size: 8
   sampling_strategy: map_type_balanced
 validation:
-  contract_version: route_a_v4_5_10_tail_aware_safety_v1
-  primary_metric: macro_map_type_total_static_loss
+  contract_version: route_a_v4_8_3_candidate_only_recovery_v1
+  primary_metric: v4_8_3_normal_plus_recovery_safe_sector
   direction: minimize
-  minimum_epoch: 9
-  patience: 10
+  minimum_epoch: 3
+  patience: 3
   predefined_metrics:
   - macro_map_type_total_static_loss
   - per_map_type_total_static_loss
@@ -92,7 +91,12 @@ validation:
   - selected_clearance
   - coarse_false_safe_candidate_count
   - dense_clearance_drop
-output_root: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_5_10_controlled_continuation
+  - safe_sector_coverage_loss
+  - recovery_sample_fraction
+  - recovery_open_sector_soft_count
+  - recovery_mean_endpoint_distance
+  - recovery_max_endpoint_distance
+output_root: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_8_3_candidate_only_shakedown
 resume:
   automatic: false
   strict_identity: true
@@ -110,6 +114,28 @@ implementation_hotfixes:
 - route_a_v4_5_10_ten_additional_epochs_v1
 - route_a_v4_5_10_lower_score_learning_rate_v1
 - route_a_v4_5_10_no_new_qualification_gate_v1
+- route_a_v4_6_exclude_room_from_data_train_and_validation_v1
+- route_a_v4_6_restore_original_wall_density_v1
+- route_a_v4_6_four_type_balanced_sampling_v1
+- route_a_v4_6_thirty_epoch_bounded_finetune_v1
+- route_a_v4_6_early_stop_without_new_gate_v1
+- route_a_v4_7_initialize_from_v4_6_best_v1
+- route_a_v4_7_four_type_balanced_sampling_v1
+- route_a_v4_7_preserve_existing_loss_contract_v1
+- route_a_v4_7_twenty_epoch_low_lr_bounded_finetune_v1
+- route_a_v4_7_no_new_qualification_gate_v1
+- route_a_v4_8_initialize_from_latest_completed_v47_best_v1
+- route_a_v4_8_reuse_frozen_v47_dataset_v1
+- route_a_v4_8_recovery_observation_mixture_v1
+- route_a_v4_8_safe_sector_coverage_v1
+- route_a_v4_8_five_epoch_low_lr_shakedown_v1
+- route_a_v4_8_no_new_qualification_gate_v1
+- route_a_v4_8_3_initialize_from_closed_loop_v48_epoch0_v1
+- route_a_v4_8_3_record_epoch_minus_one_parent_baseline_v1
+- route_a_v4_8_3_freeze_backbone_and_score_head_v1
+- route_a_v4_8_3_candidate_lr_5e_7_v1
+- route_a_v4_8_3_safe_sector_weight_0_10_v1
+- route_a_v4_8_3_three_epoch_no_new_gate_v1
 parent_v4_config_hash: bbf93d492f50bd7ec41328c40bfba21133dc72de754d98a0b47c0206161c15ca
 objective_contract_hash: 8d1167b110f5e79d4fe616f559e0bbb97d1ca0b4943dad12d5c55a7b20b06000
 objective:
@@ -151,7 +177,6 @@ static_yopo_v4_5_1:
 parent_v4_5_1_config_hash: 16c00fd817d22b12dfb19cb6cb5e2e0392ccde86d35ede04b3aa3ba98e27e1ea
 static_yopo_v4_5_2:
   enabled: false
-experiment_role: tail_aware_controlled_continuation
 parent_v4_5_2_config_hash: 913d41e14fa5fd4b02adf997fce2e358cbdac175666b07562584acd001368ac5
 parent_v4_5_2_run: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_5_2_mixed_shakedown/20260810T044324Z-26502
 parent_v4_5_2_best_epoch: 4
@@ -237,7 +262,7 @@ parent_v4_5_9_config_hash: dd723ede6679cb9a27a26e75d415d8e074fa6373c32d86d7e0f32
 parent_v4_5_9_run: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_5_9_time_mean_safety/20260811T054339Z-37870
 parent_v4_5_9_best_epoch: 4
 static_yopo_v4_5_10:
-  enabled: true
+  enabled: false
   derivative_samples: 81
   static_safety_samples: 81
   jerk_unit_weight: 10.0
@@ -277,3 +302,86 @@ static_yopo_v4_5_10:
 parent_v4_5_10_config_hash: ec880e8d4cb9cf05f22f8da4343b80182c5a3f8cccc2158164119c5922d02ae6
 parent_v4_5_10_run: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_5_10_tail_aware_safety/20260811T065127Z-48990
 parent_v4_5_10_best_epoch: 4
+parent_v4_5_10_continuation_config_hash: a3e998e5726d6a5301cdcf03b2982741f7c54a6d6e98a5640916bf5d01fc375a
+parent_v4_5_10_continuation_run: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_5_10_controlled_continuation/20260811T073748Z-54883
+parent_v4_5_10_continuation_best_epoch: 9
+parent_v4_6_config_hash: 28b567a340ee901215b316e71c98da840e9bd2146f19f18e6ccc849035c25cfb
+parent_v4_6_run: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_6_four_scene_finetune/20260811T112951Z-77428
+parent_v4_6_best_epoch: 22
+experiment_role: recovery_candidate_only_three_epoch_shakedown
+parent_v4_7_config_hash: bc2f83984d26a12fb1840c8c0a0046af5747db6b0a552cc1f7a0be4532ce3dde
+parent_v4_7_run: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_7_original_density_finetune/20260812T050737Z-27660
+parent_v4_7_best_epoch: 15
+static_yopo_v4_8:
+  enabled: true
+  derivative_samples: 81
+  static_safety_samples: 81
+  jerk_unit_weight: 10.0
+  acceleration_unit_weight: 1.0
+  safety_weight: 1.0
+  guidance_weight: 0.15
+  guidance_perpendicular_weight: 0.5
+  score_regression_weight: 1.0
+  relative_order_weight: 1.0
+  relative_order_temperature: 0.75
+  relative_label_min_scale: 0.001
+  training_speed_mps: 6.0
+  max_speed_mps: 6.0
+  max_acceleration_mps2: 6.0
+  kinematic_speed_weight: 0.1
+  kinematic_acceleration_weight: 0.1
+  kinematic_softness: 0.05
+  vehicle_radius_m: 0.3
+  clear_distance_m: 0.5
+  dangerous_segment_weight: 0.0
+  dangerous_segment_window: 14
+  dangerous_segment_focus: 8.0
+  large_vertical_displacement_m: 1.0
+  clearance_score_weight: 0.0
+  clearance_score_softness_m: 0.08
+  clearance_pairwise_weight: 0.0
+  clearance_pairwise_margin: 0.0
+  far_clearance_cost: 0.001
+  far_decay_m: 0.1
+  radius_boundary_cost: 0.1
+  collision_surrogate_cost: 3.0
+  penetration_scale_m: 0.05
+  maximum_training_cost: 6.0
+  time_mean_weight: 0.9
+  worst_sample_weight: 0.1
+  worst_sample_count: 5
+  safe_sector_weight: 0.1
+  safe_sector_ray_start_m: 0.5
+  safe_sector_ray_end_m: 4.0
+  safe_sector_ray_samples: 12
+  safe_sector_openness_center_m: 0.45
+  safe_sector_openness_softness_m: 0.1
+  safe_sector_target_length_m: 3.0
+  safe_sector_shortfall_softness_m: 0.35
+route_a_v4_8:
+  enabled: true
+  dataset_reused_from: route_a_v4_7_static_yopo
+  supported_map_types:
+  - cave
+  - forest
+  - pillar
+  - wall
+  map_type_balanced: true
+  maximum_epochs: 5
+  qualification_gate_count: 0
+parent_v4_8_config_hash: 80b43a9d09de566e9d9de1a5ebe958ccbbee99bef3d074c440fa78b0a02b6855
+parent_v4_8_run: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_8_recovery_capacity_shakedown/20260812T121425Z-125126
+parent_v4_8_best_epoch: 0
+route_a_v4_8_3:
+  enabled: true
+  initial_validation_epoch: -1
+  ordinary_sample_fraction: 0.8
+  recovery_sample_fraction: 0.2
+  trainable_groups:
+  - candidate_head
+  frozen_groups:
+  - backbone
+  - score_head
+  maximum_epochs: 3
+  qualification_gate_count: 0
+  selection_metric: ordinary_four_map_macro_total_loss_plus_conditional_recovery_safe_sector_loss

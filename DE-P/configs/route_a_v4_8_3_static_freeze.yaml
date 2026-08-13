@@ -1,0 +1,50 @@
+contract_version: route_a_v4_8_3_static_freeze_v1
+status: FROZEN_CLOSED_LOOP_SELECTED
+selected_version: v4.8.3
+scope:
+  static_map_types:
+  - cave
+  - forest
+  - pillar
+  - wall
+  dynamic_filter_modified: false
+  deadlock_recovery_contract: v4_8_2_universal_odometry_stagnation_stable_sector_handoff_v1
+checkpoint:
+  path: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_8_3_candidate_only_shakedown/20260813T050742Z-13178/checkpoints/best.pth
+  sha256: 22e5c63c273d751c15479d70c99d9b85ad615b7b4c62063946a5b1683776ac60
+  epoch: 2
+  training_run: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_8_3_candidate_only_shakedown/20260813T050742Z-13178
+  git_storage: local_ignored_artifact_verified_by_sha256
+offline_validation:
+  selection_metric: 2.619093385764814
+  ordinary_four_map_macro_loss: 2.5120403112486382
+  conditional_recovery_safe_sector_loss: 0.10705307451617598
+  collision_free_candidate_count: 8.83855
+  feasible_candidate_count: 3.8014666666666668
+  recovery_mean_endpoint_distance: 1.6710703484937997
+  conditional_collision_selection_error: 0.25795
+  score_oracle_regret: 0.3680384377549092
+closed_loop_evidence:
+  scene: pillar
+  goal_mode: fixed-ab
+  actors: none
+  run: /home/zjh/YOPO/DE-P/runs/dep_interactive_demo/20260813T052323Z-pillar
+  goal_arrived: true
+  collision_events: 0
+  near_contact_events: 1
+  path_length_m: 36.62766001040909
+  mean_feasible_candidates: 7.350515463917525
+  zero_feasible_fraction: 0.008836524300441826
+  recovery_scan_frames: 0
+  recovery_cycles: 0
+rejected_successor:
+  version: v4.8.4
+  reason: score_only_adaptation_did_not_beat_parent
+  selected_best_epoch: -1
+  parent_selection_metric: 2.619093385764814
+  trained_selection_metric: 2.6193539755485578
+  score_selection_improved: false
+  candidate_capacity_preserved: true
+qualification:
+  production_qualified: false
+  rationale: static checkpoint frozen for reproducible closed-loop development; dynamic and multi-seed production validation remain separate

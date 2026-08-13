@@ -130,6 +130,8 @@ def training_contract_classification(config):
             "route_a_v4_5_9_time_mean_localized_safety_v1",
             "route_a_v4_5_10_tail_aware_safety_v1",
             "route_a_v4_8_recovery_capacity_v1",
+            "route_a_v4_8_3_candidate_only_recovery_v1",
+            "route_a_v4_8_4_score_adaptation_v1",
         },
         "diagnostic": config.get("experiment_role") in {
             "map_type_convergence_probe",
@@ -144,6 +146,8 @@ def training_contract_classification(config):
             "tail_aware_safety_shakedown",
             "tail_aware_controlled_continuation",
             "recovery_capacity_five_epoch_shakedown",
+            "recovery_candidate_only_three_epoch_shakedown",
+            "recovery_score_only_two_epoch_adaptation",
         },
     }
 
@@ -487,6 +491,56 @@ def apply_score_only_warmup(optimizer, config, epoch, start_epoch, model=None):
     return transition
 
 
+def apply_trainable_group_contract(optimizer, config, model):
+    """Apply a persistent optimizer-group freeze without changing topology.
+
+    Existing runs default to ``all`` and remain byte-compatible.  The
+    ``candidate_head_only`` mode is used by V4.8.3: backbone weights and
+    BatchNorm buffers are frozen, the independent Score tower is frozen, and
+    only the trajectory/candidate tower receives gradients. V4.8.4 uses the
+    symmetric ``score_head_only`` mode so candidate outputs remain fixed while
+    the independent Score tower adapts to them.
+    """
+    mode = str(config["training"].get("trainable_groups", "all"))
+    if mode == "all":
+        return None
+    trainable_name = {
+        "candidate_head_only": "candidate_head",
+        "score_head_only": "score_head",
+    }.get(mode)
+    if trainable_name is None:
+        raise ValueError(f"unsupported trainable_groups contract: {mode}")
+    groups = {
+        str(group.get("group_name")): group
+        for group in optimizer.param_groups
+    }
+    required = {"backbone", "candidate_head", "score_head"}
+    if not required <= set(groups):
+        raise ValueError(f"{mode} training requires split optimizer groups")
+    for name, group in groups.items():
+        trainable = name == trainable_name
+        for parameter in group["params"]:
+            parameter.requires_grad_(trainable)
+        if not trainable:
+            group["lr"] = 0.0
+    groups[trainable_name]["lr"] = float(
+        config["optimizer"][f"{trainable_name}_learning_rate"]
+    )
+    # ``model.train()`` would otherwise continue changing frozen BatchNorm
+    # buffers even with requires_grad=False.
+    model.network.image_backbone.eval()
+    frozen_head_prefix = (
+        "score" if trainable_name == "candidate_head" else "trajectory"
+    )
+    for suffix in ("model", "head"):
+        module = getattr(
+            model.network.dep_head, f"{frozen_head_prefix}_{suffix}", None
+        )
+        if module is not None:
+            module.eval()
+    return mode
+
+
 def build_scheduler(optimizer, config):
     scheduler_config = config["scheduler"]
     name = str(scheduler_config["name"])
@@ -681,6 +735,7 @@ def main():
         static_yopo_v4_8_config=config.get("static_yopo_v4_8"),
     ).to(device)
     optimizer = build_optimizer(model, config)
+    apply_trainable_group_contract(optimizer, config, model)
     scheduler = build_scheduler(optimizer, config)
     scaler = torch.amp.GradScaler("cuda", enabled=bool(config["training"]["amp"]))
     start_epoch, global_step, best = 0, 0, float("inf")
@@ -767,13 +822,30 @@ def main():
             raise RuntimeError("resume checkpoint/best metric mismatch")
         epochs_without_improvement = int(last["epoch"]) - best_epoch
     try:
-        for epoch in range(start_epoch, maximum_epochs):
+        evaluate_initial_checkpoint = bool(
+            config["training"].get("evaluate_initial_checkpoint", False)
+        )
+        first_epoch = (
+            -1 if evaluate_initial_checkpoint and start_epoch == 0
+            and not args.resume else start_epoch
+        )
+        for epoch in range(first_epoch, maximum_epochs):
+            initial_validation = epoch == -1
             epoch_started = time.perf_counter()
-            train_sampler.set_epoch(epoch)
-            model.train()
-            stage_transition = apply_score_only_warmup(
-                optimizer, config, epoch, start_epoch, model=model
-            )
+            if initial_validation:
+                model.eval()
+                stage_transition = "initial_checkpoint_validation"
+            else:
+                train_sampler.set_epoch(epoch)
+                model.train()
+                stage_transition = apply_score_only_warmup(
+                    optimizer, config, epoch, start_epoch, model=model
+                )
+                persistent_stage = apply_trainable_group_contract(
+                    optimizer, config, model
+                )
+                if persistent_stage is not None:
+                    stage_transition = persistent_stage
             if stage_transition is not None:
                 event = {
                     "event": "optimizer_stage_transition",
@@ -807,12 +879,15 @@ def main():
                 train_sums["clearance_pairwise_ranking_loss"] = 0.0
             print(json.dumps({
                 "event": "epoch_start", "epoch": epoch,
-                "epochs_total": maximum_epochs, "train_batches": len(train_loader),
+                "initial_validation": initial_validation,
+                "epochs_total": maximum_epochs,
+                "train_batches": 0 if initial_validation else len(train_loader),
                 "validation_batches": len(valid_loader),
                 "learning_rate": max(optimizer_learning_rates(optimizer).values()),
                 "learning_rates": optimizer_learning_rates(optimizer),
             }), flush=True)
-            for batch_no, batch in enumerate(train_loader):
+            epoch_train_loader = () if initial_validation else train_loader
+            for batch_no, batch in enumerate(epoch_train_loader):
                 batch = {key: (value.to(device, non_blocking=True)
                                if torch.is_tensor(value) else value)
                          for key, value in batch.items()}
@@ -1093,12 +1168,24 @@ def main():
                         ], device=device, dtype=torch.bool)
                         target = validation_by_type.setdefault(map_type, {
                             "samples": 0,
+                            "ordinary_samples": 0,
+                            "ordinary_total_loss_sum": 0.0,
                             **{name: 0.0 for name in validation_sums},
                             "score_top1_matches": 0,
                         })
                         target["samples"] += int(mask.sum())
                         for name, values in per_sample.items():
                             target[name] += float(values[mask].sum())
+                        if v48_enabled:
+                            ordinary_mask = mask & per_sample[
+                                "recovery_sample_fraction"
+                            ].lt(0.5)
+                            target["ordinary_samples"] += int(
+                                ordinary_mask.sum()
+                            )
+                            target["ordinary_total_loss_sum"] += float(
+                                per_sample["total_loss"][ordinary_mask].sum()
+                            )
                         target["score_top1_matches"] += int(
                             details["per_sample_score_top1_match"][mask].sum()
                         )
@@ -1117,7 +1204,10 @@ def main():
                         print(json.dumps(event, sort_keys=True), flush=True)
                     if maximum_valid_batches and batch_no + 1 >= maximum_valid_batches:
                         break
-            train_count = min(len(train_loader), maximum_train_batches or len(train_loader))
+            train_count = (
+                1 if initial_validation else
+                min(len(train_loader), maximum_train_batches or len(train_loader))
+            )
             train_means = {key: value / train_count for key, value in train_sums.items()}
             validation_means = {
                 key: value / validation_count
@@ -1144,6 +1234,11 @@ def main():
             validation_map_type_metrics = {
                 map_type: {
                     "samples": values["samples"],
+                    "ordinary_samples": values["ordinary_samples"],
+                    "ordinary_total_loss": (
+                        values["ordinary_total_loss_sum"]
+                        / max(values["ordinary_samples"], 1)
+                    ),
                     **{
                         name: values[name] / values["samples"]
                         for name in validation_sums
@@ -1180,6 +1275,15 @@ def main():
                 values["total_loss"]
                 for values in validation_map_type_metrics.values()
             ]))
+            ordinary_macro_map_type_total = float(np.mean([
+                values["ordinary_total_loss"]
+                for values in validation_map_type_metrics.values()
+            ])) if v48_enabled else macro_map_type_total
+            recovery_safe_sector_loss = (
+                validation_means["safe_sector_coverage_loss"]
+                / max(validation_means["recovery_sample_fraction"], 1.0e-12)
+                if v48_enabled else 0.0
+            )
             validation_contract = config["validation"].get(
                 "contract_version", "legacy_selection_gate"
             )
@@ -1198,6 +1302,8 @@ def main():
                 "route_a_v4_5_9_time_mean_localized_safety_v1",
                 "route_a_v4_5_10_tail_aware_safety_v1",
                 "route_a_v4_8_recovery_capacity_v1",
+                "route_a_v4_8_3_candidate_only_recovery_v1",
+                "route_a_v4_8_4_score_adaptation_v1",
             }:
                 # These contracts deliberately have no qualification lattice. The
                 # scalar held-out loss selects best.pth; physical deployment
@@ -1325,6 +1431,24 @@ def main():
                 metric = validation_means["total_loss"]
             elif primary_metric == "macro_map_type_total_static_loss":
                 metric = macro_map_type_total
+            elif primary_metric == "v4_8_3_normal_plus_recovery_safe_sector":
+                if not v48_enabled:
+                    raise RuntimeError(
+                        "V4.8.3 composite metric requires recovery observations"
+                    )
+                metric = (
+                    ordinary_macro_map_type_total
+                    + recovery_safe_sector_loss
+                )
+            elif primary_metric == "v4_8_4_score_adaptation":
+                if not v48_enabled:
+                    raise RuntimeError(
+                        "V4.8.4 composite metric requires recovery observations"
+                    )
+                metric = (
+                    ordinary_macro_map_type_total
+                    + recovery_safe_sector_loss
+                )
             elif primary_metric == "anti_hover_feasible_macro_loss":
                 # Keep JSON/checkpoint state finite while ensuring that any
                 # gate-passing epoch outranks every collapsed/hovering epoch.
@@ -1381,7 +1505,7 @@ def main():
             warmup_epochs = int(config["training"].get(
                 "score_only_warmup_epochs", 0
             ))
-            if epoch < warmup_epochs:
+            if initial_validation or epoch < warmup_epochs:
                 pass
             elif isinstance(
                 scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau
@@ -1391,12 +1515,19 @@ def main():
                 scheduler.step()
             row = {
                 "epoch": epoch, "global_step": global_step,
+                "initial_checkpoint_validation": initial_validation,
                 "train_total_loss": train_means["total_loss"],
                 "train_components": train_means,
                 "validation_total_static_loss": metric,
                 "validation_components": validation_means,
                 "validation_by_map_type": validation_map_type_metrics,
                 "validation_macro_map_type_total_static_loss": macro_map_type_total,
+                "validation_ordinary_macro_map_type_total_static_loss": (
+                    ordinary_macro_map_type_total
+                ),
+                "validation_recovery_safe_sector_loss": (
+                    recovery_safe_sector_loss
+                ),
                 "selection_metric_name": primary_metric,
                 "selection_metric": metric,
                 "selection_gate_pass": selection_gate_pass,
@@ -1444,7 +1575,8 @@ def main():
                 "long_training_started": not args.dry_run,
             })
             print(json.dumps({"event": "epoch_end", **row}, sort_keys=True), flush=True)
-            if not args.dry_run and epoch >= minimum_epoch \
+            if not args.dry_run and not initial_validation \
+                    and epoch >= minimum_epoch \
                     and epochs_without_improvement >= patience:
                 stop_reason = "EARLY_STOPPING_PATIENCE"
                 print(json.dumps({
