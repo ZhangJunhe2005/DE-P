@@ -9,6 +9,8 @@ from pathlib import Path
 
 import numpy as np
 
+from policy.runtime_profile_v4_9 import RUNTIME_BEHAVIOR_VERSION
+
 
 ROOT = Path(__file__).resolve().parents[1]
 RUN_ROOT = ROOT / "runs/dep_interactive_demo"
@@ -40,14 +42,26 @@ def matches_contract(manifest):
         and checkpoint.resolve() == CHECKPOINT
         and manifest.get("actors") == "multi_target"
         and int(manifest.get("actor_count", -1)) == 16
-        and manifest.get("actor_layout") == "route_encounters"
-        and int(manifest.get("actor_seed", -1)) == 8801
+        and manifest.get("actor_layout") == "uniform_3d"
+        and int(manifest.get("actor_seed", -1)) == 9098
         and manifest.get("dynamic_mode") == "dynamic_safety"
         and manifest.get("dynamic_foreground_mode") == "range_image_hybrid"
         and manifest.get("runtime_profile") == RUNTIME_PROFILE
+        and manifest.get("runtime_behavior_version")
+        == RUNTIME_BEHAVIOR_VERSION
         and manifest.get("goal_mode") == "fixed-ab"
-        and int(manifest.get("route_encounter_actor_count", -1)) == 16
-        and int(manifest.get("route_contract_preserved_actor_count", -1)) == 16
+        and manifest.get("uniform_3d_contract_version")
+        == "uniform_3d_layout_v1"
+        and manifest.get("z_bounds_source") == "canonical_flight_bounds"
+        and manifest.get("xy_strata_shape") == [4, 4]
+        and int(manifest.get("xy_strata_occupied", -1)) == 16
+        and int(manifest.get("z_strata_count", -1)) == 4
+        and int(manifest.get("z_strata_occupied", -1)) == 4
+        and int(manifest.get("motion_direction_octants_occupied", -1)) >= 6
+        and manifest.get("vertical_direction_signs") == [-1, 1]
+        and manifest.get("route_encounter_guaranteed") is False
+        and int(manifest.get("route_encounter_actor_count", -1)) == 0
+        and manifest.get("planner_ground_truth_exposed") is False
     )
 
 
@@ -70,7 +84,7 @@ def finite_quantiles(values):
     }
 
 
-def summarize_run(run, report):
+def summarize_run(run, report, manifest):
     rows = read_jsonl(run / "safety_decisions.jsonl")
     state_counts = Counter(str(row.get("control_state", "missing")) for row in rows)
     cause_counts = Counter(str(row.get("dynamic_blocking_cause", "missing")) for row in rows)
@@ -83,6 +97,33 @@ def summarize_run(run, report):
     collision_classes = report.get("dynamic_collision_observability_counts", {})
     return {
         "run": str(run.resolve()),
+        "uniform_3d_fixture": {
+            "contract_version": manifest.get("uniform_3d_contract_version"),
+            "z_bounds": manifest.get("uniform_3d_z_bounds"),
+            "z_bounds_source": manifest.get("z_bounds_source"),
+            "xy_strata_shape": manifest.get("xy_strata_shape"),
+            "xy_strata_occupied": manifest.get("xy_strata_occupied"),
+            "z_strata_count": manifest.get("z_strata_count"),
+            "z_strata_occupied": manifest.get("z_strata_occupied"),
+            "motion_direction_octants_occupied": manifest.get(
+                "motion_direction_octants_occupied"
+            ),
+            "vertical_direction_signs": manifest.get(
+                "vertical_direction_signs"
+            ),
+            "route_proximity_actor_count": manifest.get(
+                "route_proximity_actor_count"
+            ),
+            "route_proximity_threshold_m": manifest.get(
+                "route_proximity_threshold_m"
+            ),
+            "route_encounter_guaranteed": manifest.get(
+                "route_encounter_guaranteed"
+            ),
+            "planner_ground_truth_exposed": manifest.get(
+                "planner_ground_truth_exposed"
+            ),
+        },
         "collision_report_status": report.get("status"),
         "goal_arrived": bool(report.get("goal_arrived", False)),
         "goal_path_length_m": report.get("goal_path_length_m"),
@@ -162,7 +203,7 @@ def collect(run_root=RUN_ROOT):
         scene = str(manifest.get("scene", ""))
         if scene not in SCENES or scene in latest or not matches_contract(manifest):
             continue
-        latest[scene] = summarize_run(run, read_json(report_path))
+        latest[scene] = summarize_run(run, read_json(report_path), manifest)
     complete = len(latest) == len(SCENES)
     return {
         "status": (
@@ -174,9 +215,19 @@ def collect(run_root=RUN_ROOT):
         "contract": {
             "actors": "multi_target",
             "actor_count": 16,
-            "actor_layout": "route_encounters",
-            "actor_seed": 8801,
+            "actor_layout": "uniform_3d",
+            "actor_seed": 9098,
+            "uniform_3d_contract_version": "uniform_3d_layout_v1",
+            "z_bounds_source": "canonical_flight_bounds",
+            "xy_strata_shape": [4, 4],
+            "xy_strata_occupied": 16,
+            "z_strata_count": 4,
+            "z_strata_occupied": 4,
+            "vertical_direction_signs": [-1, 1],
+            "route_encounter_guaranteed": False,
+            "planner_ground_truth_exposed": False,
             "runtime_profile": RUNTIME_PROFILE,
+            "runtime_behavior_version": RUNTIME_BEHAVIOR_VERSION,
             "goal_mode": "fixed-ab",
         },
         "scenes": {

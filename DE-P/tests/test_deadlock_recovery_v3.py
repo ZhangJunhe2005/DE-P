@@ -22,6 +22,9 @@ from policy.runtime_profile_v4_8_2 import (
 from policy.runtime_profile_v4_8_5 import (
     deadlock_recovery_mapping_v4_8_5,
 )
+from policy.runtime_profile_v4_9 import (
+    deadlock_recovery_mapping_v4_9,
+)
 
 
 def recovery_config(**updates):
@@ -91,6 +94,48 @@ def test_v4_8_2_normal_translation_never_triggers_motion_recovery():
         assert decision.transition is None
     assert decision.motion_stagnation_replans == 0
     assert decision.motion_window_displacement_m > 0.20
+
+
+@pytest.mark.parametrize("replan_dt", [0.03, 0.067, 0.10])
+def test_v4_9_stagnation_trigger_is_bounded_by_time_not_loop_rate(replan_dt):
+    config = DeadlockRecoveryConfigV3.from_mapping(
+        deadlock_recovery_mapping_v4_9({"enabled": True})
+    )
+    recovery = DeadlockRecoveryV3(config)
+    decision = None
+    transition_time = None
+    for index in range(int(math.ceil(3.0 / replan_dt)) + 1):
+        now_s = index * replan_dt
+        decision = observe(
+            recovery, now_s,
+            feasible=4, selected=True, progress=1.0,
+            action_id=7, sector_id=2,
+            position=[0.02 * math.sin(index * 0.1), 0.0, 0.0],
+        )
+        if decision.transition is not None:
+            transition_time = now_s
+            break
+    assert decision.transition == "network_stagnation_to_braking"
+    assert decision.recovery_trigger_reason == "observed_motion_stagnation"
+    assert decision.motion_stagnation_replans == 1
+    assert transition_time >= config.motion_stagnation_window_s
+    assert transition_time <= config.motion_stagnation_window_s + replan_dt
+
+
+def test_v4_9_normal_translation_does_not_false_trigger_prompt_recovery():
+    config = DeadlockRecoveryConfigV3.from_mapping(
+        deadlock_recovery_mapping_v4_9({"enabled": True})
+    )
+    recovery = DeadlockRecoveryV3(config)
+    for index in range(120):
+        decision = observe(
+            recovery, index * 0.067,
+            feasible=3, selected=True, progress=1.0,
+            action_id=7, sector_id=2,
+            position=[index * 0.03, 0.0, 0.0],
+        )
+        assert decision.transition is None
+        assert decision.mode == recovery.NORMAL
 
 
 def v4_8_5_recovery():

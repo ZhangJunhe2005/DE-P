@@ -118,17 +118,19 @@ def parse_args():
     parser.add_argument(
         "--actor-layout", choices=(
             "corridor", "map_wide", "hybrid", "route_encounters",
+            "uniform_3d",
         ),
         default="hybrid",
         help=(
             "hybrid disperses actors map-wide while retaining some route "
             "encounters; route_encounters builds a deterministic multi-family "
-            "stress route"
+            "stress route; uniform_3d uses deterministic seed-stratified XY/Z "
+            "placement and random three-dimensional motion across the map"
         ),
     )
     parser.add_argument(
         "--actor-seed", type=int, default=8801,
-        help="reproducible random seed for map-wide actor placement",
+        help="reproducible random seed for map-wide actor placement and motion",
     )
     parser.add_argument(
         "--actor-vertical-span", type=float, default=2.0,
@@ -802,6 +804,350 @@ def resolve_actor_count(actor_mode, actor_count):
     return count
 
 
+def _build_uniform_3d_actor_layout(
+    scene, count, actor_seed, vertical_span,
+):
+    """Build a deterministic stratified full-map 3-D actor fixture.
+
+    This is deliberately different from ``route_encounters``.  XY is divided
+    into near-square strata and Z uses four independently shuffled balanced
+    layers.  Each accepted actor remains in its assigned XY/Z stratum;
+    dense-map rejection sampling is therefore unable to silently collapse the
+    fixture back onto the nominal UAV route.
+    """
+    if "actor_xy_bounds" not in scene:
+        raise ValueError("uniform_3d actor layout requires scene actor_xy_bounds")
+    if float(vertical_span) <= 0.0:
+        raise ValueError(
+            "uniform_3d actor layout requires positive actor vertical span"
+        )
+
+    (x_min, x_max), (y_min, y_max) = [
+        tuple(map(float, bounds)) for bounds in scene["actor_xy_bounds"]
+    ]
+    if "flight_bounds_min" in scene and "flight_bounds_max" in scene:
+        z_min = float(scene["flight_bounds_min"][2])
+        z_max = float(scene["flight_bounds_max"][2])
+        z_bounds_source = "canonical_flight_bounds"
+    else:
+        z_min, z_max = map(float, scene["actor_z_bounds"])
+        z_bounds_source = "legacy_actor_z_bounds_fallback"
+    if not (x_min < x_max and y_min < y_max and z_min < z_max):
+        raise ValueError("uniform_3d actor bounds must be increasing")
+
+    rng = np.random.default_rng(int(actor_seed))
+    columns = int(math.ceil(math.sqrt(count)))
+    rows = int(math.ceil(count / columns))
+    cell_width = (x_max - x_min) / columns
+    cell_height = (y_max - y_min) / rows
+    cells = [
+        (row, column)
+        for row in range(rows)
+        for column in range(columns)
+    ]
+    rng.shuffle(cells)
+    cells = cells[:count]
+    z_stratum_count = min(4, count)
+    z_strata = [index % z_stratum_count for index in range(count)]
+    rng.shuffle(z_strata)
+
+    authority = None
+    if "authority_root" in scene:
+        authority = CanonicalOccupancy(scene["authority_root"], scene["map_uuid"])
+        for label, position in (
+            ("start", scene["start"]),
+            ("suggested_goal", scene["suggested_goal"]),
+        ):
+            if authority.sphere_collides(position, 0.3):
+                raise ValueError(
+                    f"{label} is not UAV-clear in canonical occupancy"
+                )
+
+    actors = []
+    accepted_initial_positions = []
+    rejection_counts = {
+        "insufficient_motion_extent": 0,
+        "launch_or_goal_proximity": 0,
+        "initial_actor_overlap": 0,
+        "canonical_static_collision": 0,
+    }
+    maximum_attempts = 2048
+    # A common centre interval makes the Z strata comparable even though the
+    # emitted spheres have slightly different radii.
+    largest_radius = 0.44
+    z_center_min = z_min + largest_radius
+    z_center_max = z_max - largest_radius
+    if z_center_max - z_center_min < 1.0:
+        raise ValueError("uniform_3d effective actor Z band is too small")
+
+    for index, ((row, column), z_stratum) in enumerate(zip(cells, z_strata)):
+        actor_id = 101 + index
+        radius = 0.35 + 0.03 * (index % 4)
+        cell_x_min = x_min + column * cell_width
+        cell_x_max = cell_x_min + cell_width
+        cell_y_min = y_min + row * cell_height
+        cell_y_max = cell_y_min + cell_height
+        horizontal_margin = radius + 0.15
+        if (
+            cell_x_max - cell_x_min <= 2.0 * horizontal_margin
+            or cell_y_max - cell_y_min <= 2.0 * horizontal_margin
+        ):
+            raise ValueError("uniform_3d XY stratum is too small for actor")
+        raw_z_layer_min = z_min + (
+            z_stratum * (z_max - z_min) / z_stratum_count
+        )
+        raw_z_layer_max = z_min + (
+            (z_stratum + 1) * (z_max - z_min) / z_stratum_count
+        )
+        safe_z_layer_min = max(raw_z_layer_min, z_min + radius)
+        safe_z_layer_max = min(raw_z_layer_max, z_max - radius)
+        if safe_z_layer_max - safe_z_layer_min < 0.2:
+            raise ValueError("uniform_3d Z stratum is too small for actor")
+
+        accepted = None
+        actor_rejections = {key: 0 for key in rejection_counts}
+        for attempt in range(1, maximum_attempts + 1):
+            center = np.asarray([
+                rng.uniform(
+                    cell_x_min + horizontal_margin,
+                    cell_x_max - horizontal_margin,
+                ),
+                rng.uniform(
+                    cell_y_min + horizontal_margin,
+                    cell_y_max - horizontal_margin,
+                ),
+                rng.uniform(
+                    safe_z_layer_min + 0.1 * (
+                        safe_z_layer_max - safe_z_layer_min
+                    ),
+                    safe_z_layer_max - 0.1 * (
+                        safe_z_layer_max - safe_z_layer_min
+                    ),
+                ),
+            ], dtype=np.float64)
+
+            azimuth = float(rng.uniform(-math.pi, math.pi))
+            vertical_component = float(rng.uniform(0.16, 0.48))
+            if rng.integers(0, 2) == 0:
+                vertical_component *= -1.0
+            horizontal_component = math.sqrt(1.0 - vertical_component ** 2)
+            motion_direction = np.asarray([
+                horizontal_component * math.cos(azimuth),
+                horizontal_component * math.sin(azimuth),
+                vertical_component,
+            ], dtype=np.float64)
+
+            lower = np.asarray([
+                cell_x_min + horizontal_margin,
+                cell_y_min + horizontal_margin,
+                safe_z_layer_min,
+            ])
+            upper = np.asarray([
+                cell_x_max - horizontal_margin,
+                cell_y_max - horizontal_margin,
+                safe_z_layer_max,
+            ])
+            maximum_half_extent = float("inf")
+            for axis in range(3):
+                component = abs(float(motion_direction[axis]))
+                if component > 1e-9:
+                    maximum_half_extent = min(
+                        maximum_half_extent,
+                        (center[axis] - lower[axis]) / component,
+                        (upper[axis] - center[axis]) / component,
+                    )
+            maximum_half_extent = min(
+                maximum_half_extent,
+                0.5 * float(vertical_span) / abs(vertical_component),
+                3.5,
+            )
+            if maximum_half_extent < 0.45:
+                actor_rejections["insufficient_motion_extent"] += 1
+                continue
+            half_extent = float(rng.uniform(
+                0.42,
+                max(0.420001, min(3.2, 0.92 * maximum_half_extent)),
+            ))
+            first = center - half_extent * motion_direction
+            second = center + half_extent * motion_direction
+            if rng.integers(0, 2) == 0:
+                first, second = second, first
+
+            # Avoid turning a deterministic validation launch into an
+            # immediate spawn collision.  This does not bias actors toward the
+            # route; it only excludes a small ball around both endpoints.
+            if (
+                _point_segment_distance(scene["start"], first, second) < 1.5
+                or _point_segment_distance(
+                    scene["suggested_goal"], first, second
+                ) < 1.0
+            ):
+                actor_rejections["launch_or_goal_proximity"] += 1
+                continue
+            if any(
+                np.linalg.norm(first - previous_position)
+                < radius + previous_radius + 0.6
+                for previous_position, previous_radius in accepted_initial_positions
+            ):
+                actor_rejections["initial_actor_overlap"] += 1
+                continue
+
+            actor = {
+                "id": actor_id,
+                "enabled": True,
+                "shape": "sphere",
+                "radius": radius,
+                "initial_position_world": first.tolist(),
+                "trajectory": {
+                    "type": "waypoint_ping_pong",
+                    "waypoints_world": [first.tolist(), second.tolist()],
+                    "speed": float(rng.uniform(0.65, 1.25)),
+                    "start_time": 0.0,
+                    "end_time": 3600.0,
+                },
+            }
+            if authority is not None and not authority.actor_path_is_clear(actor):
+                actor_rejections["canonical_static_collision"] += 1
+                continue
+
+            for key, value in actor_rejections.items():
+                rejection_counts[key] += value
+            actual_center = 0.5 * (first + second)
+            actual_direction = second - first
+            actual_direction /= np.linalg.norm(actual_direction)
+            actor["uniform_3d_sampling_evidence"] = {
+                "contract_version": "uniform_3d_actor_sample_v1",
+                "seed": int(actor_seed),
+                "xy_cell": [int(row), int(column)],
+                "xy_grid_shape": [int(rows), int(columns)],
+                "z_stratum": int(z_stratum),
+                "z_stratum_count": int(z_stratum_count),
+                "uniform_3d_z_bounds": [z_min, z_max],
+                "z_bounds_source": z_bounds_source,
+                "accepted_attempt": int(attempt),
+                "rejections_before_acceptance": actor_rejections,
+                "sampled_center_world": actual_center.tolist(),
+                "motion_unit_direction": actual_direction.tolist(),
+                "motion_path_length_m": float(np.linalg.norm(second - first)),
+                "vertical_displacement_m": float(abs(second[2] - first[2])),
+                "canonical_path_clear": authority is not None,
+            }
+            accepted = actor
+            break
+        if accepted is None:
+            raise ValueError(
+                "cannot place uniform_3d actor "
+                f"{actor_id} in XY cell {(row, column)} and Z stratum "
+                f"{z_stratum} after {maximum_attempts} attempts"
+            )
+        actors.append(accepted)
+        accepted_initial_positions.append((
+            np.asarray(accepted["initial_position_world"], dtype=np.float64),
+            float(accepted["radius"]),
+        ))
+
+    centers = np.asarray([
+        np.mean(np.asarray(actor["trajectory"]["waypoints_world"]), axis=0)
+        for actor in actors
+    ])
+    normalized_centers = np.column_stack((
+        (centers[:, 0] - x_min) / (x_max - x_min),
+        (centers[:, 1] - y_min) / (y_max - y_min),
+        (centers[:, 2] - z_center_min) / (z_center_max - z_center_min),
+    ))
+    motion_octants = set()
+    vertical_direction_signs = set()
+    route_proximity_threshold_m = 3.0
+    route_proximity_actor_count = 0
+    route_start = np.asarray(scene["start"], dtype=np.float64)
+    route_goal = np.asarray(scene["suggested_goal"], dtype=np.float64)
+    for actor in actors:
+        first, second = [
+            np.asarray(value, dtype=np.float64)
+            for value in actor["trajectory"]["waypoints_world"]
+        ]
+        direction = second - first
+        horizontal_angle = math.atan2(float(direction[1]), float(direction[0]))
+        motion_octants.add(int(math.floor(
+            ((horizontal_angle + math.pi) % (2.0 * math.pi))
+            * 4.0 / math.pi
+        )))
+        vertical_direction_signs.add(1 if direction[2] >= 0.0 else -1)
+        _, _, distance_to_route = _segment_segment_closest(
+            first, second, route_start, route_goal
+        )
+        if distance_to_route <= route_proximity_threshold_m:
+            route_proximity_actor_count += 1
+    evidence = {
+        "contract_version": "uniform_3d_layout_v1",
+        "sampling_method": (
+            "seeded_balanced_xyz_stratification_with_canonical_rejection_v1"
+        ),
+        "seed": int(actor_seed),
+        "requested_actor_count": int(count),
+        "accepted_actor_count": len(actors),
+        "xy_bounds": [[x_min, x_max], [y_min, y_max]],
+        "actor_z_bounds": [z_min, z_max],
+        "uniform_3d_z_bounds": [z_min, z_max],
+        "z_bounds_source": z_bounds_source,
+        "effective_z_center_bounds": [z_center_min, z_center_max],
+        "xy_grid_shape": [rows, columns],
+        "occupied_xy_cell_count": len({
+            tuple(actor["uniform_3d_sampling_evidence"]["xy_cell"])
+            for actor in actors
+        }),
+        "occupied_z_stratum_count": len({
+            actor["uniform_3d_sampling_evidence"]["z_stratum"]
+            for actor in actors
+        }),
+        "z_stratum_count": int(z_stratum_count),
+        "normalized_center_min": normalized_centers.min(axis=0).tolist(),
+        "normalized_center_max": normalized_centers.max(axis=0).tolist(),
+        "normalized_center_span": np.ptp(
+            normalized_centers, axis=0
+        ).tolist(),
+        "all_trajectories_have_3d_motion": all(
+            actor["uniform_3d_sampling_evidence"]["vertical_displacement_m"]
+            > 1e-6 for actor in actors
+        ),
+        "canonical_occupancy_checked": authority is not None,
+        "canonical_static_clearance_rejections": rejection_counts[
+            "canonical_static_collision"
+        ],
+        "motion_direction_octants_occupied": len(motion_octants),
+        "motion_direction_octants": [
+            int(octant) for octant in sorted(motion_octants)
+        ],
+        "vertical_direction_signs": sorted(vertical_direction_signs),
+        "route_proximity_threshold_m": route_proximity_threshold_m,
+        "route_proximity_actor_count": route_proximity_actor_count,
+        "route_encounter_guaranteed": False,
+        "planner_ground_truth_exposed": False,
+        "rejection_counts": rejection_counts,
+    }
+    evidence["passed"] = bool(
+        len(actors) == count
+        and evidence["occupied_xy_cell_count"] == count
+        and evidence["occupied_z_stratum_count"] == z_stratum_count
+        and evidence["all_trajectories_have_3d_motion"]
+        and evidence["motion_direction_octants_occupied"] >= min(4, count)
+        and vertical_direction_signs == {-1, 1}
+        and (authority is None or all(
+            actor["uniform_3d_sampling_evidence"]["canonical_path_clear"]
+            for actor in actors
+        ))
+    )
+    if not evidence["passed"]:
+        raise ValueError("uniform_3d actor layout evidence did not pass")
+    clearance = {
+        "checked": authority is not None,
+        "relocated_actor_count": 0,
+        "route_contract_actor_count": 0,
+        "route_contract_preserved_actor_count": 0,
+    }
+    return actors, evidence, clearance
+
+
 def build_actor_scenario(
     scene_name, scene, actor_mode, actor_count=None, vertical_span=2.0,
     actor_layout="hybrid", actor_seed=8801,
@@ -811,10 +1157,13 @@ def build_actor_scenario(
     if not 0.0 <= vertical_span <= 6.0:
         raise ValueError("--actor-vertical-span must be within [0, 6] m")
     if actor_layout not in {
-        "corridor", "map_wide", "hybrid", "route_encounters",
+        "corridor", "map_wide", "hybrid", "route_encounters", "uniform_3d",
     }:
         raise ValueError("unsupported actor layout")
-    if actor_layout in {"map_wide", "hybrid"} and "actor_xy_bounds" not in scene:
+    if (
+        actor_layout in {"map_wide", "hybrid", "uniform_3d"}
+        and "actor_xy_bounds" not in scene
+    ):
         raise ValueError("map-wide actor layout requires scene actor_xy_bounds")
     if actor_layout == "route_encounters":
         if actor_mode != "multi_target":
@@ -882,6 +1231,58 @@ def build_actor_scenario(
 
     def bounded_z(value):
         return min(z_max, max(z_min, float(value)))
+
+    if actor_layout == "uniform_3d":
+        actors, uniform_evidence, clearance = _build_uniform_3d_actor_layout(
+            scene, count, actor_seed, vertical_span
+        )
+        scenario = {
+            "enabled": bool(actors),
+            "scenario_id": (
+                f"dep_interactive_{scene_name}_{actor_mode}_{actor_layout}_"
+                f"{count}_actors"
+            ),
+            "seed": int(actor_seed),
+            "requested_actor_count": count,
+            "actor_layout": actor_layout,
+            "corridor_actor_count": 0,
+            "map_wide_actor_count": count,
+            "vertical_span_m": vertical_span,
+            "canonical_occupancy_checked": clearance["checked"],
+            "relocated_actor_count": clearance["relocated_actor_count"],
+            "uniform_3d_contract_version": "uniform_3d_layout_v1",
+            "uniform_3d_layout_contract_version": "uniform_3d_layout_v1",
+            "xy_strata_shape": uniform_evidence["xy_grid_shape"],
+            "xy_strata_occupied": uniform_evidence[
+                "occupied_xy_cell_count"
+            ],
+            "z_strata_count": uniform_evidence["z_stratum_count"],
+            "z_strata_occupied": uniform_evidence[
+                "occupied_z_stratum_count"
+            ],
+            "uniform_3d_z_bounds": uniform_evidence[
+                "uniform_3d_z_bounds"
+            ],
+            "z_bounds_source": uniform_evidence["z_bounds_source"],
+            "motion_direction_octants_occupied": uniform_evidence[
+                "motion_direction_octants_occupied"
+            ],
+            "vertical_direction_signs": uniform_evidence[
+                "vertical_direction_signs"
+            ],
+            "route_proximity_actor_count": uniform_evidence[
+                "route_proximity_actor_count"
+            ],
+            "route_proximity_threshold_m": uniform_evidence[
+                "route_proximity_threshold_m"
+            ],
+            "route_encounter_guaranteed": False,
+            "route_encounter_actor_count": 0,
+            "planner_ground_truth_exposed": False,
+            "uniform_3d_layout_evidence": uniform_evidence,
+            "actors": actors,
+        }
+        return {"dynamic_scenario": scenario}
 
     if actor_layout == "corridor":
         corridor_count = count
@@ -1318,6 +1719,33 @@ def main():
         ),
         "route_contract_preserved_actor_count": actor_contract.get(
             "route_contract_preserved_actor_count", 0
+        ),
+        "uniform_3d_contract_version": actor_contract.get(
+            "uniform_3d_contract_version"
+        ),
+        "uniform_3d_z_bounds": actor_contract.get("uniform_3d_z_bounds"),
+        "z_bounds_source": actor_contract.get("z_bounds_source"),
+        "xy_strata_shape": actor_contract.get("xy_strata_shape"),
+        "xy_strata_occupied": actor_contract.get("xy_strata_occupied"),
+        "z_strata_count": actor_contract.get("z_strata_count"),
+        "z_strata_occupied": actor_contract.get("z_strata_occupied"),
+        "motion_direction_octants_occupied": actor_contract.get(
+            "motion_direction_octants_occupied"
+        ),
+        "vertical_direction_signs": actor_contract.get(
+            "vertical_direction_signs"
+        ),
+        "route_proximity_actor_count": actor_contract.get(
+            "route_proximity_actor_count"
+        ),
+        "route_proximity_threshold_m": actor_contract.get(
+            "route_proximity_threshold_m"
+        ),
+        "route_encounter_guaranteed": actor_contract.get(
+            "route_encounter_guaranteed"
+        ),
+        "planner_ground_truth_exposed": actor_contract.get(
+            "planner_ground_truth_exposed"
         ),
         "dynamic_mode": args.dynamic_mode,
         "runtime_safety_enabled": bool(args.runtime_safety),

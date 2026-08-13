@@ -1,5 +1,6 @@
 import hashlib
 import inspect
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -11,6 +12,7 @@ from policy.runtime_profile_v4_8_5 import (
 )
 from policy.runtime_profile_v4_9 import (
     PROFILE_NAME,
+    RUNTIME_BEHAVIOR_VERSION,
     deadlock_recovery_mapping_v4_9,
 )
 from tools.summarize_route_a_v4_9_dynamic_runs import collect
@@ -26,7 +28,7 @@ BENCHMARK_LAUNCHER = (
 )
 
 
-def test_v49_launcher_freezes_weight_and_route_encounter_matrix():
+def test_v49_launcher_freezes_weight_and_uniform_3d_matrix():
     text = LAUNCHER.read_text(encoding="utf-8")
     assert "route_a_static_yopo_v4_8_3_candidate_only_shakedown" in text
     assert (
@@ -34,7 +36,8 @@ def test_v49_launcher_freezes_weight_and_route_encounter_matrix():
         in text
     )
     assert "--actor-count 16" in text
-    assert "--actor-layout route_encounters" in text
+    assert "--actor-layout uniform_3d" in text
+    assert "--actor-seed 9098" in text
     assert "--actors multi_target" in text
     assert "--dynamic-mode dynamic_safety" in text
     assert f"--runtime-profile {PROFILE_NAME}" in text
@@ -100,11 +103,31 @@ def test_v49_latency_smoke_is_diagnostic_and_versioned():
     assert BENCHMARK_LAUNCHER.stat().st_mode & 0o111
 
 
-def test_v49_does_not_change_frozen_recovery_mapping():
+def test_v49_changes_only_loop_rate_dependent_stagnation_confirmation():
     base = {"enabled": True}
-    assert deadlock_recovery_mapping_v4_9(base) == (
-        deadlock_recovery_mapping_v4_8_5(base)
+    parent = deadlock_recovery_mapping_v4_8_5(base)
+    current = deadlock_recovery_mapping_v4_9(base)
+    changed = {
+        key for key in set(parent) | set(current)
+        if parent.get(key) != current.get(key)
+    }
+    assert changed == {"motion_stagnation_trigger_replans"}
+    assert parent["motion_stagnation_trigger_replans"] == 30
+    assert current["motion_stagnation_trigger_replans"] == 1
+    assert current["motion_stagnation_window_s"] == 2.0
+    assert current["motion_stagnation_min_displacement_m"] == 0.20
+
+
+def test_ros_entry_dispatches_v49_recovery_mapping_not_v485_parent():
+    source = inspect.getsource(DepNet.__init__)
+    v49_dispatch = source.index(
+        "deadlock_recovery_mapping_v4_9(recovery_mapping)"
     )
+    v485_dispatch = source.index(
+        "deadlock_recovery_mapping_v4_8_5(recovery_mapping)"
+    )
+    assert v49_dispatch < v485_dispatch
+    assert "V485_RUNTIME_PROFILE, V49_RUNTIME_PROFILE" not in source
 
 
 def test_frozen_checkpoint_hash_is_the_declared_hash():
@@ -123,7 +146,68 @@ def test_empty_v49_summary_is_diagnostic_not_a_gate(tmp_path):
     assert result["status"] == "FOUR_SCENE_EVIDENCE_INCOMPLETE"
     assert result["role"] == "diagnostic_only_no_gate_no_production_claim"
     assert result["contract"]["actor_count"] == 16
-    assert result["contract"]["actor_layout"] == "route_encounters"
+    assert result["contract"]["actor_layout"] == "uniform_3d"
+    assert result["contract"]["z_bounds_source"] == (
+        "canonical_flight_bounds"
+    )
+    assert result["contract"]["xy_strata_occupied"] == 16
+    assert result["contract"]["z_strata_occupied"] == 4
+    assert result["contract"]["route_encounter_guaranteed"] is False
+    assert result["contract"]["runtime_behavior_version"] == (
+        RUNTIME_BEHAVIOR_VERSION
+    )
     encoded = str(result).lower()
     assert "qualified" not in encoded
     assert "gate_passed" not in encoded
+
+
+def test_v49_summary_consumes_uniform_3d_manifest_evidence(tmp_path):
+    run = tmp_path / "20260813T120000Z-fixture"
+    run.mkdir()
+    manifest = {
+        "scene": "forest",
+        "checkpoint": str(CHECKPOINT := (
+            ROOT / "runs/route_a_static_yopo_v4_8_3_candidate_only_shakedown"
+            / "20260813T050742Z-13178/checkpoints/best.pth"
+        ).resolve()),
+        "actors": "multi_target",
+        "actor_count": 16,
+        "actor_layout": "uniform_3d",
+        "actor_seed": 9098,
+        "dynamic_mode": "dynamic_safety",
+        "dynamic_foreground_mode": "range_image_hybrid",
+        "runtime_profile": PROFILE_NAME,
+        "runtime_behavior_version": RUNTIME_BEHAVIOR_VERSION,
+        "goal_mode": "fixed-ab",
+        "uniform_3d_contract_version": "uniform_3d_layout_v1",
+        "uniform_3d_z_bounds": [-0.1, 14.3],
+        "z_bounds_source": "canonical_flight_bounds",
+        "xy_strata_shape": [4, 4],
+        "xy_strata_occupied": 16,
+        "z_strata_count": 4,
+        "z_strata_occupied": 4,
+        "motion_direction_octants_occupied": 8,
+        "vertical_direction_signs": [-1, 1],
+        "route_proximity_actor_count": 2,
+        "route_proximity_threshold_m": 3.0,
+        "route_encounter_guaranteed": False,
+        "route_encounter_actor_count": 0,
+        "planner_ground_truth_exposed": False,
+    }
+    assert CHECKPOINT.is_file()
+    (run / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (run / "collision_report.json").write_text(
+        json.dumps({"status": "PASS", "goal_arrived": True}),
+        encoding="utf-8",
+    )
+    (run / "safety_decisions.jsonl").write_text("", encoding="utf-8")
+
+    result = collect(tmp_path)
+    fixture = result["scenes"]["forest"]["uniform_3d_fixture"]
+    assert fixture["z_bounds"] == [-0.1, 14.3]
+    assert fixture["z_bounds_source"] == "canonical_flight_bounds"
+    assert fixture["xy_strata_occupied"] == 16
+    assert fixture["z_strata_occupied"] == 4
+    assert fixture["route_proximity_actor_count"] == 2
+    assert fixture["route_encounter_guaranteed"] is False
+    assert fixture["planner_ground_truth_exposed"] is False

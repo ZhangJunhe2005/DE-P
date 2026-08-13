@@ -70,6 +70,50 @@ def _independent_route_encounter_measurements(scene, actor):
     }
 
 
+def _uniform_stratum(value, bounds, count):
+    """Return an independent half-open stratum index for emitted geometry."""
+    lower, upper = map(float, bounds)
+    assert lower <= float(value) <= upper
+    normalized = (float(value) - lower) / (upper - lower)
+    return min(count - 1, int(math.floor(normalized * count)))
+
+
+def _uniform_actor_measurements(scene, actor, z_bounds=None):
+    """Measure the emitted simulator trajectory without trusting metadata."""
+    first, second = (
+        np.asarray(value, dtype=np.float64)
+        for value in actor["trajectory"]["waypoints_world"]
+    )
+    midpoint = 0.5 * (first + second)
+    movement = second - first
+    movement_norm = float(np.linalg.norm(movement))
+    assert movement_norm > 1e-6
+    angle = math.atan2(float(movement[1]), float(movement[0]))
+    octant = int(math.floor(
+        ((angle + math.pi) % (2.0 * math.pi)) * 4.0 / math.pi
+    ))
+    x_bounds, y_bounds = scene["actor_xy_bounds"]
+    z_bounds = scene["actor_z_bounds"] if z_bounds is None else z_bounds
+    route_first = np.asarray(scene["start"], dtype=np.float64)
+    route_second = np.asarray(scene["suggested_goal"], dtype=np.float64)
+    _, _, route_distance = DEMO._segment_segment_closest(
+        first, second, route_first, route_second
+    )
+    return {
+        "first": first,
+        "second": second,
+        "midpoint": midpoint,
+        "movement": movement,
+        "xy_stratum": (
+            _uniform_stratum(midpoint[0], x_bounds, 4),
+            _uniform_stratum(midpoint[1], y_bounds, 4),
+        ),
+        "z_stratum": _uniform_stratum(midpoint[2], z_bounds, 4),
+        "direction_octant": octant,
+        "route_distance_m": route_distance,
+    }
+
+
 @pytest.mark.parametrize("scene_name", ["cave", "forest", "pillar", "room", "wall"])
 def test_all_interactive_scenes_have_existing_maps_and_valid_routes(scene_name):
     scene = DEMO.load_scene(DEMO.DEFAULT_SCENES, scene_name)
@@ -161,6 +205,133 @@ def test_hybrid_layout_spreads_actors_across_map_and_keeps_route_encounters():
     assert scenario["map_wide_actor_count"] == 11
     assert max(value[0] for value in centers) - min(value[0] for value in centers) > 25
     assert max(value[1] for value in centers) - min(value[1] for value in centers) > 25
+
+
+@pytest.mark.parametrize("scene_name", ["cave", "forest", "pillar", "wall"])
+def test_uniform_3d_layout_covers_full_map_height_and_canonical_free_space(
+    scene_name,
+):
+    """The stress population must occupy XYZ strata, not one route-aligned row."""
+    scenes = ROOT / "configs" / "dep_interactive_demo_scenes_v4_6.json"
+    scene = DEMO.load_scene(scenes, scene_name)
+    payload = DEMO.build_actor_scenario(
+        scene_name, scene, "multi_target", actor_count=16,
+        vertical_span=2.0, actor_layout="uniform_3d", actor_seed=9917,
+    )
+    scenario = payload["dynamic_scenario"]
+    actors = scenario["actors"]
+    z_bounds = scenario["uniform_3d_z_bounds"]
+    measured = [
+        _uniform_actor_measurements(scene, actor, z_bounds) for actor in actors
+    ]
+
+    assert len(actors) == 16
+    assert scenario["actor_layout"] == "uniform_3d"
+    assert scenario["uniform_3d_contract_version"] == "uniform_3d_layout_v1"
+    assert scenario["xy_strata_shape"] == [4, 4]
+    assert scenario["xy_strata_occupied"] == 16
+    assert scenario["z_strata_count"] == 4
+    assert scenario["z_strata_occupied"] == 4
+    assert scenario["z_bounds_source"] == "canonical_flight_bounds"
+    assert scenario["canonical_occupancy_checked"] is True
+    assert scene["flight_bounds_min"][2] <= z_bounds[0] < z_bounds[1]
+    assert z_bounds[1] <= scene["flight_bounds_max"][2]
+    assert (z_bounds[1] - z_bounds[0]) >= 0.75 * (
+        scene["flight_bounds_max"][2] - scene["flight_bounds_min"][2]
+    )
+    assert {item["xy_stratum"] for item in measured} == {
+        (x_index, y_index)
+        for x_index in range(4)
+        for y_index in range(4)
+    }
+    z_counts = np.bincount(
+        [item["z_stratum"] for item in measured], minlength=4
+    )
+    assert z_counts.tolist() == [4, 4, 4, 4]
+
+    # Recheck final post-relocation paths against the canonical authority.  A
+    # placement label cannot substitute for collision-free emitted geometry.
+    authority = DEMO.CanonicalOccupancy(
+        scene["authority_root"], scene["map_uuid"]
+    )
+    assert all(authority.actor_path_is_clear(actor) for actor in actors)
+    assert all(
+        "route_encounter_contract" not in actor
+        and "route_encounter_evidence" not in actor
+        for actor in actors
+    )
+
+
+def test_uniform_3d_layout_is_seeded_random_and_directionally_diverse():
+    scene = DEMO.load_scene(
+        ROOT / "configs" / "dep_interactive_demo_scenes_v4_6.json", "cave"
+    )
+
+    def build(seed):
+        return DEMO.build_actor_scenario(
+            "cave", scene, "multi_target", actor_count=16,
+            vertical_span=2.0, actor_layout="uniform_3d", actor_seed=seed,
+        )["dynamic_scenario"]
+
+    first = build(9917)
+    repeated = build(9917)
+    alternate = build(9918)
+    assert first == repeated
+    assert first != alternate
+
+    measured = [
+        _uniform_actor_measurements(
+            scene, actor, first["uniform_3d_z_bounds"]
+        ) for actor in first["actors"]
+    ]
+    octants = {item["direction_octant"] for item in measured}
+    vertical_signs = {
+        int(np.sign(item["movement"][2])) for item in measured
+        if abs(float(item["movement"][2])) > 1e-6
+    }
+    assert len(octants) >= 6
+    assert first["motion_direction_octants_occupied"] == len(octants)
+    assert first["vertical_direction_signs"] == [-1, 1]
+    assert vertical_signs == {-1, 1}
+
+
+def test_uniform_3d_reports_route_proximity_without_claiming_encounters():
+    """Uniform map coverage is not evidence that a nominal route meets actors."""
+    scene = DEMO.load_scene(
+        ROOT / "configs" / "dep_interactive_demo_scenes_v4_6.json", "forest"
+    )
+    scenario = DEMO.build_actor_scenario(
+        "forest", scene, "multi_target", actor_count=16,
+        vertical_span=2.0, actor_layout="uniform_3d", actor_seed=9917,
+    )["dynamic_scenario"]
+    threshold = float(scenario["route_proximity_threshold_m"])
+    measured = [
+        _uniform_actor_measurements(
+            scene, actor, scenario["uniform_3d_z_bounds"]
+        )
+        for actor in scenario["actors"]
+    ]
+    proximity_count = sum(
+        item["route_distance_m"] <= threshold for item in measured
+    )
+    assert scenario["route_proximity_actor_count"] == proximity_count
+    assert proximity_count < len(measured)
+    assert scenario["route_encounter_guaranteed"] is False
+    assert scenario.get("route_encounter_actor_count", 0) == 0
+    assert scenario["planner_ground_truth_exposed"] is False
+
+
+def test_uniform_3d_ground_truth_file_is_only_wired_to_simulator():
+    """The actor fixture may diagnose perception but must not enter planning."""
+    source = TOOL_PATH.read_text(encoding="utf-8")
+    simulator_start = source.index('            "simulator",')
+    monitor_start = source.index(
+        '            "collision_monitor",', simulator_start
+    )
+    planner_start = source.index('            "planner",', monitor_start)
+    readiness_start = source.index("        ready_topics =", planner_start)
+    assert "_dynamic_scenario_file" in source[simulator_start:monitor_start]
+    assert "_dynamic_scenario_file" not in source[planner_start:readiness_start]
 
 
 def test_route_encounter_layout_requires_a_meaningful_multi_target_stress_set():
@@ -330,6 +501,15 @@ def test_actor_limit_is_64_for_static_reactive_scenarios():
         actor_layout="map_wide", actor_seed=9918,
     )
     assert len(payload["dynamic_scenario"]["actors"]) == 32
+
+
+def test_uniform_3d_layout_rejects_zero_vertical_motion_contract():
+    scene = DEMO.load_scene(DEMO.DEFAULT_SCENES, "forest")
+    with pytest.raises(ValueError, match="requires positive actor vertical span"):
+        DEMO.build_actor_scenario(
+            "forest", scene, "multi_target", actor_count=16,
+            vertical_span=0.0, actor_layout="uniform_3d", actor_seed=8801,
+        )
 
 
 def test_formal_training_checkpoint_unwraps_for_inference():

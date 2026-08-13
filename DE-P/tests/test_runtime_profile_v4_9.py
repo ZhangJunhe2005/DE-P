@@ -78,13 +78,20 @@ def evaluate(shield, trajectory, obstacle=(), actor=None, duration=1.7):
     )[0]
 
 
-def test_v49_preserves_v485_recovery_and_enables_only_dynamic_extensions():
-    assert deadlock_recovery_mapping_v4_9({"enabled": True}) == (
-        deadlock_recovery_mapping_v4_8_5({"enabled": True})
-    )
-    DeadlockRecoveryConfigV3.from_mapping(
-        deadlock_recovery_mapping_v4_9({"enabled": True})
-    )
+def test_v49_uses_prompt_universal_stagnation_and_dynamic_extensions():
+    parent = deadlock_recovery_mapping_v4_8_5({"enabled": True})
+    mapping = deadlock_recovery_mapping_v4_9({"enabled": True})
+    config = DeadlockRecoveryConfigV3.from_mapping(mapping)
+    assert {
+        key: value for key, value in mapping.items()
+        if key != "motion_stagnation_trigger_replans"
+    } == {
+        key: value for key, value in parent.items()
+        if key != "motion_stagnation_trigger_replans"
+    }
+    assert config.motion_stagnation_window_s == 2.0
+    assert config.motion_stagnation_min_displacement_m == 0.20
+    assert config.motion_stagnation_trigger_replans == 1
     config = RuntimeSafetyConfigV1.from_mapping(
         runtime_safety_mapping_v4_9({})
     )
@@ -95,7 +102,7 @@ def test_v49_preserves_v485_recovery_and_enables_only_dynamic_extensions():
     assert config.dynamic_command_freshness_watchdog_enabled
     assert config.dynamic_command_max_age_s == 0.20
     assert RUNTIME_BEHAVIOR_VERSION == (
-        "v4_9_bounded_risk_ordered_retiming_fresh_prefix_v1"
+        "v4_9_bounded_risk_ordered_retiming_prompt_stagnation_v2"
     )
 
 

@@ -1,10 +1,10 @@
 contract_version: route_a_v4_9_dynamic_motion_safety_v1
 status: IMPLEMENTED_PENDING_FOUR_SCENE_CLOSED_LOOP
 selected_version: v4.9
-implementation_sha256: 41e66b8432d2fd71b046c257c9ad41bedb03175e4a09a613577e971edc94f388
-implementation_hash_method: sha256_of_sorted_core_file_sha256_lines
+implementation_sha256: PENDING_FINAL_RECOMPUTE_AFTER_UNIFORM_3D_FIXTURE_CHANGE
+implementation_hash_method: pending_final_recompute_after_uniform_3d_fixture_change
 base:
-  recovery_freeze_version: v4.8.5
+  recovery_parent_version: v4.8.5
   recovery_freeze_commit: 7e1524a435143bedbafdc08bf98ce84021501a35
   static_policy_version: v4.8.3
   checkpoint_path: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_8_3_candidate_only_shakedown/20260813T050742Z-13178/checkpoints/best.pth
@@ -13,10 +13,15 @@ scope:
   network_weights_modified: false
   training_executed: false
   training_dataset_modified: false
-  v4_8_5_recovery_parameters_modified: false
+  v4_8_5_frozen_implementation_modified: false
+  v4_9_recovery_override: prompt_universal_odometry_stagnation
+  motion_stagnation_window_s: 2.0
+  motion_stagnation_min_displacement_m: 0.20
+  motion_stagnation_trigger_replans: 1
+  map_specific_recovery_logic: false
   v4_8_5_recovery_scan_limits_deg: [60, 90, 120]
   runtime_profile: v4_9_dynamic_motion_preserving_safety
-  runtime_behavior_version: v4_9_bounded_risk_ordered_retiming_fresh_prefix_v1
+  runtime_behavior_version: v4_9_bounded_risk_ordered_retiming_prompt_stagnation_v2
 dynamic_selection:
   normal_candidate_hard_predicted_collision_veto_preserved: true
   emergency_brake_dynamic_only_exception: true
@@ -52,13 +57,27 @@ emergency_braking:
   static_unsafe_fallback_forbidden: true
 actor_validation:
   actor_count: 16
-  layout: route_encounters
-  families:
-    crossing: 4
-    head_on: 4
-    same_direction_slow: 4
-    staggered_crossing: 4
-  canonical_relocation_must_preserve_geometry_and_timing: true
+  layout: uniform_3d
+  layout_contract_version: uniform_3d_layout_v1
+  deterministic_seed: 9098
+  seed_selection: nonzero_spatial_route_proximity_in_all_four_fixed_scenes
+  seed_selection_does_not_claim_temporal_encounter: true
+  xy_sampling: seeded_4_by_4_stratified_jitter
+  xy_strata_shape: [4, 4]
+  xy_strata_occupied: 16
+  z_bounds_source: canonical_flight_bounds
+  z_sampling: seeded_balanced_four_strata
+  z_strata_count: 4
+  z_strata_occupied: 4
+  motion: random_3d_waypoint_ping_pong
+  minimum_horizontal_direction_octants: 4
+  vertical_direction_signs: [-1, 1]
+  canonical_path_clearance_required: true
+  route_proximity_threshold_m: 3.0
+  route_proximity_is_diagnostic_only: true
+  route_encounter_guaranteed: false
+  route_encounter_actor_count: 0
+  planner_ground_truth_exposed: false
   independent_test_oracle: true
 collision_diagnostics:
   categories: [visible, tracked, unobservable, unknown]
@@ -66,9 +85,10 @@ collision_diagnostics:
   diagnostic_only: true
   planner_control_affected: false
 automated_validation:
-  relevant_pytest_passed: 215
-  relevant_pytest_xfailed: 1
-  relevant_subtests_passed: 10
+  core_runtime_pytest_passed: 129
+  uniform_3d_entry_pytest_passed: 46
+  combined_runtime_recovery_entry_pytest_passed: 153
+  prompt_stagnation_targeted_pytest_passed: 52
   four_scene_preflight_exit_zero: true
   strict_checkpoint_load: PASS
   compileall: PASS
@@ -84,7 +104,8 @@ latency_smoke:
   conservative_three_stage_p95_ms: 23.695463699095853
 qualification:
   static_policy_frozen: true
-  recovery_baseline_preserved: true
+  v4_8_5_recovery_baseline_preserved_as_parent: true
+  v4_9_prompt_stagnation_override_tested: true
   dynamic_runtime_implemented: true
   four_scene_closed_loop_complete: false
   production_qualified: false

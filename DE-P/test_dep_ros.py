@@ -343,20 +343,22 @@ class DepNet:
             )
         if recovery_profile == "bounded_scan_v3":
             recovery_mapping = (
-                deadlock_recovery_mapping_v4_8_5(recovery_mapping)
-                if runtime_profile in (
-                    V485_RUNTIME_PROFILE, V49_RUNTIME_PROFILE
-                ) else
+                deadlock_recovery_mapping_v4_9(recovery_mapping)
+                if runtime_profile == V49_RUNTIME_PROFILE else
                 (
-                    deadlock_recovery_mapping_v4_8_2(recovery_mapping)
-                    if runtime_profile == V482_RUNTIME_PROFILE else
+                    deadlock_recovery_mapping_v4_8_5(recovery_mapping)
+                    if runtime_profile == V485_RUNTIME_PROFILE else
                     (
-                        deadlock_recovery_mapping_v4_8_1_pillar(recovery_mapping)
-                        if runtime_profile == V481_RUNTIME_PROFILE else
+                        deadlock_recovery_mapping_v4_8_2(recovery_mapping)
+                        if runtime_profile == V482_RUNTIME_PROFILE else
                         (
-                            deadlock_recovery_mapping_v4_8_pillar(recovery_mapping)
-                            if runtime_profile == V48_RUNTIME_PROFILE else
-                            deadlock_recovery_mapping_v4_7_pillar(recovery_mapping)
+                            deadlock_recovery_mapping_v4_8_1_pillar(recovery_mapping)
+                            if runtime_profile == V481_RUNTIME_PROFILE else
+                            (
+                                deadlock_recovery_mapping_v4_8_pillar(recovery_mapping)
+                                if runtime_profile == V48_RUNTIME_PROFILE else
+                                deadlock_recovery_mapping_v4_7_pillar(recovery_mapping)
+                            )
                         )
                     )
                 )

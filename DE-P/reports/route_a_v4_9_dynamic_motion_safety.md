@@ -63,10 +63,24 @@ effective_score = network_score + 0.20 * risk
 
 ## Actor 与碰撞诊断
 
-固定验证入口使用 16 个沿完整路线分布的 actor：crossing、head-on、
-same-direction-slow、staggered-crossing 各四个。canonical relocation 后会
-重新验证实际 waypoint、速度、首次出现方向和时空相遇，不再依赖场景元数据
-自证。
+固定验证入口现使用 16 个全图三维 actor，不再沿名义航线排列。每张地图的
+XY 范围划分成 4×4 个分层且每层恰好一个 actor；高度使用 canonical flight
+bounds 的完整可飞 Z 范围（按 actor 半径和运动包络内缩），均衡覆盖四个高度
+层。固定 seed 只保证复现，层内中心、三维运动方向、速度和运动长度仍是随机
+采样；每条最终 ping-pong 线段都必须独立通过 canonical occupancy 检查，否则
+只在其原 XY/Z 层内重采样。因此森林中的 actor 不再局限于旧的 1.0–4.2 m
+高度带，也不会全部挤在无人机航线上或同一高度。
+
+该布局主动声明 `route_encounter_guaranteed=false`：全图均匀覆盖不能保证固定
+起点—终点的一次飞行一定会撞见每个 actor。报告会单独记录距离名义路线 3 m
+以内的 actor 数量，但不会把它冒充为动态相遇证明。历史 `route_encounters`
+布局仍保留，可用于定向压力复现，但不再是 V4.9 默认验证入口。
+
+默认 seed 采用 `9098`。它仍由完全相同的全图 XYZ 分层随机生成器产生，只是
+在候选 seed 中预先选取了四张固定地图均至少有一个 actor 轨迹在空间上接近
+名义路线的可复现 fixture，避免一次固定闭环完全遇不到 actor。该筛选不证明
+时间同步相遇，也不会把 actor 真值提供给规划器；真实动态能力仍应结合多个
+seed 的交互闭环判断。
 
 碰撞报告区分 `visible / tracked / unobservable / unknown`。不可见 actor 与
 track 的绑定只在监控器中做双向唯一的 post-hoc 时空关联；GT 不会进入规划器，
@@ -74,8 +88,12 @@ track 的绑定只在监控器中做双向唯一的 post-hoc 时空关联；GT �
 
 ## 自动验证
 
-- V4.9、动态感知、恢复和旧 runtime profile 相关测试：215 passed，
-  1 expected xfail，10 subtests passed。
+- V4.9、动态感知、恢复和旧 runtime profile 核心回归：129 passed；
+  `uniform_3d` 与 V4.9 入口定向回归：46 passed。
+  新增测试会独立重算 XY/Z 分层、三维方向、canonical 路径净空、seed 复现性
+  以及 manifest 的 GT 隔离语义，而不信任生成器自报字段。
+- 通用停滞触发与真实 ROS 分派定向回归：52 passed；包含旧版本兼容的恢复、
+  runtime safety 和入口组合回归：153 passed。
 - cave、forest、pillar、wall 四场景 preflight：全部退出码 0，冻结权重严格
   加载通过。
 - 16 tracks、15 candidates、81 samples、3600 depth points 的 CPU 诊断：
@@ -120,6 +138,16 @@ bash scripts/route_a_v4_9_dynamic_runtime_benchmark.sh
 
 机器可读合同位于 `configs/route_a_v4_9_dynamic_motion_safety.yaml`。
 
-核心实现文件 SHA256 清单再哈希为：
+本次 `uniform_3d` fixture 修改后的实现哈希将在闭环证据冻结时统一重算；旧的
+`41e66b...` 哈希仅对应修改前的 route-aligned fixture，不能继续作为当前实现
+身份。
 
-`41e66b8432d2fd71b046c257c9ad41bedb03175e4a09a613577e971edc94f388`
+### 通用停滞触发延迟修复
+
+Pillar `20260813T093703Z-pillar` 运行证据显示，长时间静止段内没有动态
+track，因此不是 V4.9 动态让行暂停恢复。旧合同在“2 秒内位移小于 0.20 m”
+之后还要求累计 30 次重规划；真实 ROS 规划频率约 15 Hz 且存在抖动，使恢复
+额外延迟约 2～5 秒。V4.9 现在保留相同的 2 秒/0.20 m 物理证据，但在首个完整
+时间窗上立即触发。该覆盖不读取场景名，对 cave、forest、pillar、wall 使用
+完全相同的逻辑；动态让行期间仍会清空停滞证据，避免把主动等待动态 actor
+误判为静态卡死。V4.8.5 冻结实现和 V4.8.3 权重均未修改。

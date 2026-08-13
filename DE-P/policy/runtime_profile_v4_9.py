@@ -1,9 +1,10 @@
 """V4.9 motion-preserving dynamic safety over the frozen V4.8.5 runtime.
 
-The learned V4.8.3 static policy, V4.8.5 recovery parameters and every hard
-static collision rule remain unchanged.  This profile only adds a bounded
-continuous moving-obstacle ranking term and an ordered 1.0/1.2/1.4 temporal
-fallback for candidates blocked solely by causal dynamic prediction.
+The learned V4.8.3 static policy and every hard static collision rule remain
+unchanged.  Besides the bounded moving-obstacle extensions, this profile
+removes the loop-rate-dependent extra delay from the universal odometry
+stagnation trigger.  The same two-second motion window is used on every map;
+one completed stationary window is sufficient to start bounded recovery.
 """
 
 from __future__ import annotations
@@ -17,7 +18,7 @@ from policy.runtime_profile_v4_8_5 import (
 
 PROFILE_NAME = "v4_9_dynamic_motion_preserving_safety"
 RUNTIME_BEHAVIOR_VERSION = (
-    "v4_9_bounded_risk_ordered_retiming_fresh_prefix_v1"
+    "v4_9_bounded_risk_ordered_retiming_prompt_stagnation_v2"
 )
 
 
@@ -47,8 +48,20 @@ def runtime_safety_mapping_v4_9(base):
 
 
 def deadlock_recovery_mapping_v4_9(base):
-    """Keep the frozen V4.8.5 recovery state-machine contract unchanged."""
-    return deadlock_recovery_mapping_v4_8_5(base)
+    """Trigger recovery after one complete stationary odometry window.
+
+    V4.8.5 required both a two-second displacement window and another 30 ROS
+    replans.  The latter translated to an additional variable delay in live
+    runs.  Keeping the physical 20 cm / 2 s evidence but requiring only its
+    first completed observation makes the trigger independent of planner
+    frequency.  No map name participates in this policy, and dynamic-yield
+    pauses still discard stagnation evidence in the shared state machine.
+    """
+    value = deadlock_recovery_mapping_v4_8_5(base)
+    value.update({
+        "motion_stagnation_trigger_replans": 1,
+    })
+    return value
 
 
 def calculate_recovery_continuity_yaw_v4_9(

@@ -29,19 +29,23 @@ conda run --no-capture-output -n yopo \
   python tools/validate_route_a_launch_fixture.py \
     --config "$SCENES" --scene "$SCENE"
 
-# V4.9 changes no learned weight and no V4.8.5 recovery parameter.  Its
+# V4.9 changes no learned weight.  Its runtime profile keeps the V4.8.5
+# recovery state machine but removes the loop-rate-dependent 30-replan delay:
+# one complete 2 s / 0.20 m stationary odometry window starts recovery.  The
 # default validation fixture places 16 deterministic, canonical-clear actors
-# along the nominal route: crossing, head-on, same-direction slow and delayed
-# crossing.  Extra arguments are appended intentionally for interactive goals
-# or an explicit hybrid blind-spot stress run.
+# in seed-stratified XY cells and Z layers over the complete map.  Each actor
+# follows an independently sampled 3-D trajectory, so the fixture neither
+# collapses onto the nominal route nor confines actors to one altitude.
+# Extra arguments are appended intentionally, so callers can still select an
+# older layout explicitly when reproducing a historical run.
 exec bash scripts/run_dep_interactive_demo.sh \
   --scene "$SCENE" \
   --scenes-config "$SCENES" \
   --checkpoint "$CHECKPOINT" \
   --actors multi_target \
   --actor-count 16 \
-  --actor-layout route_encounters \
-  --actor-seed 8801 \
+  --actor-layout uniform_3d \
+  --actor-seed 9098 \
   --actor-vertical-span 2.0 \
   --dynamic-mode dynamic_safety \
   --goal-mode fixed-ab \
