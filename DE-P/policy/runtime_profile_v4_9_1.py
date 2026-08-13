@@ -10,7 +10,7 @@ from policy.runtime_profile_v4_9 import (
 
 
 PROFILE_NAME = "v4_9_1_recovery_temporary_subgoal"
-RUNTIME_BEHAVIOR_VERSION = "v4_9_1_directional_temporary_subgoal_handoff_v2"
+RUNTIME_BEHAVIOR_VERSION = "v4_9_1_full_horizon_temporary_subgoal_handoff_v3"
 
 
 def runtime_safety_mapping_v4_9_1(base):

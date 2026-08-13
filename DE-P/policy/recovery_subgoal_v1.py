@@ -32,6 +32,7 @@ class RecoverySubgoalConfigV1:
     prefix_horizon_s: float = 0.60
     minimum_prefix_progress_m: float = 0.05
     maximum_prefix_retreat_m: float = 0.05
+    policy_conditioning_distance_m: float = 10.0
 
     def validate(self):
         if self.minimum_candidate_distance_m <= 0.0:
@@ -48,11 +49,18 @@ class RecoverySubgoalConfigV1:
             raise ValueError("recovery prefix progress must be positive")
         if self.maximum_prefix_retreat_m < 0.0:
             raise ValueError("recovery prefix retreat must be non-negative")
+        if self.policy_conditioning_distance_m < self.target_distance_m:
+            raise ValueError(
+                "recovery policy conditioning distance must cover the "
+                "temporary target"
+            )
 
     def contract(self):
         self.validate()
         return {
-            "contract_version": "recovery_subgoal_v1_1_directional_prefix",
+            "contract_version": (
+                "recovery_subgoal_v1_2_full_horizon_conditioning"
+            ),
             "source": "network_candidate_after_full_runtime_safety",
             "translation_owner": "unchanged_learned_policy",
             "mission_goal_mutated": False,
@@ -110,6 +118,27 @@ def recovery_conditioning_goal_v1(
     if norm <= 1.0e-9 or not np.isfinite(distance) or distance <= 0.0:
         raise ValueError("recovery conditioning direction and distance must be positive")
     return position + forward / norm * distance
+
+
+def recovery_subgoal_conditioning_goal_v1(
+    position_world, temporary_target_world, distance_m=10.0,
+):
+    """Extend a temporary target direction to the policy's trained horizon.
+
+    The fixed temporary target remains the lifecycle/arrival authority.  This
+    extended point is input conditioning only: it prevents a 2--3 metre
+    recovery target from being interpreted as a near-goal stop command by a
+    policy trained on the 10 metre local planning horizon.
+    """
+    position = np.asarray(position_world, dtype=np.float64)
+    target = np.asarray(temporary_target_world, dtype=np.float64)
+    if position.shape != (3,) or target.shape != (3,) \
+            or not np.all(np.isfinite(position)) \
+            or not np.all(np.isfinite(target)):
+        raise ValueError("recovery subgoal vectors must be finite 3-vectors")
+    return recovery_conditioning_goal_v1(
+        position, target - position, distance_m,
+    )
 
 
 def recovery_subgoal_restore_reason_v1(
@@ -239,6 +268,7 @@ __all__ = [
     "RecoverySubgoalProposalV1",
     "SUBGOAL_ABORT_RECOVERY_TRANSITIONS_V1",
     "recovery_conditioning_goal_v1",
+    "recovery_subgoal_conditioning_goal_v1",
     "recovery_subgoal_restore_reason_v1",
     "select_recovery_subgoal_v1",
 ]

@@ -128,6 +128,7 @@ from policy.runtime_profile_v4_9_1 import (
 from policy.recovery_subgoal_v1 import (
     RecoverySubgoalConfigV1,
     recovery_conditioning_goal_v1,
+    recovery_subgoal_conditioning_goal_v1,
     recovery_subgoal_restore_reason_v1,
     select_recovery_subgoal_v1,
 )
@@ -421,6 +422,7 @@ class DepNet:
         self.recovery_subgoal_last_event = "inactive"
         self.recovery_probe_goal_world = None
         self.recovery_probe_active = False
+        self.recovery_subgoal_conditioning_active = False
         self.last_network_goal_world = self.goal.copy()
         self.dynamic_yield_active = False
         self.last_dynamic_certificate_monotonic_s = None
@@ -876,6 +878,38 @@ class DepNet:
         rospy.loginfo("DE-P restored mission goal after recovery: %s", reason)
         return True
 
+    def _abort_recovery_subgoal_locked(self, reason, position_world):
+        """Restore the mission and yield scan ownership after a failed goal.
+
+        One already-authorized braking update may still be installed by the
+        caller on the transition frame.  From the next replan onward the
+        ordinary mission-conditioned network gets a fresh attempt.  If it is
+        genuinely still stuck, the unchanged universal stagnation detector can
+        start a new bounded scan from new evidence instead of trapping the
+        vehicle in the old scan chain.
+        """
+        restored = self._restore_mission_goal_locked(reason)
+        if restored:
+            self.deadlock_recovery.reset(position_world)
+            self.dynamic_yield_active = False
+            rospy.logwarn(
+                "DE-P abandoned failed recovery goal and yielded control "
+                "to the mission-conditioned network: %s", reason,
+            )
+        return restored
+
+    def _complete_recovery_subgoal_locked(self, position_world):
+        """Finish a reached temporary goal without retaining scan state."""
+        restored = self._restore_mission_goal_locked("temporary_goal_reached")
+        if restored:
+            self.deadlock_recovery.reset(position_world)
+            self.dynamic_yield_active = False
+            rospy.loginfo(
+                "DE-P recovery goal reached; ordinary mission planning "
+                "resumes on the next depth frame"
+            )
+        return restored
+
     # the first frame
     def callback_odometry(self, data):
         self.odom = data
@@ -896,7 +930,7 @@ class DepNet:
                 and np.linalg.norm(pos - self.recovery_subgoal_world)
                 <= self.recovery_subgoal_config.arrival_radius_m
             ):
-                self._restore_mission_goal_locked("temporary_goal_reached")
+                self._complete_recovery_subgoal_locked(pos)
             mission_distance = float(np.linalg.norm(pos - self.mission_goal))
         if self.goal_received and mission_distance < self.arrival_radius \
                 and not self.arrive:
@@ -1046,9 +1080,22 @@ class DepNet:
                 self.desire_pos, self.Rotation_wc[:, 0], 10.0,
             )
             self.recovery_probe_goal_world = planning_goal_world.copy()
+            self.recovery_subgoal_conditioning_active = False
+        elif (
+            self.runtime_profile == V491_RUNTIME_PROFILE
+            and self.recovery_subgoal_world is not None
+        ):
+            planning_goal_world = recovery_subgoal_conditioning_goal_v1(
+                self.desire_pos,
+                self.recovery_subgoal_world,
+                self.recovery_subgoal_config.policy_conditioning_distance_m,
+            )
+            self.recovery_probe_goal_world = None
+            self.recovery_subgoal_conditioning_active = True
         else:
             planning_goal_world = self.goal.copy()
             self.recovery_probe_goal_world = None
+            self.recovery_subgoal_conditioning_active = False
         self.recovery_probe_active = use_recovery_probe
         self.last_network_goal_world = planning_goal_world.copy()
         goal_w = planning_goal_world - self.desire_pos
@@ -1078,6 +1125,9 @@ class DepNet:
                 self.last_network_goal_world.tolist()
             ),
             "recovery_probe_active": self.recovery_probe_active,
+            "recovery_subgoal_conditioning_active": (
+                self.recovery_subgoal_conditioning_active
+            ),
             "recovery_probe_goal_world": (
                 None if self.recovery_probe_goal_world is None else
                 self.recovery_probe_goal_world.tolist()
@@ -1594,8 +1644,8 @@ class DepNet:
                         and self.recovery_subgoal_world is not None else None
                     )
                     if subgoal_restore_reason is not None:
-                        self._restore_mission_goal_locked(
-                            subgoal_restore_reason
+                        self._abort_recovery_subgoal_locked(
+                            subgoal_restore_reason, start_pos,
                         )
                     subgoal_activated = False
                     if (

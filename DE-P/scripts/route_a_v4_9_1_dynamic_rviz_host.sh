@@ -30,9 +30,10 @@ conda run --no-capture-output -n yopo \
 # V4.9.1 preserves the frozen V4.9 physical/dynamic safety contract.  During a
 # bounded scan only, a fully certified network candidate with a genuinely
 # forward prefix supplies a temporary local goal.  The unchanged network owns
-# all translation; directional handoff evidence prevents inherited reverse
-# motion from being accepted as escape.  The mission goal is restored when the
-# temporary goal is reached, and a new RViz goal always wins.
+# all translation.  The fixed 2.5 m target controls lifecycle/arrival while
+# the network sees the same direction extended to its trained 10 m horizon, so
+# rolling candidates do not collapse into near-goal braking.  Failed handoff
+# restores the mission and yields the old scan chain.  A new RViz goal wins.
 exec bash scripts/run_dep_interactive_demo.sh \
   --scene "$SCENE" \
   --scenes-config "$SCENES" \

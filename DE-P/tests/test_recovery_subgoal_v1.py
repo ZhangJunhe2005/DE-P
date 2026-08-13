@@ -6,6 +6,7 @@ import pytest
 from policy.recovery_subgoal_v1 import (
     RecoverySubgoalConfigV1,
     recovery_conditioning_goal_v1,
+    recovery_subgoal_conditioning_goal_v1,
     recovery_subgoal_restore_reason_v1,
     select_recovery_subgoal_v1,
 )
@@ -147,6 +148,26 @@ def test_scan_conditioning_target_is_forward_and_does_not_need_mission_goal():
         (2.0, 3.0, 1.0), (0.0, 2.0, 0.0), 10.0,
     )
     assert result == pytest.approx((2.0, 13.0, 1.0))
+
+
+def test_temporary_target_conditions_policy_at_full_training_horizon():
+    result = recovery_subgoal_conditioning_goal_v1(
+        (1.0, 2.0, 3.0), (3.0, 3.0, 3.0), 10.0,
+    )
+    direction = np.asarray((2.0, 1.0, 0.0), dtype=np.float64)
+    expected = np.asarray((1.0, 2.0, 3.0)) + (
+        direction / np.linalg.norm(direction) * 10.0
+    )
+    assert result == pytest.approx(expected)
+    assert np.linalg.norm(result - np.asarray((1.0, 2.0, 3.0))) \
+        == pytest.approx(10.0)
+
+
+def test_temporary_target_itself_remains_short_lifecycle_authority():
+    config = RecoverySubgoalConfigV1()
+    contract = config.contract()
+    assert contract["target_distance_m"] == 2.5
+    assert contract["policy_conditioning_distance_m"] == 10.0
 
 
 @pytest.mark.parametrize("transition", (

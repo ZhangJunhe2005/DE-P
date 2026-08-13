@@ -1,4 +1,4 @@
-contract_version: route_a_v4_9_1_recovery_subgoal_v2
+contract_version: route_a_v4_9_1_recovery_subgoal_v3
 status: IMPLEMENTED_PENDING_CLOSED_LOOP
 selected_version: v4.9.1
 rollback:
@@ -26,6 +26,11 @@ temporary_subgoal:
   prefix_horizon_s: 0.60
   minimum_prefix_progress_m: 0.05
   maximum_prefix_retreat_m: 0.05
+  policy_conditioning_distance_m: 10.0
+  goal_roles:
+    lifecycle_target: fixed_certified_point_at_approximately_2_5m
+    network_conditioning: same_direction_extended_to_10m
+    rationale: prevent_near_goal_candidate_collapse
   restore_condition: temporary_goal_reached
   cancellation_conditions:
     - new_operator_mission_goal
@@ -39,6 +44,7 @@ temporary_subgoal:
     measurement: directional_progress_toward_temporary_goal
     minimum_progress_m: 0.50
     maximum_retreat_m: 0.10
+    failed_handoff_policy: restore_mission_and_yield_old_scan_chain
 validation:
   original_v4_9_ab_preserved: true
   closed_loop_complete: false
