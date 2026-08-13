@@ -101,6 +101,13 @@ from policy.runtime_profile_v4_8_2 import (
     deadlock_recovery_mapping_v4_8_2,
     runtime_safety_mapping_v4_8_2,
 )
+from policy.runtime_profile_v4_8_5 import (
+    PROFILE_NAME as V485_RUNTIME_PROFILE,
+    RUNTIME_BEHAVIOR_VERSION as V485_RUNTIME_BEHAVIOR_VERSION,
+    calculate_recovery_continuity_yaw_v4_8_5,
+    deadlock_recovery_mapping_v4_8_5,
+    runtime_safety_mapping_v4_8_5,
+)
 from policy.state_transform import *
 from policy.dynamic.context import DynamicContext
 from policy.dynamic.types import DynamicPerceptionConfig
@@ -245,6 +252,7 @@ class DepNet:
             V48_RUNTIME_PROFILE: V48_RUNTIME_BEHAVIOR_VERSION,
             V481_RUNTIME_PROFILE: V481_RUNTIME_BEHAVIOR_VERSION,
             V482_RUNTIME_PROFILE: V482_RUNTIME_BEHAVIOR_VERSION,
+            V485_RUNTIME_PROFILE: V485_RUNTIME_BEHAVIOR_VERSION,
         }.get(runtime_profile, runtime_profile)
         if runtime_profile == V44_RUNTIME_PROFILE:
             safety_mapping = runtime_safety_mapping_v4_4(safety_mapping)
@@ -262,6 +270,8 @@ class DepNet:
             safety_mapping = runtime_safety_mapping_v4_8_1(safety_mapping)
         elif runtime_profile == V482_RUNTIME_PROFILE:
             safety_mapping = runtime_safety_mapping_v4_8_2(safety_mapping)
+        elif runtime_profile == V485_RUNTIME_PROFILE:
+            safety_mapping = runtime_safety_mapping_v4_8_5(safety_mapping)
         elif runtime_profile == "v4_3_minimal":
             # V4.3 keeps only physical collision/limit/boundary checks.  Camera
             # visibility and minimum-progress heuristics remain observable in
@@ -320,15 +330,19 @@ class DepNet:
             )
         if recovery_profile == "bounded_scan_v3":
             recovery_mapping = (
-                deadlock_recovery_mapping_v4_8_2(recovery_mapping)
-                if runtime_profile == V482_RUNTIME_PROFILE else
+                deadlock_recovery_mapping_v4_8_5(recovery_mapping)
+                if runtime_profile == V485_RUNTIME_PROFILE else
                 (
-                    deadlock_recovery_mapping_v4_8_1_pillar(recovery_mapping)
-                    if runtime_profile == V481_RUNTIME_PROFILE else
+                    deadlock_recovery_mapping_v4_8_2(recovery_mapping)
+                    if runtime_profile == V482_RUNTIME_PROFILE else
                     (
-                        deadlock_recovery_mapping_v4_8_pillar(recovery_mapping)
-                        if runtime_profile == V48_RUNTIME_PROFILE else
-                        deadlock_recovery_mapping_v4_7_pillar(recovery_mapping)
+                        deadlock_recovery_mapping_v4_8_1_pillar(recovery_mapping)
+                        if runtime_profile == V481_RUNTIME_PROFILE else
+                        (
+                            deadlock_recovery_mapping_v4_8_pillar(recovery_mapping)
+                            if runtime_profile == V48_RUNTIME_PROFILE else
+                            deadlock_recovery_mapping_v4_7_pillar(recovery_mapping)
+                        )
                     )
                 )
             )
@@ -1348,6 +1362,32 @@ class DepNet:
                         "recovery_trigger_reason": getattr(
                             recovery, "recovery_trigger_reason", None
                         ),
+                        "recovery_handoff_validation_active": getattr(
+                            recovery, "handoff_validation_active", None
+                        ),
+                        "recovery_handoff_validation_elapsed_s": getattr(
+                            recovery, "handoff_validation_elapsed_s", None
+                        ),
+                        "recovery_handoff_validation_displacement_m": getattr(
+                            recovery, "handoff_validation_displacement_m", None
+                        ),
+                        "recovery_handoff_validation_forward_clearance_gain_m": getattr(
+                            recovery,
+                            "handoff_validation_forward_clearance_gain_m", None,
+                        ),
+                        "recovery_handoff_forward_clearance_confirmation_replans": getattr(
+                            recovery,
+                            "handoff_forward_clearance_confirmation_replans", None,
+                        ),
+                        "recovery_handoff_validation_result": getattr(
+                            recovery, "handoff_validation_result", None
+                        ),
+                        "recovery_handoff_preserved_scan_offset_deg": getattr(
+                            recovery, "handoff_preserved_scan_offset_deg", None
+                        ),
+                        "recovery_handoff_preserved_scan_direction": getattr(
+                            recovery, "handoff_preserved_scan_direction", None
+                        ),
                         "action_id": action_id,
                         "network_best_action_id": int(np.argmin(raw_scores)),
                         "network_best_rejected": (
@@ -1582,6 +1622,10 @@ class DepNet:
                 )
             elif self.runtime_profile == V482_RUNTIME_PROFILE:
                 yaw, yaw_dot = calculate_recovery_continuity_yaw_v4_8_2(
+                    self.desire_vel, goal_dir, self.last_yaw, self.ctrl_dt
+                )
+            elif self.runtime_profile == V485_RUNTIME_PROFILE:
+                yaw, yaw_dot = calculate_recovery_continuity_yaw_v4_8_5(
                     self.desire_vel, goal_dir, self.last_yaw, self.ctrl_dt
                 )
             else:
@@ -1875,7 +1919,7 @@ def parser():
             V45_RUNTIME_PROFILE, V457_RUNTIME_PROFILE,
             V4510_RUNTIME_PROFILE, V47_RUNTIME_PROFILE,
             V48_RUNTIME_PROFILE, V481_RUNTIME_PROFILE,
-            V482_RUNTIME_PROFILE,
+            V482_RUNTIME_PROFILE, V485_RUNTIME_PROFILE,
         ),
         default="strict",
         help=(

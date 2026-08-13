@@ -17,6 +17,9 @@ from policy.runtime_profile_v4_8_1 import (
 from policy.runtime_profile_v4_8_2 import (
     deadlock_recovery_mapping_v4_8_2,
 )
+from policy.runtime_profile_v4_8_5 import (
+    deadlock_recovery_mapping_v4_8_5,
+)
 
 
 def recovery_config(**updates):
@@ -86,6 +89,121 @@ def test_v4_8_2_normal_translation_never_triggers_motion_recovery():
         assert decision.transition is None
     assert decision.motion_stagnation_replans == 0
     assert decision.motion_window_displacement_m > 0.20
+
+
+def v4_8_5_recovery():
+    config = DeadlockRecoveryConfigV3.from_mapping(
+        deadlock_recovery_mapping_v4_8_5({"enabled": True})
+    )
+    return DeadlockRecoveryV3(config)
+
+
+def release_v4_8_5_scan(recovery, start_s=0.40, position=None, depth=None):
+    now = float(start_s)
+    for action_id in (2, 7, 12, 2, 7):
+        decision = observe(
+            recovery, now, feasible=3, selected=True, progress=1.0,
+            action_id=action_id, sector_id=2, clearance=0.8,
+            position=position, depth=depth,
+        )
+        now += 0.03
+    assert decision.transition == "bounded_scan_to_network_selected_candidate"
+    assert decision.handoff_validation_active is True
+    return now, decision
+
+
+def test_v4_8_5_handoff_resets_scan_only_after_measured_escape_motion():
+    recovery = v4_8_5_recovery()
+    enter_scan(recovery)
+    now, decision = release_v4_8_5_scan(recovery)
+    assert recovery.unsuccessful_scan_attempts == 1
+    assert decision.current_scan_limit_deg == 90.0
+
+    # Candidate availability alone must not reset the escalation chain.
+    decision = observe(
+        recovery, now, feasible=3, selected=True, progress=1.0,
+        action_id=7, sector_id=2, position=[0.49, 0.0, 0.0],
+    )
+    assert decision.transition is None
+    assert decision.handoff_validation_active is True
+    assert recovery.unsuccessful_scan_attempts == 1
+
+    decision = observe(
+        recovery, now + 0.03, feasible=3, selected=True, progress=1.0,
+        action_id=7, sector_id=2, position=[0.51, 0.0, 0.0],
+    )
+    assert decision.transition == "handoff_measured_motion_verified"
+    assert decision.handoff_validation_result == "measured_motion_verified"
+    assert decision.handoff_validation_active is False
+    assert recovery.unsuccessful_scan_attempts == 0
+    assert decision.current_scan_limit_deg == 60.0
+
+
+def test_v4_8_5_failed_handoff_resumes_same_scan_at_ninety_degrees():
+    recovery = v4_8_5_recovery()
+    blocked = np.ones((20, 30), dtype=np.float32)
+    enter_scan(recovery)
+    # Record that the first scan had genuinely moved away from its origin.
+    yaw = 0.0
+    for _ in range(10):
+        yaw, _ = recovery.yaw_command(yaw, 0.02)
+    preserved_offset = math.degrees(recovery.scan_offset_rad)
+    preserved_direction = recovery.scan_direction
+    now, _ = release_v4_8_5_scan(
+        recovery, position=[0.0, 0.0, 0.0], depth=blocked
+    )
+
+    decision = observe(
+        recovery, now + 1.21, feasible=3, selected=True, progress=1.0,
+        action_id=7, sector_id=2, position=[0.1, 0.0, 0.0], depth=blocked,
+    )
+    assert decision.transition == "handoff_validation_failed_to_braking"
+    assert decision.mode == recovery.BRAKING
+    assert decision.handoff_validation_result == "insufficient_escape_progress"
+    assert decision.current_scan_limit_deg == 90.0
+    assert math.isclose(
+        decision.handoff_preserved_scan_offset_deg,
+        preserved_offset, abs_tol=1.0e-9,
+    )
+
+    decision = observe(
+        recovery, now + 1.24, speed=0.2,
+        position=[0.1, 0.0, 0.0], depth=blocked,
+    )
+    assert decision.transition == (
+        "handoff_failure_braking_to_resumed_bounded_scan"
+    )
+    assert decision.mode == recovery.YAW_SCAN
+    assert decision.current_scan_limit_deg == 90.0
+    assert math.isclose(decision.scan_offset_deg, preserved_offset, abs_tol=1e-9)
+    assert decision.scan_direction == preserved_direction
+
+
+def test_v4_8_5_second_failed_handoff_escalates_to_one_twenty_degrees():
+    recovery = v4_8_5_recovery()
+    blocked = np.ones((20, 30), dtype=np.float32)
+    enter_scan(recovery)
+    now, _ = release_v4_8_5_scan(recovery, depth=blocked)
+    observe(recovery, now + 1.21, position=[0.0, 0.0, 0.0], depth=blocked)
+    observe(
+        recovery, now + 1.24, speed=0.2,
+        position=[0.0, 0.0, 0.0], depth=blocked,
+    )
+    now, _ = release_v4_8_5_scan(
+        recovery, start_s=now + 1.27,
+        position=[0.0, 0.0, 0.0], depth=blocked,
+    )
+    assert recovery.current_scan_limit_deg == 120.0
+    decision = observe(
+        recovery, now + 1.21,
+        position=[0.0, 0.0, 0.0], depth=blocked,
+    )
+    assert decision.transition == "handoff_validation_failed_to_braking"
+    decision = observe(
+        recovery, now + 1.24, speed=0.2,
+        position=[0.0, 0.0, 0.0], depth=blocked,
+    )
+    assert decision.current_scan_limit_deg == 120.0
 
 
 def enter_scan(recovery, trigger=None):

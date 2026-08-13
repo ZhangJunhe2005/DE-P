@@ -43,6 +43,11 @@ class DeadlockRecoveryConfigV3:
     motion_stagnation_window_s: float = 2.0
     motion_stagnation_min_displacement_m: float = 0.20
     motion_stagnation_trigger_replans: int = 30
+    provisional_handoff_validation_enabled: bool = False
+    handoff_validation_window_s: float = 1.20
+    handoff_min_displacement_m: float = 0.50
+    handoff_min_forward_clearance_gain_m: float = 0.50
+    handoff_forward_clearance_confirmation_replans: int = 5
 
     @classmethod
     def from_mapping(cls, value):
@@ -67,6 +72,16 @@ class DeadlockRecoveryConfigV3:
             raise ValueError("motion-stagnation window must be positive")
         if self.motion_stagnation_min_displacement_m <= 0.0:
             raise ValueError("motion-stagnation displacement must be positive")
+        if self.handoff_validation_window_s <= 0.0:
+            raise ValueError("handoff validation window must be positive")
+        if self.handoff_min_displacement_m <= 0.0:
+            raise ValueError("handoff displacement must be positive")
+        if self.handoff_min_forward_clearance_gain_m <= 0.0:
+            raise ValueError("handoff clearance gain must be positive")
+        if self.handoff_forward_clearance_confirmation_replans < 1:
+            raise ValueError(
+                "handoff clearance confirmation count must be positive"
+            )
         if self.selected_min_goal_progress_m < 0.0:
             raise ValueError("selected goal progress must be non-negative")
         positive = (
@@ -92,6 +107,9 @@ class DeadlockRecoveryConfigV3:
             self.require_consistent_selected_horizontal_sector
         )
         motion_stagnation = bool(self.motion_stagnation_enabled)
+        verified_handoff = bool(
+            self.provisional_handoff_validation_enabled
+        )
         evidence_preserving = bool(
             self.accumulate_zero_during_cooldown
             or self.defer_scan_reset_until_post_release_confirmation
@@ -116,17 +134,30 @@ class DeadlockRecoveryConfigV3:
             values.pop("motion_stagnation_window_s")
             values.pop("motion_stagnation_min_displacement_m")
             values.pop("motion_stagnation_trigger_replans")
+        if not verified_handoff:
+            # V4.8.5 is opt-in.  Keep every frozen V4.7--V4.8.2 public
+            # contract byte-for-byte compatible when motion-verified handoff
+            # is disabled.
+            values.pop("provisional_handoff_validation_enabled")
+            values.pop("handoff_validation_window_s")
+            values.pop("handoff_min_displacement_m")
+            values.pop("handoff_min_forward_clearance_gain_m")
+            values.pop("handoff_forward_clearance_confirmation_replans")
         return {
             "version": (
-                "deadlock_recovery_v4_2_universal_motion_stagnation"
-                if motion_stagnation else
+                "deadlock_recovery_v4_3_motion_verified_handoff"
+                if verified_handoff else
                 (
-                    "deadlock_recovery_v4_1_stable_sector_handoff"
-                    if stable_sector_handoff else
+                    "deadlock_recovery_v4_2_universal_motion_stagnation"
+                    if motion_stagnation else
                     (
-                        "deadlock_recovery_v4_evidence_preserving_handoff"
-                        if evidence_preserving else
-                        "deadlock_recovery_v3_bounded_scan_only"
+                        "deadlock_recovery_v4_1_stable_sector_handoff"
+                        if stable_sector_handoff else
+                        (
+                            "deadlock_recovery_v4_evidence_preserving_handoff"
+                            if evidence_preserving else
+                            "deadlock_recovery_v3_bounded_scan_only"
+                        )
                     )
                 )
             ),
@@ -140,10 +171,15 @@ class DeadlockRecoveryConfigV3:
             "recovery_translation_authority": "runtime_brake_only",
             "scan_direction": "depth_free_space_only_no_goal_override",
             "release": (
-                "same_horizontal_sector_selected_runtime_safe_goal_progress_"
-                "candidate"
-                if stable_sector_handoff else
-                "selected_runtime_safe_goal_progress_candidate"
+                "provisional_same_sector_candidate_then_measured_motion_or_"
+                "stable_forward_clearance_verification"
+                if verified_handoff else
+                (
+                    "same_horizontal_sector_selected_runtime_safe_goal_"
+                    "progress_candidate"
+                    if stable_sector_handoff else
+                    "selected_runtime_safe_goal_progress_candidate"
+                )
             ),
             "post_release_yaw": "bounded_scan_heading_commitment_translation_remains_network_owned",
             "exhaustion": "return_to_network_with_reentry_cooldown",
@@ -186,6 +222,14 @@ class RecoveryDecisionV3:
     motion_window_displacement_m: float | None
     motion_window_duration_s: float | None
     recovery_trigger_reason: str | None
+    handoff_validation_active: bool
+    handoff_validation_elapsed_s: float | None
+    handoff_validation_displacement_m: float | None
+    handoff_validation_forward_clearance_gain_m: float | None
+    handoff_forward_clearance_confirmation_replans: int
+    handoff_validation_result: str | None
+    handoff_preserved_scan_offset_deg: float | None
+    handoff_preserved_scan_direction: float | None
 
 
 def horizontal_sector_from_action_id(action_id, horizontal_sector_count):
@@ -248,6 +292,19 @@ class DeadlockRecoveryV3:
         self.motion_window_displacement_m = None
         self.motion_window_duration_s = None
         self.last_recovery_trigger_reason = None
+        self.last_forward_clearance_m = None
+        self.recovery_origin_forward_clearance_m = None
+        self.handoff_validation_active = False
+        self.handoff_validation_started_s = None
+        self.handoff_validation_origin_position = None
+        self.handoff_validation_origin_forward_clearance_m = None
+        self.handoff_validation_displacement_m = None
+        self.handoff_validation_forward_clearance_gain_m = None
+        self.handoff_forward_clearance_confirmation_replans = 0
+        self.handoff_validation_result = None
+        self.handoff_preserved_scan_offset_rad = None
+        self.handoff_preserved_scan_direction = None
+        self.resume_failed_handoff_scan = False
 
     @staticmethod
     def _now(now_s):
@@ -283,6 +340,19 @@ class DeadlockRecoveryV3:
         self.motion_window_displacement_m = None
         self.motion_window_duration_s = None
         self.last_recovery_trigger_reason = None
+        self.last_forward_clearance_m = None
+        self.recovery_origin_forward_clearance_m = None
+        self.handoff_validation_active = False
+        self.handoff_validation_started_s = None
+        self.handoff_validation_origin_position = None
+        self.handoff_validation_origin_forward_clearance_m = None
+        self.handoff_validation_displacement_m = None
+        self.handoff_validation_forward_clearance_gain_m = None
+        self.handoff_forward_clearance_confirmation_replans = 0
+        self.handoff_validation_result = None
+        self.handoff_preserved_scan_offset_rad = None
+        self.handoff_preserved_scan_direction = None
+        self.resume_failed_handoff_scan = False
         if position_world is not None:
             self.record_position(position_world)
 
@@ -310,6 +380,28 @@ class DeadlockRecoveryV3:
             >= free_score(array[:, midpoint:])
             else -1.0
         )
+
+    @staticmethod
+    def forward_clearance_from_depth(depth):
+        """Return a robust clearance score for the forward image centre.
+
+        This is validation evidence, not a trajectory-safety Gate.  A low
+        quantile over the centre band is deliberately used instead of one
+        minimum pixel so sensor speckle cannot declare a provisional handoff
+        successful.  Rotation alone must expose a consistently clearer view
+        for several replans before it can substitute for measured motion.
+        """
+        array = np.asarray(depth, dtype=np.float32)
+        if array.ndim != 2 or min(array.shape) < 4:
+            return None
+        height, width = array.shape
+        row0, row1 = height // 4, height - height // 4
+        col0, col1 = width // 3, width - width // 3
+        region = array[row0:row1, col0:col1]
+        valid = region[np.isfinite(region) & (region > 0.0)]
+        if len(valid) == 0:
+            return None
+        return float(np.quantile(valid, 0.25))
 
     def _decision(self, now_s, transition=None):
         return RecoveryDecisionV3(
@@ -356,7 +448,128 @@ class DeadlockRecoveryV3:
             motion_window_displacement_m=self.motion_window_displacement_m,
             motion_window_duration_s=self.motion_window_duration_s,
             recovery_trigger_reason=self.last_recovery_trigger_reason,
+            handoff_validation_active=self.handoff_validation_active,
+            handoff_validation_elapsed_s=(
+                None if not self.handoff_validation_active
+                or self.handoff_validation_started_s is None else
+                max(0.0, now_s - self.handoff_validation_started_s)
+            ),
+            handoff_validation_displacement_m=(
+                self.handoff_validation_displacement_m
+            ),
+            handoff_validation_forward_clearance_gain_m=(
+                self.handoff_validation_forward_clearance_gain_m
+            ),
+            handoff_forward_clearance_confirmation_replans=(
+                self.handoff_forward_clearance_confirmation_replans
+            ),
+            handoff_validation_result=self.handoff_validation_result,
+            handoff_preserved_scan_offset_deg=(
+                None if self.handoff_preserved_scan_offset_rad is None else
+                math.degrees(self.handoff_preserved_scan_offset_rad)
+            ),
+            handoff_preserved_scan_direction=(
+                self.handoff_preserved_scan_direction
+            ),
         )
+
+    def _start_handoff_validation(self, now_s):
+        self.handoff_validation_active = True
+        self.handoff_validation_started_s = float(now_s)
+        self.handoff_validation_origin_position = (
+            None if self.last_position is None else self.last_position.copy()
+        )
+        self.handoff_validation_origin_forward_clearance_m = (
+            self.recovery_origin_forward_clearance_m
+            if self.recovery_origin_forward_clearance_m is not None else
+            self.last_forward_clearance_m
+        )
+        self.handoff_validation_displacement_m = 0.0
+        self.handoff_validation_forward_clearance_gain_m = 0.0
+        self.handoff_forward_clearance_confirmation_replans = 0
+        self.handoff_validation_result = "pending"
+        self.handoff_preserved_scan_offset_rad = float(self.scan_offset_rad)
+        self.handoff_preserved_scan_direction = float(self.scan_direction)
+        self.resume_failed_handoff_scan = False
+
+    def _clear_handoff_validation(self):
+        self.handoff_validation_active = False
+        self.handoff_validation_started_s = None
+        self.handoff_validation_origin_position = None
+        self.handoff_validation_origin_forward_clearance_m = None
+
+    def _observe_handoff_validation(self, now_s, position_world):
+        if not self.handoff_validation_active:
+            return None
+        point = np.asarray(position_world, dtype=np.float64).reshape(3)
+        if self.handoff_validation_origin_position is not None:
+            self.handoff_validation_displacement_m = float(np.linalg.norm(
+                point - self.handoff_validation_origin_position
+            ))
+        baseline = self.handoff_validation_origin_forward_clearance_m
+        current = self.last_forward_clearance_m
+        if baseline is not None and current is not None:
+            self.handoff_validation_forward_clearance_gain_m = float(
+                current - baseline
+            )
+            if (
+                self.handoff_validation_forward_clearance_gain_m
+                >= self.config.handoff_min_forward_clearance_gain_m
+            ):
+                self.handoff_forward_clearance_confirmation_replans += 1
+            else:
+                self.handoff_forward_clearance_confirmation_replans = 0
+        else:
+            self.handoff_validation_forward_clearance_gain_m = None
+            self.handoff_forward_clearance_confirmation_replans = 0
+
+        motion_verified = bool(
+            self.handoff_validation_displacement_m is not None
+            and self.handoff_validation_displacement_m
+            >= self.config.handoff_min_displacement_m
+        )
+        clearance_verified = bool(
+            self.handoff_forward_clearance_confirmation_replans
+            >= self.config.handoff_forward_clearance_confirmation_replans
+        )
+        if motion_verified or clearance_verified:
+            self.handoff_validation_result = (
+                "measured_motion_verified"
+                if motion_verified else "forward_clearance_verified"
+            )
+            self._clear_handoff_validation()
+            self.unsuccessful_scan_attempts = 0
+            self.current_scan_limit_deg = self.config.max_scan_angle_deg
+            self.resume_failed_handoff_scan = False
+            self.cooldown_until_s = 0.0
+            self.recovery_origin_forward_clearance_m = None
+            self._reset_motion_window(now_s)
+            return (
+                "handoff_measured_motion_verified"
+                if motion_verified else
+                "handoff_forward_clearance_verified"
+            )
+
+        elapsed = float(now_s) - float(self.handoff_validation_started_s)
+        if elapsed < self.config.handoff_validation_window_s:
+            return None
+
+        # The provisional opening did not move the vehicle out of the trap.
+        # Preserve the previous direction/offset and the already escalated
+        # 90/120-degree limit, brake, then continue the scan rather than
+        # incorrectly resetting to a fresh 60-degree attempt.
+        self.handoff_validation_result = "insufficient_escape_progress"
+        self._clear_handoff_validation()
+        self.resume_failed_handoff_scan = True
+        self.mode = self.BRAKING
+        self.selected_release_count = 0
+        self.selected_confirmation_horizontal_sector_id = None
+        self.cooldown_until_s = 0.0
+        self.last_recovery_trigger_reason = (
+            "provisional_handoff_no_escape_progress"
+        )
+        self._reset_motion_window()
+        return "handoff_validation_failed_to_braking"
 
     def _reset_motion_window(self, now_s=None):
         self.motion_history.clear()
@@ -449,6 +662,8 @@ class DeadlockRecoveryV3:
             else:
                 self.unsuccessful_scan_attempts = 0
                 self.current_scan_limit_deg = self.config.max_scan_angle_deg
+            if self.config.provisional_handoff_validation_enabled:
+                self._start_handoff_validation(now_s)
         return self._decision(now_s, transition)
 
     def heading_commitment_active(self, now_s=None):
@@ -488,7 +703,22 @@ class DeadlockRecoveryV3:
         self.last_handoff_confirmation_replans = None
         self.last_handoff_horizontal_sector_id = None
         self.record_position(position_world)
+        self.last_forward_clearance_m = self.forward_clearance_from_depth(depth)
         if not self.config.enabled:
+            return self._decision(now_s)
+
+        # A scan handoff is provisional in V4.8.5.  Normal network translation
+        # remains authoritative during this bounded validation interval.  A
+        # successful measured escape closes recovery; failure immediately
+        # resumes the wider scan chain without waiting for a new stagnation
+        # window or resetting to 60 degrees.
+        handoff_validation_was_active = self.handoff_validation_active
+        handoff_transition = self._observe_handoff_validation(
+            now_s, position_world
+        )
+        if handoff_transition is not None:
+            return self._decision(now_s, handoff_transition)
+        if handoff_validation_was_active:
             return self._decision(now_s)
 
         feasible_candidate_count = int(feasible_candidate_count)
@@ -595,6 +825,9 @@ class DeadlockRecoveryV3:
                     "observed_motion_stagnation"
                 )
                 self.mode = self.BRAKING
+                self.recovery_origin_forward_clearance_m = (
+                    self.last_forward_clearance_m
+                )
                 self.selected_release_count = 0
                 self.selected_confirmation_horizontal_sector_id = None
                 # Stop accumulating normal-flight samples, but retain the
@@ -619,23 +852,42 @@ class DeadlockRecoveryV3:
                 )
             if speed_mps <= self.config.stationary_speed_mps:
                 self.mode = self.YAW_SCAN
-                preferred_direction = self.scan_direction_from_depth(depth)
-                self.scan_direction = (
-                    preferred_direction
-                    if self.unsuccessful_scan_attempts % 2 == 0
-                    else -preferred_direction
-                )
+                if (
+                    self.resume_failed_handoff_scan
+                    and self.handoff_preserved_scan_offset_rad is not None
+                    and self.handoff_preserved_scan_direction is not None
+                ):
+                    self.scan_direction = float(
+                        self.handoff_preserved_scan_direction
+                    )
+                    self.scan_offset_rad = float(
+                        self.handoff_preserved_scan_offset_rad
+                    )
+                    self.resume_failed_handoff_scan = False
+                else:
+                    preferred_direction = self.scan_direction_from_depth(depth)
+                    self.scan_direction = (
+                        preferred_direction
+                        if self.unsuccessful_scan_attempts % 2 == 0
+                        else -preferred_direction
+                    )
+                    self.scan_offset_rad = 0.0
                 self.current_scan_limit_deg = min(
                     self.config.max_escalated_scan_angle_deg,
                     self.config.max_scan_angle_deg
                     + self.unsuccessful_scan_attempts
                     * self.config.scan_angle_step_deg,
                 )
-                self.scan_offset_rad = 0.0
                 self.scan_leg_complete = False
                 self.scan_legs_completed = 0
                 self.scan_started_s = now_s
-                return self._decision(now_s, "braking_to_bounded_scan")
+                transition = (
+                    "handoff_failure_braking_to_resumed_bounded_scan"
+                    if self.handoff_validation_result
+                    == "insufficient_escape_progress" else
+                    "braking_to_bounded_scan"
+                )
+                return self._decision(now_s, transition)
             return self._decision(now_s)
 
         if self.mode == self.YAW_SCAN:

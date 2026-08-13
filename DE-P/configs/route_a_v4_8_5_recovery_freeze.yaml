@@ -1,0 +1,91 @@
+contract_version: route_a_v4_8_5_recovery_freeze_v1
+status: FROZEN_RECOVERY_BASELINE_DYNAMIC_UNQUALIFIED
+selected_version: v4.8.5
+scope:
+  static_policy_version: v4.8.3
+  static_map_types:
+  - cave
+  - forest
+  - pillar
+  - wall
+  runtime_profile: v4_8_5_motion_verified_recovery_handoff
+  runtime_behavior_version: v4_8_5_universal_motion_verified_recovery_handoff_v1
+  recovery_contract_version: deadlock_recovery_v4_3_motion_verified_handoff
+  scene_specific_recovery_logic: false
+  network_weights_modified: false
+  candidate_safety_contract_modified: false
+  dynamic_perception_modified: false
+  dynamic_prediction_modified: false
+checkpoint:
+  path: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_8_3_candidate_only_shakedown/20260813T050742Z-13178/checkpoints/best.pth
+  sha256: 22e5c63c273d751c15479d70c99d9b85ad615b7b4c62063946a5b1683776ac60
+  epoch: 2
+  training_run: /home/zjh/YOPO/DE-P/runs/route_a_static_yopo_v4_8_3_candidate_only_shakedown/20260813T050742Z-13178
+  git_storage: local_ignored_artifact_verified_by_sha256
+recovery_handoff:
+  provisional_validation_window_s: 1.2
+  measured_displacement_success_m: 0.5
+  forward_clearance_gain_success_m: 0.5
+  forward_clearance_confirmation_replans: 5
+  scan_limits_deg:
+  - 60
+  - 90
+  - 120
+  failed_handoff_behavior: brake_then_resume_preserved_direction_and_offset_at_next_scan_limit
+  successful_handoff_behavior: reset_scan_chain_only_after_measured_escape
+automated_validation:
+  result: PASS
+  pytest_passed: 81
+  pytest_xfailed: 1
+  subtests_passed: 10
+  four_scene_preflight_exit_zero: true
+  strict_checkpoint_load: PASS
+closed_loop_evidence:
+  static_pillar:
+    run: /home/zjh/YOPO/DE-P/runs/dep_interactive_demo/20260813T065954Z-pillar
+    actors: 0
+    goal_arrived: true
+    collision_events: 0
+    near_contact_events: 0
+    path_length_m: 37.88184251077174
+  dynamic_pillar_pass_1:
+    run: /home/zjh/YOPO/DE-P/runs/dep_interactive_demo/20260813T070046Z-pillar
+    actors: 16
+    goal_arrived: true
+    collision_events: 0
+    handoff_validation_failures_resumed: 12
+    scan_limit_counts:
+      60: 4
+      90: 4
+      120: 44
+  dynamic_pillar_pass_2:
+    run: /home/zjh/YOPO/DE-P/runs/dep_interactive_demo/20260813T070239Z-pillar
+    actors: 16
+    goal_arrived: true
+    collision_events: 0
+    path_length_m: 36.795698843112795
+  dynamic_pillar_unresolved_collision_case:
+    run: /home/zjh/YOPO/DE-P/runs/dep_interactive_demo/20260813T070345Z-pillar
+    actors: 16
+    goal_arrived: false
+    static_collision_events: 0
+    dynamic_collision_events: 3
+    maximum_actual_scan_offset_deg: 116.4
+    interpretation: recovery_stability_accepted_dynamic_avoidance_not_qualified
+operator_validation:
+  status: ACCEPTED_FOR_FREEZE
+  observation: stable_and_materially_less_likely_to_deadlock
+qualification:
+  recovery_baseline_frozen: true
+  static_policy_frozen: true
+  dynamic_avoidance_qualified: false
+  production_qualified: false
+  next_scope: dynamic_perception_prediction_and_motion_preserving_dynamic_avoidance
+implementation_sha256:
+  policy/deadlock_recovery_v3.py: 13dafc6e336e674a2e4da34d9122f40994f50bdfa9c6590f5326b3f39c6df79b
+  policy/runtime_profile_v4_8_5.py: 4540d5f1f48065f7bf88a9aba3a4b1d96ed5f2b434c3568b273cd3523342f7e6
+  test_dep_ros.py: 196973260f31b926d593a3114fffc4f6d183c611712de75cb06fd667844e4ad7
+  tools/run_dep_interactive_demo.py: 1da340efabc988dfbdd106a1424d78b5afc475a86efbe88c9bded13ebeb74624
+  tools/summarize_deadlock_recovery_run.py: c89eb5c416e3769fd213ceaa756ee6f93abdc0efecc7b5a2561fbfb0eece3603
+  scripts/route_a_v4_8_5_rviz_host.sh: a272934371d275b6521b4064c176c9135530e0d1d31e6774227030e8f57dc6aa
+  scripts/route_a_v4_8_5_recovery_summary.sh: fbd3bb50e0b352dceae82ec9a99108af6462bfea3967a760a1257536dc5cccd3

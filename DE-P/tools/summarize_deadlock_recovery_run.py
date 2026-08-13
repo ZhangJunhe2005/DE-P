@@ -46,6 +46,11 @@ def main():
         row for row in replans
         if row.get("recovery_handoff_confirmation_replans") is not None
     ]
+    validation_rows = [
+        row for row in replans
+        if row.get("recovery_handoff_validation_active")
+        or row.get("recovery_handoff_validation_result") is not None
+    ]
     scan_sector_switches = 0
     previous_sector = None
     for row in scan_rows:
@@ -96,6 +101,48 @@ def main():
             row.get("recovery_selected_candidate_min_observed_clearance_m")
             for row in handoff_rows
         ],
+        "recovery_handoff_validation_results": dict(Counter(
+            row["recovery_handoff_validation_result"]
+            for row in validation_rows
+            if row.get("recovery_transition") in {
+                "handoff_measured_motion_verified",
+                "handoff_forward_clearance_verified",
+                "handoff_validation_failed_to_braking",
+            }
+            and row.get("recovery_handoff_validation_result")
+        )),
+        "recovery_handoff_validation_transition_counts": dict(Counter(
+            row["recovery_transition"] for row in validation_rows
+            if row.get("recovery_transition")
+        )),
+        "maximum_handoff_validation_displacement_m": max(
+            (
+                float(row["recovery_handoff_validation_displacement_m"])
+                for row in validation_rows
+                if row.get("recovery_handoff_validation_displacement_m")
+                is not None
+            ),
+            default=None,
+        ),
+        "maximum_handoff_forward_clearance_gain_m": max(
+            (
+                float(row[
+                    "recovery_handoff_validation_forward_clearance_gain_m"
+                ])
+                for row in validation_rows
+                if row.get(
+                    "recovery_handoff_validation_forward_clearance_gain_m"
+                ) is not None
+            ),
+            default=None,
+        ),
+        "maximum_actual_scan_offset_deg": max(
+            (
+                abs(float(row.get("recovery_scan_offset_deg", 0.0) or 0.0))
+                for row in scan_rows
+            ),
+            default=None,
+        ),
         "flight_volume_region_counts": dict(boundary_regions),
         "boundary_escape_replans": sum(
             row.get("boundary_escape_candidate_count", 0) > 0
