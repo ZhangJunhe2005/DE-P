@@ -28,6 +28,7 @@ temporary_subgoal:
     - new_operator_mission_goal
     - provisional_handoff_failed
     - renewed_network_stagnation
+    - dynamic_only_zero_feasible
   dynamic_hard_veto_preserved: true
   mission_arrival_uses_temporary_goal: false
 validation:

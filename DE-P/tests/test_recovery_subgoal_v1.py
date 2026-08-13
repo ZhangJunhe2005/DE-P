@@ -6,6 +6,7 @@ import pytest
 from policy.recovery_subgoal_v1 import (
     RecoverySubgoalConfigV1,
     recovery_conditioning_goal_v1,
+    recovery_subgoal_restore_reason_v1,
     select_recovery_subgoal_v1,
 )
 
@@ -103,3 +104,24 @@ def test_scan_conditioning_target_is_forward_and_does_not_need_mission_goal():
         (2.0, 3.0, 1.0), (0.0, 2.0, 0.0), 10.0,
     )
     assert result == pytest.approx((2.0, 13.0, 1.0))
+
+
+@pytest.mark.parametrize("transition", (
+    "network_to_braking",
+    "network_stagnation_to_braking",
+    "handoff_validation_failed_to_braking",
+))
+def test_repeated_deadlock_always_restores_mission_before_new_scan(transition):
+    assert recovery_subgoal_restore_reason_v1(transition) == transition
+
+
+def test_dynamic_only_blockage_also_abandons_stale_temporary_goal():
+    assert recovery_subgoal_restore_reason_v1(
+        None, dynamic_only_blocked=True,
+    ) == "dynamic_only_zero_feasible"
+
+
+def test_successful_handoff_does_not_restore_until_temporary_goal_is_reached():
+    assert recovery_subgoal_restore_reason_v1(
+        "handoff_measured_motion_verified"
+    ) is None

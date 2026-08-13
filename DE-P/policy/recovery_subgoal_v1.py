@@ -14,6 +14,13 @@ from dataclasses import asdict, dataclass
 import numpy as np
 
 
+SUBGOAL_ABORT_RECOVERY_TRANSITIONS_V1 = frozenset({
+    "network_to_braking",
+    "network_stagnation_to_braking",
+    "handoff_validation_failed_to_braking",
+})
+
+
 @dataclass(frozen=True)
 class RecoverySubgoalConfigV1:
     enabled: bool = True
@@ -89,6 +96,17 @@ def recovery_conditioning_goal_v1(
     if norm <= 1.0e-9 or not np.isfinite(distance) or distance <= 0.0:
         raise ValueError("recovery conditioning direction and distance must be positive")
     return position + forward / norm * distance
+
+
+def recovery_subgoal_restore_reason_v1(
+    recovery_transition, *, dynamic_only_blocked=False,
+):
+    """Return why an active local goal must yield back to the mission goal."""
+    if dynamic_only_blocked:
+        return "dynamic_only_zero_feasible"
+    if recovery_transition in SUBGOAL_ABORT_RECOVERY_TRANSITIONS_V1:
+        return str(recovery_transition)
+    return None
 
 
 def select_recovery_subgoal_v1(
@@ -168,6 +186,8 @@ def select_recovery_subgoal_v1(
 __all__ = [
     "RecoverySubgoalConfigV1",
     "RecoverySubgoalProposalV1",
+    "SUBGOAL_ABORT_RECOVERY_TRANSITIONS_V1",
     "recovery_conditioning_goal_v1",
+    "recovery_subgoal_restore_reason_v1",
     "select_recovery_subgoal_v1",
 ]

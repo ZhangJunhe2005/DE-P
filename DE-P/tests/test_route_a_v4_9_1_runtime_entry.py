@@ -42,8 +42,7 @@ def test_v491_profile_and_goal_lifecycle_are_wired_to_ros():
         "_restore_mission_goal_locked",
         '"cancelled_by_new_mission_goal"',
         '"temporary_goal_reached"',
-        '"handoff_validation_failed_to_braking"',
-        '"network_stagnation_to_braking"',
+        "recovery_subgoal_restore_reason_v1",
         '"recovery_probe_no_handoff_brake"',
     ):
         assert expected in source

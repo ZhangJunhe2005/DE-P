@@ -128,6 +128,7 @@ from policy.runtime_profile_v4_9_1 import (
 from policy.recovery_subgoal_v1 import (
     RecoverySubgoalConfigV1,
     recovery_conditioning_goal_v1,
+    recovery_subgoal_restore_reason_v1,
     select_recovery_subgoal_v1,
 )
 from policy.state_transform import *
@@ -1579,16 +1580,17 @@ class DepNet:
                         "bounded_scan_timeout_to_network_selected_candidate",
                         "bounded_scan_limit_to_network_selected_candidate",
                     }
-                    if (
-                        self.runtime_profile == V491_RUNTIME_PROFILE
-                        and recovery.transition in {
-                            "network_to_braking",
-                            "network_stagnation_to_braking",
-                            "handoff_validation_failed_to_braking",
-                        }
-                    ):
+                    subgoal_restore_reason = (
+                        recovery_subgoal_restore_reason_v1(
+                            recovery.transition,
+                            dynamic_only_blocked=bool(dynamic_yield),
+                        )
+                        if self.runtime_profile == V491_RUNTIME_PROFILE
+                        and self.recovery_subgoal_world is not None else None
+                    )
+                    if subgoal_restore_reason is not None:
                         self._restore_mission_goal_locked(
-                            recovery.transition
+                            subgoal_restore_reason
                         )
                     subgoal_activated = False
                     if (
@@ -2028,6 +2030,9 @@ class DepNet:
                         ),
                         "recovery_subgoal_activated_this_replan": (
                             subgoal_activated
+                        ),
+                        "recovery_subgoal_restore_reason_this_replan": (
+                            subgoal_restore_reason
                         ),
                         "recovery_retreat_target_world": (
                             recovery.retreat_target_world
