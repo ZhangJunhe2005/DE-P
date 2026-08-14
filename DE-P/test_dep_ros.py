@@ -420,6 +420,16 @@ class DepNet:
         self.recovery_subgoal_origin_world = None
         self.recovery_subgoal_action_id = None
         self.recovery_subgoal_last_event = "inactive"
+        # A temporary target is one bounded escape action, not a waypoint
+        # generator.  Once it ends, another one cannot be created until the
+        # ordinary mission policy has demonstrably resumed forward progress.
+        self.recovery_subgoal_rearm_pending = False
+        self.recovery_subgoal_rearm_origin_world = None
+        self.recovery_subgoal_rearm_reason = None
+        self.recovery_subgoal_rearm_count = 0
+        # Inference runs outside the planner lock.  This generation rejects a
+        # result if odometry or an operator changed the active goal meanwhile.
+        self.planning_goal_generation = 0
         self.recovery_probe_goal_world = None
         self.recovery_probe_active = False
         self.recovery_subgoal_conditioning_active = False
@@ -817,6 +827,8 @@ class DepNet:
             self.recovery_subgoal_origin_world = None
             self.recovery_subgoal_action_id = None
             self.recovery_subgoal_last_event = "cancelled_by_new_mission_goal"
+            self._clear_recovery_subgoal_rearm_locked()
+            self.planning_goal_generation += 1
             self.accepted_goal_count += 1
             self.goal_received = True
             self.arrive = False
@@ -846,7 +858,10 @@ class DepNet:
 
     def _activate_recovery_subgoal_locked(self, proposal, origin_world):
         """Temporarily point the unchanged policy at a certified opening."""
-        if not self.recovery_subgoal_config.enabled:
+        if (
+            not self.recovery_subgoal_config.enabled
+            or self.recovery_subgoal_rearm_pending
+        ):
             return False
         target = np.asarray(proposal.target_world, dtype=np.float64)
         origin = np.asarray(origin_world, dtype=np.float64)
@@ -858,6 +873,7 @@ class DepNet:
         self.recovery_subgoal_origin_world = origin.copy()
         self.recovery_subgoal_action_id = int(proposal.action_id)
         self.goal = target.copy()
+        self.planning_goal_generation += 1
         self.recovery_subgoal_last_event = "activated_from_certified_candidate"
         rospy.logwarn(
             "DE-P recovery temporary goal activated at (%.2f, %.2f, %.2f); "
@@ -875,22 +891,80 @@ class DepNet:
         self.recovery_subgoal_origin_world = None
         self.recovery_subgoal_action_id = None
         self.recovery_subgoal_last_event = f"restored_mission:{reason}"
+        self.planning_goal_generation += 1
         rospy.loginfo("DE-P restored mission goal after recovery: %s", reason)
+        return True
+
+    def _clear_recovery_subgoal_rearm_locked(self):
+        self.recovery_subgoal_rearm_pending = False
+        self.recovery_subgoal_rearm_origin_world = None
+        self.recovery_subgoal_rearm_reason = None
+
+    def _begin_mission_reacquisition_locked(self, position_world, reason):
+        """Require real mission progress before allowing another local goal.
+
+        This is a recovery lifecycle boundary, not a trajectory-safety Gate.
+        Runtime safety and the unchanged network still own all translation.
+        """
+        position = np.asarray(position_world, dtype=np.float64)
+        if position.shape != (3,) or not np.all(np.isfinite(position)):
+            raise ValueError(
+                "mission reacquisition requires a finite world position"
+            )
+        self.recovery_subgoal_rearm_pending = True
+        self.recovery_subgoal_rearm_origin_world = position.copy()
+        self.recovery_subgoal_rearm_reason = str(reason)
+        # Stop executing the old temporary-goal polynomial immediately.  The
+        # existing hold/yaw-align path turns the camera back toward the mission
+        # before the unchanged policy is asked to resume translation.
+        self.ctrl_time = None
+        self.recovery_trajectory_installed = False
+        self.active_trajectory_requires_dynamic_freshness = False
+        self.last_dynamic_certificate_monotonic_s = None
+        self.goal_alignment_pending = bool(
+            self.align_goal_before_planning and self.odom_init
+        )
+
+    def _finish_mission_reacquisition_locked(self, position_world):
+        """Re-arm only at the first fresh mission-conditioned planning frame.
+
+        Alignment has already completed when this method is called.  Resetting
+        the universal recovery observer here starts an independent mission
+        attempt: a second escape is possible, but only after new zero-feasible
+        or odometry-stagnation evidence accumulates from scratch.
+        """
+        if not self.recovery_subgoal_rearm_pending:
+            return False
+        position = np.asarray(position_world, dtype=np.float64)
+        if position.shape != (3,) or not np.all(np.isfinite(position)):
+            raise ValueError(
+                "mission reacquisition completion requires a finite position"
+            )
+        reason = self.recovery_subgoal_rearm_reason
+        self._clear_recovery_subgoal_rearm_locked()
+        self.deadlock_recovery.reset(position)
+        self.recovery_subgoal_rearm_count += 1
+        rospy.loginfo(
+            "DE-P mission control re-established after yaw alignment; "
+            "temporary recovery re-armed for fresh stagnation evidence "
+            "(restore reason: %s)", reason,
+        )
         return True
 
     def _abort_recovery_subgoal_locked(self, reason, position_world):
         """Restore the mission and yield scan ownership after a failed goal.
 
         One already-authorized braking update may still be installed by the
-        caller on the transition frame.  From the next replan onward the
-        ordinary mission-conditioned network gets a fresh attempt.  If it is
-        genuinely still stuck, the unchanged universal stagnation detector can
-        start a new bounded scan from new evidence instead of trapping the
-        vehicle in the old scan chain.
+        caller on the transition frame.  The old trajectory is then cancelled,
+        the camera is aligned to the restored mission, and the ordinary
+        mission-conditioned network gets a fresh attempt.  A second local goal
+        is not permitted until measured mission progress proves that this
+        takeover actually happened.
         """
         restored = self._restore_mission_goal_locked(reason)
         if restored:
             self.deadlock_recovery.reset(position_world)
+            self._begin_mission_reacquisition_locked(position_world, reason)
             self.dynamic_yield_active = False
             rospy.logwarn(
                 "DE-P abandoned failed recovery goal and yielded control "
@@ -903,10 +977,13 @@ class DepNet:
         restored = self._restore_mission_goal_locked("temporary_goal_reached")
         if restored:
             self.deadlock_recovery.reset(position_world)
+            self._begin_mission_reacquisition_locked(
+                position_world, "temporary_goal_reached"
+            )
             self.dynamic_yield_active = False
             rospy.loginfo(
-                "DE-P recovery goal reached; ordinary mission planning "
-                "resumes on the next depth frame"
+                "DE-P recovery goal reached; aligning and reacquiring the "
+                "ordinary mission before recovery can re-arm"
             )
         return restored
 
@@ -1121,6 +1198,16 @@ class DepNet:
             ),
             "recovery_subgoal_action_id": self.recovery_subgoal_action_id,
             "recovery_subgoal_last_event": self.recovery_subgoal_last_event,
+            "recovery_subgoal_rearm_pending": (
+                self.recovery_subgoal_rearm_pending
+            ),
+            "recovery_subgoal_rearm_reason": (
+                self.recovery_subgoal_rearm_reason
+            ),
+            "recovery_subgoal_rearm_count": (
+                self.recovery_subgoal_rearm_count
+            ),
+            "planning_goal_generation": self.planning_goal_generation,
             "network_conditioning_goal_world": (
                 self.last_network_goal_world.tolist()
             ),
@@ -1250,8 +1337,23 @@ class DepNet:
         # input prepare
         time1 = time.time()
         depth_input = torch.from_numpy(depth).to(self.device, non_blocking=True)  # (non_blocking: copying speed 3x)
-        obs_norm = self.process_odom()
-        network_goal_world = self.last_network_goal_world.copy()
+        with self.lock:
+            # The unlocked early check above is only a fast path.  Goal
+            # restoration can begin from the odometry thread between that
+            # check and this snapshot, so never start a plan while mission yaw
+            # reacquisition owns the command boundary.
+            if self.goal_alignment_pending:
+                return
+            if self.recovery_subgoal_rearm_pending:
+                current_position = np.asarray((
+                    self.odom.pose.pose.position.x,
+                    self.odom.pose.pose.position.y,
+                    self.odom.pose.pose.position.z,
+                ), dtype=np.float64)
+                self._finish_mission_reacquisition_locked(current_position)
+            obs_norm = self.process_odom()
+            planning_goal_generation = self.planning_goal_generation
+            network_goal_world = self.last_network_goal_world.copy()
         obs_input = self.state_transform.prepare_input(obs_norm)
         obs_input = obs_input.to(self.device, non_blocking=True)
         # torch.cuda.synchronize()
@@ -1303,6 +1405,16 @@ class DepNet:
         visualization_evaluations = None
         visualization_durations = None
         with self.lock:  # Python3.8: threads are scheduled using time slices, add the lock to ensure safety
+            if (
+                planning_goal_generation != self.planning_goal_generation
+                or self.goal_alignment_pending
+            ):
+                rospy.loginfo_throttle(
+                    1.0,
+                    "Discarded neural plan computed across a goal or "
+                    "alignment lifecycle boundary",
+                )
+                return
             start_pos = self.desire_pos if self.plan_from_reference else np.array((self.odom.pose.pose.position.x, self.odom.pose.pose.position.y, self.odom.pose.pose.position.z))
             start_vel = self.desire_vel if self.plan_from_reference else np.array((self.odom.twist.twist.linear.x, self.odom.twist.twist.linear.y, self.odom.twist.twist.linear.z))
             start_acc = np.asarray(self.desire_acc, dtype=np.float64)
@@ -1491,6 +1603,7 @@ class DepNet:
                     if (
                         self.runtime_profile == V491_RUNTIME_PROFILE
                         and recovery_selection_active
+                        and not self.recovery_subgoal_rearm_pending
                     ):
                         recovery_subgoal_proposal = select_recovery_subgoal_v1(
                             candidates, candidate_durations, evaluations,
@@ -1839,6 +1952,19 @@ class DepNet:
                                     ),
                                 )
                                 self.recovery_trajectory_installed = True
+                    elif subgoal_restore_reason is not None:
+                        # The odometry/recovery lifecycle has atomically
+                        # restored the mission and requested yaw alignment.
+                        # This callback was inferred/evaluated against the old
+                        # temporary goal, so installing its fallback brake
+                        # would recreate an old dynamic freshness certificate.
+                        # control_pub now owns a low-speed position hold until
+                        # mission alignment completes; the next depth frame
+                        # performs a genuinely fresh mission-conditioned plan.
+                        self.recovery_trajectory_installed = False
+                        self.ctrl_time = None
+                        self.active_trajectory_requires_dynamic_freshness = False
+                        self.last_dynamic_certificate_monotonic_s = None
                     elif action_id is None:
                         self.recovery_trajectory_installed = False
                         if v49_runtime:
@@ -1939,6 +2065,8 @@ class DepNet:
                             ),
                         )
                     control_state = (
+                        "mission_reacquisition_hold"
+                        if subgoal_restore_reason is not None else
                         (
                             "mixed_recovery"
                             if blocking_after_scaling[

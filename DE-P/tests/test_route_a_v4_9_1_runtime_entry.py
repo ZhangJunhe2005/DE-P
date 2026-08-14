@@ -28,6 +28,9 @@ def test_v491_is_an_ab_entry_over_the_same_frozen_checkpoint_and_fixture():
         assert expected in parent
     assert f"--runtime-profile {PROFILE_NAME}" in current
     assert "v4_9_dynamic_motion_preserving_safety" in parent
+    assert 'dirname -- "${BASH_SOURCE[0]}"' in current
+    assert "DEP_V491_CHECKPOINT" in current
+    assert "DEP_V491_SCENES_CONFIG" in current
     assert LAUNCHER.stat().st_mode & 0o111
 
 
@@ -43,6 +46,11 @@ def test_v491_profile_and_goal_lifecycle_are_wired_to_ros():
         '"cancelled_by_new_mission_goal"',
         '"temporary_goal_reached"',
         "recovery_subgoal_restore_reason_v1",
+        "recovery_subgoal_rearm_pending",
+        "_finish_mission_reacquisition_locked",
+        "planning_goal_generation",
+        "Discarded neural plan computed across a goal or ",
+        '"mission_reacquisition_hold"',
         '"recovery_probe_no_handoff_brake"',
     ):
         assert expected in source

@@ -59,7 +59,31 @@ def test_subgoal_lies_on_a_fully_feasible_network_candidate():
     assert proposal is not None
     assert proposal.action_id == 0
     assert proposal.target_world[1] == pytest.approx(0.0)
-    assert proposal.target_distance_m == pytest.approx(2.5, abs=0.06)
+    assert proposal.target_distance_m == pytest.approx(4.0, abs=0.06)
+
+
+def test_long_candidate_uses_at_most_five_metres_of_certified_path():
+    proposal = select_recovery_subgoal_v1(
+        (_candidate((7.0, 0.0, 0.0)),),
+        (1.0,),
+        (_evaluation(distance=7.0),),
+        (0.2,),
+        np.zeros(3),
+    )
+    assert proposal is not None
+    assert proposal.target_distance_m == pytest.approx(5.0, abs=0.09)
+    assert proposal.candidate_endpoint_distance_m == pytest.approx(7.0)
+
+
+def test_candidate_below_long_escape_minimum_is_not_a_recovery_goal():
+    proposal = select_recovery_subgoal_v1(
+        (_candidate((3.4, 0.0, 0.0)),),
+        (1.0,),
+        (_evaluation(distance=3.4),),
+        (0.0,),
+        np.zeros(3),
+    )
+    assert proposal is None
 
 
 def test_dynamic_or_static_veto_can_never_supply_a_subgoal():
@@ -89,15 +113,15 @@ def test_short_candidate_does_not_trigger_translation_handoff():
 def test_capacity_is_primary_but_network_score_breaks_sufficient_ties():
     proposals = select_recovery_subgoal_v1(
         (
-            _candidate((2.6, 0.0, 0.0)),
-            _candidate((0.0, 3.0, 0.0)),
-            _candidate((1.5, 0.0, 0.0)),
+            _candidate((5.5, 0.0, 0.0)),
+            _candidate((0.0, 6.0, 0.0)),
+            _candidate((4.0, 0.0, 0.0)),
         ),
         (1.0, 1.0, 1.0),
         (
-            _evaluation(distance=2.6),
-            _evaluation(distance=3.0),
-            _evaluation(distance=1.5),
+            _evaluation(distance=5.5),
+            _evaluation(distance=6.0),
+            _evaluation(distance=4.0),
         ),
         (0.3, 0.1, -100.0),
         np.zeros(3),
@@ -107,14 +131,14 @@ def test_capacity_is_primary_but_network_score_breaks_sufficient_ties():
 
 def test_candidate_that_reaches_forward_only_after_retreat_is_rejected():
     reverse_prefix = (
-        _RetreatThenAdvanceAxis(4.0),
+        _RetreatThenAdvanceAxis(5.0),
         _LinearAxis(0.0, 0.0),
         _LinearAxis(0.0, 0.0),
     )
     proposal = select_recovery_subgoal_v1(
-        (reverse_prefix, _candidate((3.0, 0.0, 0.0))),
+        (reverse_prefix, _candidate((4.0, 0.0, 0.0))),
         (1.0, 1.0),
-        (_evaluation(distance=4.0), _evaluation(distance=3.0)),
+        (_evaluation(distance=5.0), _evaluation(distance=4.0)),
         (-100.0, 0.0),
         np.zeros(3),
     )
@@ -141,6 +165,12 @@ def test_contract_states_network_translation_and_mission_separation():
     assert contract["translation_owner"] == "unchanged_learned_policy"
     assert contract["mission_goal_mutated"] is False
     assert contract["dynamic_hard_veto_preserved"] is True
+    assert contract["consecutive_temporary_goals_allowed"] is False
+    assert contract["target_distance_m"] == 5.0
+    assert contract["minimum_candidate_distance_m"] == 3.5
+    assert contract["repeat_recovery_policy"] == (
+        "fresh_universal_stagnation_evidence_after_mission_attempt"
+    )
 
 
 def test_scan_conditioning_target_is_forward_and_does_not_need_mission_goal():
@@ -163,10 +193,10 @@ def test_temporary_target_conditions_policy_at_full_training_horizon():
         == pytest.approx(10.0)
 
 
-def test_temporary_target_itself_remains_short_lifecycle_authority():
+def test_temporary_target_uses_a_long_but_bounded_lifecycle_authority():
     config = RecoverySubgoalConfigV1()
     contract = config.contract()
-    assert contract["target_distance_m"] == 2.5
+    assert contract["target_distance_m"] == 5.0
     assert contract["policy_conditioning_distance_m"] == 10.0
 
 

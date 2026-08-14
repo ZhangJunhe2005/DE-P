@@ -25,8 +25,11 @@ SUBGOAL_ABORT_RECOVERY_TRANSITIONS_V1 = frozenset({
 @dataclass(frozen=True)
 class RecoverySubgoalConfigV1:
     enabled: bool = True
-    minimum_candidate_distance_m: float = 1.0
-    target_distance_m: float = 2.5
+    # A recovery goal must carry the vehicle beyond the immediate obstacle
+    # shoulder.  Shorter candidates remain valid normal-flight choices, but
+    # they are not sufficient evidence for a temporary escape handoff.
+    minimum_candidate_distance_m: float = 3.5
+    target_distance_m: float = 5.0
     arrival_radius_m: float = 0.60
     trajectory_samples: int = 81
     prefix_horizon_s: float = 0.60
@@ -59,12 +62,19 @@ class RecoverySubgoalConfigV1:
         self.validate()
         return {
             "contract_version": (
-                "recovery_subgoal_v1_2_full_horizon_conditioning"
+                "recovery_subgoal_v1_4_long_escape_rearmable_mission_attempt"
             ),
             "source": "network_candidate_after_full_runtime_safety",
             "translation_owner": "unchanged_learned_policy",
             "mission_goal_mutated": False,
             "dynamic_hard_veto_preserved": True,
+            "consecutive_temporary_goals_allowed": False,
+            "rearm_evidence": (
+                "mission_yaw_aligned_then_fresh_mission_conditioned_replan"
+            ),
+            "repeat_recovery_policy": (
+                "fresh_universal_stagnation_evidence_after_mission_attempt"
+            ),
             **asdict(self),
         }
 
@@ -126,7 +136,7 @@ def recovery_subgoal_conditioning_goal_v1(
     """Extend a temporary target direction to the policy's trained horizon.
 
     The fixed temporary target remains the lifecycle/arrival authority.  This
-    extended point is input conditioning only: it prevents a 2--3 metre
+    extended point is input conditioning only: it prevents a bounded local
     recovery target from being interpreted as a near-goal stop command by a
     policy trained on the 10 metre local planning horizon.
     """

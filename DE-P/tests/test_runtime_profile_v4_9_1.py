@@ -28,10 +28,12 @@ def test_v491_keeps_v49_physical_and_dynamic_runtime_contract_exactly():
     assert runtime_safety_mapping_v4_9_1(base) == runtime_safety_mapping_v4_9(base)
     parent = deadlock_recovery_mapping_v4_9(base)
     directional = deadlock_recovery_mapping_v4_9_1(base)
-    assert directional.pop("handoff_validation_window_s") == 2.50
+    assert directional.pop("handoff_validation_window_s") == 4.00
+    assert directional.pop("handoff_min_displacement_m") == 0.15
     assert directional.pop("handoff_directional_progress_enabled") is True
     assert directional.pop("handoff_max_directional_retreat_m") == 0.10
     parent.pop("handoff_validation_window_s")
+    parent.pop("handoff_min_displacement_m")
     assert directional == parent
 
 
@@ -57,6 +59,8 @@ def test_subgoal_activation_never_overwrites_mission_and_restore_is_exact(monkey
     node.recovery_subgoal_origin_world = None
     node.recovery_subgoal_action_id = None
     node.recovery_subgoal_last_event = "inactive"
+    node.recovery_subgoal_rearm_pending = False
+    node.planning_goal_generation = 0
     proposal = SimpleNamespace(
         target_world=np.asarray((2.5, 0.0, 2.5)), action_id=7,
     )
@@ -69,6 +73,7 @@ def test_subgoal_activation_never_overwrites_mission_and_restore_is_exact(monkey
     assert node._restore_mission_goal_locked("test")
     assert node.goal.tolist() == [12.0, -4.0, 2.5]
     assert node.mission_goal.tolist() == [12.0, -4.0, 2.5]
+    assert node.planning_goal_generation == 2
 
 
 def test_failed_subgoal_restores_mission_and_yields_old_scan_chain(monkeypatch):
@@ -81,7 +86,20 @@ def test_failed_subgoal_restores_mission_and_yields_old_scan_chain(monkeypatch):
     node.recovery_subgoal_origin_world = np.zeros(3)
     node.recovery_subgoal_action_id = 7
     node.recovery_subgoal_last_event = "activated"
+    node.recovery_subgoal_config = RecoverySubgoalConfigV1()
+    node.recovery_subgoal_rearm_pending = False
+    node.recovery_subgoal_rearm_origin_world = None
+    node.recovery_subgoal_rearm_reason = None
+    node.recovery_subgoal_rearm_count = 0
+    node.planning_goal_generation = 0
     node.dynamic_yield_active = True
+    node.ctrl_time = 1.0
+    node.recovery_trajectory_installed = True
+    node.active_trajectory_requires_dynamic_freshness = True
+    node.last_dynamic_certificate_monotonic_s = 1.0
+    node.align_goal_before_planning = True
+    node.odom_init = True
+    node.goal_alignment_pending = False
     recovery = SimpleNamespace(
         reset_calls=[],
         reset=lambda position: recovery.reset_calls.append(
@@ -97,6 +115,9 @@ def test_failed_subgoal_restores_mission_and_yields_old_scan_chain(monkeypatch):
     assert node.goal.tolist() == [12.0, -4.0, 2.5]
     assert node.recovery_subgoal_world is None
     assert node.dynamic_yield_active is False
+    assert node.recovery_subgoal_rearm_pending is True
+    assert node.goal_alignment_pending is True
+    assert node.ctrl_time is None
     assert len(recovery.reset_calls) == 1
     assert recovery.reset_calls[0] == pytest.approx(position)
 
@@ -111,7 +132,20 @@ def test_reached_subgoal_restores_mission_and_clears_handoff(monkeypatch):
     node.recovery_subgoal_origin_world = np.zeros(3)
     node.recovery_subgoal_action_id = 7
     node.recovery_subgoal_last_event = "activated"
+    node.recovery_subgoal_config = RecoverySubgoalConfigV1()
+    node.recovery_subgoal_rearm_pending = False
+    node.recovery_subgoal_rearm_origin_world = None
+    node.recovery_subgoal_rearm_reason = None
+    node.recovery_subgoal_rearm_count = 0
+    node.planning_goal_generation = 0
     node.dynamic_yield_active = True
+    node.ctrl_time = 1.0
+    node.recovery_trajectory_installed = True
+    node.active_trajectory_requires_dynamic_freshness = True
+    node.last_dynamic_certificate_monotonic_s = 1.0
+    node.align_goal_before_planning = True
+    node.odom_init = True
+    node.goal_alignment_pending = False
     recovery = SimpleNamespace(
         reset_calls=[],
         reset=lambda position: recovery.reset_calls.append(
@@ -125,8 +159,56 @@ def test_reached_subgoal_restores_mission_and_clears_handoff(monkeypatch):
     assert node.goal.tolist() == [12.0, -4.0, 2.5]
     assert node.recovery_subgoal_world is None
     assert node.dynamic_yield_active is False
+    assert node.recovery_subgoal_rearm_pending is True
+    assert node.recovery_subgoal_rearm_reason == "temporary_goal_reached"
+    assert node.goal_alignment_pending is True
+    assert node.ctrl_time is None
     assert len(recovery.reset_calls) == 1
     assert recovery.reset_calls[0] == pytest.approx(position)
+
+
+def test_second_goal_waits_for_fresh_mission_replan_then_can_recover_again(monkeypatch):
+    monkeypatch.setattr(test_dep_ros.rospy, "logwarn", lambda *args: None)
+    monkeypatch.setattr(test_dep_ros.rospy, "loginfo", lambda *args: None)
+    node = DepNet.__new__(DepNet)
+    node.recovery_subgoal_config = RecoverySubgoalConfigV1()
+    node.mission_goal = np.asarray((10.0, 0.0, 2.5))
+    node.goal = node.mission_goal.copy()
+    node.recovery_subgoal_world = None
+    node.recovery_subgoal_origin_world = None
+    node.recovery_subgoal_action_id = None
+    node.recovery_subgoal_last_event = "restored_mission:temporary_goal_reached"
+    node.recovery_subgoal_rearm_pending = True
+    node.recovery_subgoal_rearm_origin_world = np.asarray((2.0, 0.0, 2.5))
+    node.recovery_subgoal_rearm_reason = "temporary_goal_reached"
+    node.recovery_subgoal_rearm_count = 0
+    node.planning_goal_generation = 2
+    recovery = SimpleNamespace(
+        reset_calls=[],
+        reset=lambda position: recovery.reset_calls.append(
+            np.asarray(position).copy()
+        ),
+    )
+    node.deadlock_recovery = recovery
+    proposal = SimpleNamespace(
+        target_world=np.asarray((7.0, 0.0, 2.5)), action_id=7,
+    )
+
+    assert not node._activate_recovery_subgoal_locked(
+        proposal, np.asarray((2.0, 0.0, 2.5)),
+    )
+    # The very first fresh mission-conditioned planning boundary re-arms the
+    # detector.  Resetting it here requires a completely new stagnation window
+    # before another scan/release transition can occur.
+    assert node._finish_mission_reacquisition_locked(
+        np.asarray((2.0, 0.0, 2.5))
+    ) is True
+    assert node.recovery_subgoal_rearm_pending is False
+    assert node.recovery_subgoal_rearm_count == 1
+    assert len(recovery.reset_calls) == 1
+    assert node._activate_recovery_subgoal_locked(
+        proposal, np.asarray((2.0, 0.0, 2.5)),
+    )
 
 
 def test_active_short_subgoal_conditions_network_at_ten_metre_horizon():

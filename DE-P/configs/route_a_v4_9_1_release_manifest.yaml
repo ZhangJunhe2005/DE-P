@@ -1,0 +1,34 @@
+release_contract: route_a_v4_9_1_reproducible_release_v1
+release_tag: route-a-v4.9.1-recovery-subgoal-v6
+runtime_profile: v4_9_1_recovery_temporary_subgoal
+runtime_behavior_version: v4_9_1_long_escape_slow_handoff_rearmable_lifecycle_v6
+recovery_contract_version: recovery_subgoal_v1_4_long_escape_rearmable_mission_attempt
+static_policy:
+  role: frozen_v4_8_3_candidate_only_static_policy
+  path: runs/route_a_static_yopo_v4_8_3_candidate_only_shakedown/20260813T050742Z-13178/checkpoints/best.pth
+  sha256: 22e5c63c273d751c15479d70c99d9b85ad615b7b4c62063946a5b1683776ac60
+  tracked_in_release: true
+runtime_entry:
+  launcher: scripts/route_a_v4_9_1_dynamic_rviz_host.sh
+  default_actor_count: 16
+  default_actor_layout: uniform_3d
+  default_actor_seed: 9098
+  dynamic_mode: dynamic_safety
+  deadlock_recovery_profile: bounded_scan_v3
+external_runtime_assets:
+  tracked_in_release: false
+  reason: generated point clouds and canonical occupancy exceed the source repository budget
+  scene_contract: configs/dep_interactive_demo_scenes_v4_6.json
+  required_sibling_workspaces:
+    - Controller
+    - Simulator
+  pointcloud_sha256:
+    cave: f9974c844a69391c800977ad0996499f152ba1f2314f9dc13057eb30b37bc0b8
+    forest: 06de70676b03521d8fdadef146fc46f76359976a0bb48f801e35275789f510c9
+    pillar: dd3bdae25a0e97188d7349183a48008db7c3fdfcff21e7ed93ffc43d6d81c3d3
+    wall: 50f2c70a597945be13f73e65e2ad17ce150f1076df4fac97c8d836831f3fc6e9
+verification:
+  command: bash scripts/verify_route_a_v4_9_1_checkout.sh
+  runtime_asset_command: bash scripts/verify_route_a_v4_9_1_checkout.sh --runtime-assets
+  ros_master_required: false
+training_executed_by_verification: false

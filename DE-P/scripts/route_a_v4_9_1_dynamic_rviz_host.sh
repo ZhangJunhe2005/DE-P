@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="/home/zjh/YOPO/DE-P"
-SCENES="$ROOT/configs/dep_interactive_demo_scenes_v4_6.json"
-CHECKPOINT="$ROOT/runs/route_a_static_yopo_v4_8_3_candidate_only_shakedown/20260813T050742Z-13178/checkpoints/best.pth"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
+SCENES="${DEP_V491_SCENES_CONFIG:-$ROOT/configs/dep_interactive_demo_scenes_v4_6.json}"
+CHECKPOINT="${DEP_V491_CHECKPOINT:-$ROOT/runs/route_a_static_yopo_v4_8_3_candidate_only_shakedown/20260813T050742Z-13178/checkpoints/best.pth}"
 EXPECTED_SHA256="22e5c63c273d751c15479d70c99d9b85ad615b7b4c62063946a5b1683776ac60"
 SCENE="${1:-pillar}"
 if [[ $# -gt 0 ]]; then shift; fi
@@ -30,11 +31,19 @@ conda run --no-capture-output -n yopo \
 # V4.9.1 preserves the frozen V4.9 physical/dynamic safety contract.  During a
 # bounded scan only, a fully certified network candidate with a genuinely
 # forward prefix supplies a temporary local goal.  The unchanged network owns
-# all translation.  The fixed 2.5 m target controls lifecycle/arrival while
+# all translation.  A 3.5--5.0 m certified escape target controls lifecycle
+# and arrival while
 # the network sees the same direction extended to its trained 10 m horizon, so
-# rolling candidates do not collapse into near-goal braking.  Failed handoff
-# restores the mission and yields the old scan chain.  A new RViz goal wins.
-exec bash scripts/run_dep_interactive_demo.sh \
+# rolling candidates do not collapse into near-goal braking.  Reaching or
+# abandoning that one escape point restores and re-aligns the mission; another
+# temporary goal stays disarmed through mission-yaw alignment.  The first fresh
+# mission-conditioned replan resets the universal stagnation observer and
+# re-arms recovery, so a genuine second deadlock can trigger another bounded
+# escape without chaining local goals.  A new RViz goal always wins.
+# Low-speed takeover is verified with 0.15 m directional motion in a bounded
+# 4 s window; every rolling trajectory still passes the unchanged full static
+# and dynamic safety evaluation.
+exec bash "$ROOT/scripts/run_dep_interactive_demo.sh" \
   --scene "$SCENE" \
   --scenes-config "$SCENES" \
   --checkpoint "$CHECKPOINT" \

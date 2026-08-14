@@ -1,4 +1,4 @@
-contract_version: route_a_v4_9_1_recovery_subgoal_v3
+contract_version: route_a_v4_9_1_recovery_subgoal_v6
 status: IMPLEMENTED_PENDING_CLOSED_LOOP
 selected_version: v4.9.1
 rollback:
@@ -20,15 +20,21 @@ scope:
 temporary_subgoal:
   scan_inference_conditioning: current_camera_forward_10m_non_executable_probe
   source: network_candidate_after_full_runtime_safety
-  minimum_candidate_distance_m: 1.0
-  target_distance_m: 2.5
+  minimum_candidate_distance_m: 3.5
+  target_distance_m: 5.0
   arrival_radius_m: 0.60
   prefix_horizon_s: 0.60
   minimum_prefix_progress_m: 0.05
   maximum_prefix_retreat_m: 0.05
   policy_conditioning_distance_m: 10.0
+  mission_reacquisition:
+    align_to_mission_after_restore: true
+    consecutive_temporary_goals_allowed: false
+    rearm_after_first_fresh_mission_conditioned_replan: true
+    repeated_recovery_requires_fresh_universal_stagnation_evidence: true
+    new_operator_goal_rearms_immediately: true
   goal_roles:
-    lifecycle_target: fixed_certified_point_at_approximately_2_5m
+    lifecycle_target: certified_candidate_point_up_to_5m
     network_conditioning: same_direction_extended_to_10m
     rationale: prevent_near_goal_candidate_collapse
   restore_condition: temporary_goal_reached
@@ -40,9 +46,9 @@ temporary_subgoal:
   dynamic_hard_veto_preserved: true
   mission_arrival_uses_temporary_goal: false
   handoff_validation:
-    window_s: 2.50
+    window_s: 4.00
     measurement: directional_progress_toward_temporary_goal
-    minimum_progress_m: 0.50
+    minimum_progress_m: 0.15
     maximum_retreat_m: 0.10
     failed_handoff_policy: restore_mission_and_yield_old_scan_chain
 validation:

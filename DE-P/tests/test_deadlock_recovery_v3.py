@@ -224,6 +224,24 @@ def test_v4_9_1_handoff_accepts_only_motion_toward_temporary_goal():
     assert decision.handoff_validation_directional_progress_m == pytest.approx(0.51)
 
 
+def test_v4_9_1_accepts_observed_slow_directional_takeover_from_live_trace():
+    recovery = v4_9_1_recovery()
+    enter_scan(recovery)
+    now, _ = release_v4_8_5_scan(recovery)
+    target = np.asarray([4.56, 0.0, 0.0])
+
+    decision = observe(
+        recovery, now + 2.55, feasible=1, selected=True, progress=1.0,
+        action_id=7, sector_id=2, position=[0.191, 0.0, 0.0],
+        handoff_target=target,
+        depth=np.full((20, 30), 7.54, dtype=np.float32),
+    )
+    assert decision.transition == "handoff_measured_motion_verified"
+    assert decision.handoff_validation_result == "measured_motion_verified"
+    assert decision.handoff_validation_directional_progress_m \
+        == pytest.approx(0.191)
+
+
 def test_v4_9_1_handoff_rejects_more_than_ten_centimetres_of_retreat():
     recovery = v4_9_1_recovery()
     enter_scan(recovery)
